@@ -1,0 +1,114 @@
+spring:
+  application:
+    name: logparser
+  profiles:
+    active:
+      - dev
+server:
+  port: 58443
+
+logparser:
+  threads: 20
+  add_origin_text : true
+  input: 
+#    -
+#      type : tcp
+#      port : 21514
+#      messagetype : syslog
+#    -
+#      type : udp
+#      port : 21514
+#      messagetype : syslog
+#    -
+#      type : http
+#      port : 21515
+#      messagetype  : fe
+#      codec : json
+#    -
+#      type : kafka
+#      topicid : csas
+#      bootstrapservers: "192.168.254.8:9092"
+#    -
+#      type : file
+#      path: "/home/docker/bro/logs/conn.log"
+#      messagetype : idslog
+    -
+      type : FileInputAdapter
+      path : "./eve.json"
+      messagetype : eve
+      isFromBeginning: true
+    # -
+    #   type : http
+    #   port : 9997
+    #   messagetype  : fe
+    # -
+    #   type : tcp
+    #   port : 9996
+    #   messagetype : agent
+    # -
+    #   type : udp
+    #   port : 9995
+    #   messagetype : applicationlog
+    
+  parser:
+    # - type: GrokParser
+    #   param : "<%{POSINT:syslog_pri}>%{POSINT:syslog_sev} %{GREEDYDATA:syslog_time} \\[%{GREEDYDATA:syslog_app}\\] \\[%{IP:syslog_host}\\]start_time=\"%{GREEDYDATA:start_time}\" end_time=\"%{GREEDYDATA:end_time}\" duration=%{WORD:duration} machine_name=%{WORD:machine_name} fw_rule_id=%{WORD:fw_rule_id} nat_rule_id=%{DATA:nat_rule_id} src_ip=%{IP:src_ip} userid=%{GREEDYDATA:userid} src_port=%{WORD:src_port} dst_ip=%{IP:dst_ip} dst_port=%{WORD:dst_port} protocol=%{GREEDYDATA:protocol} ingres_if=%{GREEDYDATA:ingres_if} interface=%{WORD:interface} packets_forward=%{WORD:packets_forward} packets_backward=%{WORD:packets_backward} bytes_forward=%{WORD:bytes_foward} bytes_backward=%{WORD:bytes_backward} fragment_info=%{GREEDYDATA:fragment_info} flag_record=%{GREEDYDATA:flag_record} terminate_reason=%{GREEDYDATA:terminate_reason}"
+    #   messagetype : eve
+    - type: RFC5424SyslogParser
+      messagetype: eve
+  transform:
+    - type: Filter
+      messagetype: eve
+      param:
+        pass:
+          event_type: alert, anomaly, http, dns, tls, files
+        drop:
+          event_type: tls, files
+    - type: AddProperty
+      messagetype: eve
+      param:
+        add:
+          tag:
+            - src_ip
+            - src_port
+            - dest_ip
+            - dest_port
+            - proto
+    - type: RemoveProperty
+      messagetype: eve
+      param:
+        remove:
+          - "@timestamp"
+
+
+  output: 
+#    -
+#      type : kafka
+#      messagetype : all
+#      topicid : csas
+#      bootstrapservers : "192.168.254.8:9092"
+#    -
+#      type : http
+#      messagetype  : fe
+#      url : "http://192.168.254.53:21504/fe"
+#    -
+#      type : tcp
+#      messagetype : syslog
+#      host : 192.168.254.51
+#      port : 21514
+#    -
+#      type : elasticsearch
+#      messagetype : all
+#      host : "192.168.1.22"
+#      index : "%{messagetype}.%{yyMMdd}"
+    -
+      type : BenchmarkAdapter
+      messagetype : all
+    # -
+      # type : ConsoleOutputAdapter
+      # messagetype : all
+    # -
+    #   type : OpenSearchOutputAdapter
+    #   messagetype : all
+    #   host : "192.168.1.22"
+    #   index : "%{messagetype}.%{yyMMdd}"
