@@ -138,7 +138,7 @@ public class OpenSearchOutputAdapter implements OutputAdapter {
 		for(List<String> entry: dataMap.values()) {
 			size += entry.size();
 		}
-		if(size > 200)
+		if(size >= 2000)
 			this.flush();
 	}
 
@@ -174,11 +174,12 @@ public class OpenSearchOutputAdapter implements OutputAdapter {
 				long endElapse = System.currentTimeMillis();
 				double elapsedSeconds = (endElapse - startElapse) / 1000.0;
 				int processedPerSecond = (int) (count / elapsedSeconds); // Calculate count per second
-				LOGGER.info("{} processed per second: {}", processedPerSecond, count);
+				LOGGER.info("{} item processed in {} second: {}/s", count, elapsedSeconds, processedPerSecond);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
+		this.dataMap.clear();
 	}
 
 	public void sendRest(String url, String json) throws IOException {

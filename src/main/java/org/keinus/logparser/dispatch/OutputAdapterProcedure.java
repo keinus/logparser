@@ -38,7 +38,13 @@ public class OutputAdapterProcedure implements Runnable {
             try {
                 this.outputMessageQueue.add(message);
                 break;
-            } catch(IllegalStateException e) { }
+            } catch(IllegalStateException e) { 
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e1) {
+                    e1.printStackTrace();
+                } 
+            }
         }
     }
 
