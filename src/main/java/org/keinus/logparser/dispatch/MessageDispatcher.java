@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.keinus.logparser.util.CustomExecutorService;
+import org.keinus.logparser.util.ThreadUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ public class MessageDispatcher {
 		initializeInputAdater(appProp.getInput());
 		initializeOutputAdapter(appProp.getOutput(), appProp.isAddOriginText());
 
-		customExecutorService.execute(this::inputThread);
+		customExecutorService.execute(this::parseAndTransform);
 	}
 
 	/**
@@ -61,26 +62,27 @@ public class MessageDispatcher {
 			adapter.init(param);
 			InputAdapterProcedure proc = new InputAdapterProcedure(adapter);
 			this.inputList.add(proc);
-			customExecutorService.execute(() -> {
-				while(true) {
-					Message msg = null;
-					try {
-						msg = proc.process();
-					} catch(IOException e) {
-						LOGGER.error(e.getMessage());
-						continue;
-					}
-					if(msg != null) {
-						try {
-							while(!InputMessageQueue.offer(msg));
-						} catch(IllegalStateException e) {
-							LOGGER.error("Internal message queue is full.");
-						}
-					} else
-						try { Thread.sleep(100); } catch (InterruptedException e) { e.printStackTrace(); }
-				}
-			});
+			customExecutorService.execute(() -> this.processInputAdapter(proc));
 			LOGGER.info("InputAdapter {} registerd", adapter.getClass().getSimpleName());
+		}
+	}
+
+	private void processInputAdapter(InputAdapterProcedure proc) {
+		while(true) {
+			Message msg = null;
+			try {
+				msg = proc.process();
+			} catch(IOException e) {
+				LOGGER.error(e.getMessage());
+				continue;
+			}
+			if(msg != null) {
+				while(!InputMessageQueue.offer(msg)) { 
+					ThreadUtil.sleep(10); 
+				}
+			} else
+				ThreadUtil.sleep(100);
+				
 		}
 	}
 
@@ -105,11 +107,11 @@ public class MessageDispatcher {
 	}
 
 	/**
-	 * inputThread 함수
+	 * parseAndTransform 함수
 	 * 메시지 큐에서 메시지를 하나 꺼낸다.
 	 * 꺼낸 메시지를 파싱 후 output queue에 넣는다.
 	 */
-	public void inputThread() {
+	public void parseAndTransform() {
 		while (true) {
 			Message message = null;
 			try {
@@ -121,7 +123,7 @@ public class MessageDispatcher {
 			}
 			
 			if(message == null)
-			    continue;
+			    return;
 			
 			Map<String, Object> parsedStr = parseService.parse(message);
 			if(parsedStr != null) {

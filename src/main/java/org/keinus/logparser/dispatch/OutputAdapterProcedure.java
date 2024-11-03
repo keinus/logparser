@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import com.google.gson.Gson;
 
 import org.keinus.logparser.schema.Message;
+import org.keinus.logparser.util.ThreadUtil;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 public class OutputAdapterProcedure implements Runnable {
@@ -39,11 +40,7 @@ public class OutputAdapterProcedure implements Runnable {
                 this.outputMessageQueue.add(message);
                 break;
             } catch(IllegalStateException e) { 
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e1) {
-                    e1.printStackTrace();
-                } 
+                ThreadUtil.sleep(1); 
             }
         }
     }
@@ -73,11 +70,7 @@ public class OutputAdapterProcedure implements Runnable {
                 for(var adapter : mOutputAdapterList) {
                     adapter.flush();
                 }
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                ThreadUtil.sleep(10); 
             }
         }
     }

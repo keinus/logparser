@@ -13,8 +13,8 @@ public class RegexParser implements IParser {
 
     @Override
     public void init(Object param) {
-        String regex = (String)param;
-        this.regex = Pattern.compile(regex);
+        String pattern = (String)param;
+        this.regex = Pattern.compile(pattern);
     }
  
     @Override
