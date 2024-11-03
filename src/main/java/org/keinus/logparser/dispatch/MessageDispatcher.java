@@ -14,13 +14,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.keinus.logparser.schema.Message;
 import org.keinus.logparser.config.ApplicationProperties;
-import org.keinus.logparser.interfaces.ITransform;
 import org.keinus.logparser.interfaces.InputAdapter;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 
 @Service
-public class MessageDispatcher implements Runnable {
+public class MessageDispatcher {
 	private static final Logger LOGGER = LoggerFactory.getLogger( MessageDispatcher.class );
 
 	private static final BlockingQueue<Message> InputMessageQueue = new LinkedBlockingQueue<>(100);
@@ -42,7 +41,7 @@ public class MessageDispatcher implements Runnable {
 		initializeInputAdater(appProp.getInput());
 		initializeOutputAdapter(appProp.getOutput(), appProp.isAddOriginText());
 
-		customExecutorService.execute(this);
+		customExecutorService.execute(this::inputThread);
 	}
 
 	/**
@@ -73,7 +72,7 @@ public class MessageDispatcher implements Runnable {
 					}
 					if(msg != null) {
 						try {
-							while(!InputMessageQueue.offer(msg)) {}
+							while(!InputMessageQueue.offer(msg));
 						} catch(IllegalStateException e) {
 							LOGGER.error("Internal message queue is full.");
 						}
@@ -90,7 +89,7 @@ public class MessageDispatcher implements Runnable {
 			OutputAdapter adapter = OutputFactory.getOutputAdapter(param);
 			adapter.init(param);
 			
-			var typeList = param.get("inputtype") != null ? param.get("inputtype").split(",") : new String[]{"all"};
+			var typeList = param.get("messagetype") != null ? param.get("messagetype").split(",") : new String[]{"all"};
 			for(String type : typeList) {
 				if(type.length() <= 1)
 					continue;
@@ -110,8 +109,7 @@ public class MessageDispatcher implements Runnable {
 	 * 메시지 큐에서 메시지를 하나 꺼낸다.
 	 * 꺼낸 메시지를 파싱 후 output queue에 넣는다.
 	 */
-	@Override
-	public void run() {
+	public void inputThread() {
 		while (true) {
 			Message message = null;
 			try {
@@ -126,15 +124,15 @@ public class MessageDispatcher implements Runnable {
 			    continue;
 			
 			Map<String, Object> parsedStr = parseService.parse(message);
-			if(!this.transformService.transform(message))
-				continue;
-
 			if(parsedStr != null) {
 				message.putAll(parsedStr);
 			} else {
 				LOGGER.error("Failed to parse message, {}", message.getOriginText());
 				message.put("ERROR", "Failed to parse message");
 			}
+
+			if(!this.transformService.transform(message))
+				continue;
 
 			var output = outputMap.get(message.getType());
 			if(output != null)

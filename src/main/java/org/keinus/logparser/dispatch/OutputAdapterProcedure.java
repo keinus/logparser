@@ -38,8 +38,7 @@ public class OutputAdapterProcedure implements Runnable {
             try {
                 this.outputMessageQueue.add(message);
                 break;
-            } catch(IllegalStateException e) {
-            }
+            } catch(IllegalStateException e) { }
         }
     }
 
@@ -54,12 +53,7 @@ public class OutputAdapterProcedure implements Runnable {
 
         while(true) {
             Message message = null;
-            try {
-                message = outputMessageQueue.take();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                Thread.currentThread().interrupt();
-            }
+            message = outputMessageQueue.poll();
             
             if(message != null) {
                 var msg = message.getMsg();
@@ -68,6 +62,15 @@ public class OutputAdapterProcedure implements Runnable {
                 String jsonString = gson.toJson(msg);
                 for(var adapter : mOutputAdapterList) {
                     adapter.send(msg, jsonString);
+                }
+            } else {
+                for(var adapter : mOutputAdapterList) {
+                    adapter.flush();
+                }
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
         }

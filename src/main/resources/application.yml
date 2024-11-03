@@ -54,7 +54,9 @@ logparser:
     # - type: GrokParser
     #   param : "<%{POSINT:syslog_pri}>%{POSINT:syslog_sev} %{GREEDYDATA:syslog_time} \\[%{GREEDYDATA:syslog_app}\\] \\[%{IP:syslog_host}\\]start_time=\"%{GREEDYDATA:start_time}\" end_time=\"%{GREEDYDATA:end_time}\" duration=%{WORD:duration} machine_name=%{WORD:machine_name} fw_rule_id=%{WORD:fw_rule_id} nat_rule_id=%{DATA:nat_rule_id} src_ip=%{IP:src_ip} userid=%{GREEDYDATA:userid} src_port=%{WORD:src_port} dst_ip=%{IP:dst_ip} dst_port=%{WORD:dst_port} protocol=%{GREEDYDATA:protocol} ingres_if=%{GREEDYDATA:ingres_if} interface=%{WORD:interface} packets_forward=%{WORD:packets_forward} packets_backward=%{WORD:packets_backward} bytes_forward=%{WORD:bytes_foward} bytes_backward=%{WORD:bytes_backward} fragment_info=%{GREEDYDATA:fragment_info} flag_record=%{GREEDYDATA:flag_record} terminate_reason=%{GREEDYDATA:terminate_reason}"
     #   messagetype : eve
-    - type: RFC5424SyslogParser
+    # - type: RFC5424SyslogParser
+    #   messagetype: eve
+    - type: JsonParser
       messagetype: eve
   transform:
     - type: Filter
@@ -107,8 +109,9 @@ logparser:
     # -
       # type : ConsoleOutputAdapter
       # messagetype : all
-    # -
-    #   type : OpenSearchOutputAdapter
-    #   messagetype : all
-    #   host : "192.168.1.22"
-    #   index : "%{messagetype}.%{yyMMdd}"
+    -
+      type : OpenSearchOutputAdapter
+      messagetype : all
+      host : "192.168.1.23"
+      port: 9200
+      index : "suricata-%{event_type}-%{yyMMdd}"
