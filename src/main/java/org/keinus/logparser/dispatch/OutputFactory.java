@@ -16,9 +16,11 @@ public class OutputFactory {
 			Class<?> cls = Class.forName("org.keinus.logparser.output." + type);
 			return (OutputAdapter) cls.getDeclaredConstructor().newInstance();
 		}
-		catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+		catch (InstantiationException | IllegalAccessException | IllegalArgumentException 
+			| InvocationTargetException | NoSuchMethodException 
+			| SecurityException | ClassNotFoundException e) {
 			e.printStackTrace();
+			throw new IllegalStateException("Invalid Output Adapter.");
 		}
-		return null;
 	}
 }

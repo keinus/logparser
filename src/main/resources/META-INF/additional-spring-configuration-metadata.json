@@ -1,0 +1,5 @@
+{"properties": [{
+  "name": "threads",
+  "type": "java.lang.Integer",
+  "description": "A description for 'threads number'"
+}]}

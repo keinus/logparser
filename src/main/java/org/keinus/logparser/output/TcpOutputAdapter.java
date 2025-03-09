@@ -14,29 +14,20 @@ import org.slf4j.LoggerFactory;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 
-public class TcpOutputAdapter implements OutputAdapter {
+public class TcpOutputAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( TcpOutputAdapter.class );
 	private Socket socket;
 	private String host = null;
 	private int port = 0;
 	private int retry = 3;
     
-	public void init(Map<String, String> obj) {
-		try {
-			if (obj == null) {
-            	LOGGER.info("Property not found.");
-                throw new IOException("Property not found.");
-            }
-            port = Integer.parseInt(obj.get("port"));
-            host = obj.get("host");
-            socket = new Socket();
-            LOGGER.info("TCP Output Adapter connected at ip, port {}, {}", host, port);
-        } catch (IOException e) {
-            e.printStackTrace();
-            LOGGER.error(e.getMessage());
-        } catch (Exception e) {
-			e.printStackTrace();
-		}
+	public TcpOutputAdapter(Map<String, String> obj) throws IOException {
+		super(obj);
+
+		port = Integer.parseInt(obj.get("port"));
+		host = obj.get("host");
+		socket = new Socket();
+		LOGGER.info("TCP Output Adapter connected at ip, port {}, {}", host, port);
 	}
 
 	public void send(Map<String, Object> json, String jsonString) {

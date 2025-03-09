@@ -31,14 +31,10 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-
-
-
-
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 
-public class OpenSearchOutputAdapter implements OutputAdapter {
+public class OpenSearchOutputAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( OpenSearchOutputAdapter.class );
 	String host;
 	int port;
@@ -48,24 +44,15 @@ public class OpenSearchOutputAdapter implements OutputAdapter {
 	private final ConcurrentHashMap<String, List<String>> dataMap = new ConcurrentHashMap<>();
 	CloseableHttpClient httpClient;
 
-	@Override
-	public void init(Map<String, String> obj) {
-		try {
-			if (obj == null) {
-				LOGGER.info("Property not found.");
-				throw new IOException("Property not found.");
-			}
-			
-			host = obj.get("host");	
-			port = Integer.parseInt(obj.get("port"));
-			index = obj.get("index");
-			indexVars = extractBracedStrings(index);
-						
-			LOGGER.info("Elastic Output Adapter Init. {}:{}", host, port);
-		} catch (IOException e) {
-			e.printStackTrace();
-			LOGGER.error(e.getMessage());
-		}
+	public OpenSearchOutputAdapter(Map<String, String> obj) throws IOException {
+		super(obj);
+		
+		host = obj.get("host");	
+		port = Integer.parseInt(obj.get("port"));
+		index = obj.get("index");
+		indexVars = extractBracedStrings(index);
+					
+		LOGGER.info("Elastic Output Adapter Init. {}:{}", host, port);
 
 		try {
 			class AllTrustingTrustManager implements X509TrustManager {

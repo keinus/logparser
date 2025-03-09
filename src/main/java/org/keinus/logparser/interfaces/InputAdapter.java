@@ -1,11 +1,24 @@
 package org.keinus.logparser.interfaces;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.Map;
 
-public interface InputAdapter extends Closeable {
-	public void init(Map<String, String> obj);
-	public String run();
-	public String getHost();
-	public String getType();
+import org.keinus.logparser.schema.Message;
+
+public abstract class InputAdapter implements Closeable {
+	private String type = "";
+
+	protected InputAdapter(Map<String, String> obj) throws IOException {
+		if (obj == null) {
+			throw new IOException("Property not found.");
+		}
+		this.type = obj.get("type");
+	}
+
+	public abstract Message run();
+
+	public String getType() {
+		return this.type;
+	}
 }

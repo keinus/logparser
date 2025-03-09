@@ -11,14 +11,14 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.BuiltinExchangeType;
 import com.rabbitmq.client.Channel;
 
-public class RabbitMQAdapter implements OutputAdapter {
+public class RabbitMQAdapter extends OutputAdapter {
 	private String routingkey = null;
 	private String exchange = null;
 	Channel channel = null;
 	Connection connection = null;
 
-	@Override
-	public void init(Map<String, String> obj) {
+	public RabbitMQAdapter(Map<String, String> obj) throws IOException {
+		super(obj);
 		ConnectionFactory factory = new ConnectionFactory();
 		factory.setHost(obj.get("host"));
 		factory.setUsername(obj.get("username"));

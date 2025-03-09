@@ -11,28 +11,20 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.keinus.logparser.interfaces.InputAdapter;
+import org.keinus.logparser.schema.Message;
 
 
-public class TcpInputAdapter implements InputAdapter {
+public class TcpInputAdapter extends InputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( TcpInputAdapter.class );
 	private ServerSocket serverSocket;
-    private String type = null;
-	private String host = null;
 	private int port = 0;
     
-	@Override
-	public void init(Map<String, String> obj) {
+	public TcpInputAdapter(Map<String, String> obj) throws IOException {
+		super(obj);
 		try {
-            if (obj == null) {
-            	LOGGER.info("Property not found.");
-            	
-                throw new IOException("Property not found.");
-            }
             port = Integer.parseInt(obj.get("port"));
-            serverSocket = new ServerSocket(port);
-			serverSocket.setReuseAddress(true);
-
-            this.type = obj.get("type");
+            initServerSocket();
+            
             LOGGER.info("TCP Input Adapter start at port {}", port);
         } catch (IOException e) {
             e.printStackTrace();
@@ -40,23 +32,28 @@ public class TcpInputAdapter implements InputAdapter {
         }
 	}
 
+	private void initServerSocket() throws IOException {
+		serverSocket = new ServerSocket(port);
+		serverSocket.setReuseAddress(true);
+	}
+
 	@Override
-	public String run() {
+	public Message run() {
         try {
             Socket socket = serverSocket.accept();
             if (socket.isConnected()) {
             	BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
             	String payload = br.readLine();
-                this.host = socket.getInetAddress().toString();
-            	return payload;
+                String host = socket.getInetAddress().toString();
+				return new Message(payload, host);
             }
         } catch(SocketException e) {
 			try {
-				serverSocket.close();
-				serverSocket = new ServerSocket(port);
+				initServerSocket();
 			} catch (IOException e1) {
 				e1.printStackTrace();
+				LOGGER.error("TcpInputAdaptor Server Socket Error(Terminate this Adapter): {}", e1.getMessage());
 			}
 		} catch (IOException e) {
             e.printStackTrace();
@@ -68,15 +65,5 @@ public class TcpInputAdapter implements InputAdapter {
 	public void close() throws IOException {
 		if(serverSocket != null)
 			serverSocket.close();
-	}
-
-	@Override
-	public String getHost() {
-		return this.host;
-	}
-
-	@Override
-	public String getType() {
-		return this.type;
 	}
 }

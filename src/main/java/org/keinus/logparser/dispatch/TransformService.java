@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.keinus.logparser.config.TransformConfig;
 import org.keinus.logparser.interfaces.ITransform;
-import org.keinus.logparser.schema.Message;
 
 
 public class TransformService {
@@ -51,10 +50,10 @@ public class TransformService {
         }
     }
 
-    public boolean transform(Message message) {
-        List<ITransform> transList = transformer.get(message.getType());
+    public boolean transform(Map<String, Object> parsedStr, String type) {
+        List<ITransform> transList = transformer.get(type);
         for(ITransform trans : transList) {
-            var ret = trans.parse(message.getMsg());
+            var ret = trans.parse(parsedStr);
             if(ret == null)
                 return false;
         }

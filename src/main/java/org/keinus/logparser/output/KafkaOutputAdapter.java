@@ -15,33 +15,24 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 
-public class KafkaOutputAdapter implements OutputAdapter {
+public class KafkaOutputAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( KafkaOutputAdapter.class );
 	Producer<String, String> producer = null;
 	String topic = "";
 	
-	@Override
-	public void init(Map<String, String> obj) {
-		try {
-			if (obj == null) {
-            	LOGGER.info("Property not found.");
-                throw new IOException("Property not found.");
-            }
-            topic = obj.get("topicid");
-            String server = obj.get("bootstrapservers");
-            
-            Properties props = new Properties();
-			props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-			props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, server);
-			props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-			producer = new KafkaProducer<>(props);
-            
-            LOGGER.info("Kafka Output Adapter connected to {}, {}", server, topic);
+	public KafkaOutputAdapter(Map<String, String> obj) throws IOException {
+		super(obj);
 
-        } catch (IOException e) {
-            e.printStackTrace();
-            LOGGER.error(e.getMessage());
-        }
+		topic = obj.get("topicid");
+		String server = obj.get("bootstrapservers");
+		
+		Properties props = new Properties();
+		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, server);
+		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		producer = new KafkaProducer<>(props);
+		
+		LOGGER.info("Kafka Output Adapter connected to {}, {}", server, topic);
 	}
 
 	public void send(Map<String, Object> json, String jsonString) {

@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 
-public class HttpOutputAdapter implements OutputAdapter {
+public class HttpOutputAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( HttpOutputAdapter.class );
 	private Socket socket;
     String path = null;
@@ -21,11 +21,9 @@ public class HttpOutputAdapter implements OutputAdapter {
     int port;
 	int retry = 3;
     
-	public void init(Map<String, String> obj) {
-		if (obj == null) {
-			LOGGER.info("Property not found.");
-			return;
-		}
+	public HttpOutputAdapter(Map<String, String> obj) throws IOException {
+		super(obj);
+		
 		String url = obj.get("url");	// "http://192.168.254.8:8070/fe"
 		
 		int start = url.indexOf("://");

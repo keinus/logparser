@@ -14,7 +14,7 @@ public class InputFactory {
 		String type = param.get("type");
 		try {
 			Class<?> cls = Class.forName("org.keinus.logparser.input." + type);
-			return (InputAdapter) cls.getDeclaredConstructor().newInstance();
+			return (InputAdapter) cls.getDeclaredConstructor().newInstance(param);
 		}
 		catch (InstantiationException | IllegalAccessException | IllegalArgumentException 
 			| InvocationTargetException | NoSuchMethodException 

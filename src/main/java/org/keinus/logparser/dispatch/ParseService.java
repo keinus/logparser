@@ -9,7 +9,6 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.keinus.logparser.interfaces.IParser;
-import org.keinus.logparser.schema.Message;
 
 
 public class ParseService {
@@ -27,8 +26,6 @@ public class ParseService {
                     parserInterface.init(parser.get("param"));
                     var typeList = parser.get("messagetype").split(",");
                     for(String type : typeList) {
-                        if(type.length() <= 1)
-                            continue;
                         if(parsers.get(type) == null) {
                             parsers.put(type, new ArrayList<>());
                         } 
@@ -45,10 +42,10 @@ public class ParseService {
         }
     }
 
-    public Map<String, Object> parse(Message message) {
-        List<IParser> parserList = parsers.get(message.getType());
+    public Map<String, Object> parse(String text, String type) {
+        List<IParser> parserList = parsers.get(type);
         for(IParser parser : parserList) {
-            var parsered = parser.parse(message.getOriginText());
+            var parsered = parser.parse(text);
             if(parsered != null) {
                 return parsered;
             }

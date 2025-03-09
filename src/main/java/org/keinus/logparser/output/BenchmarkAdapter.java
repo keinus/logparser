@@ -9,13 +9,13 @@ import org.slf4j.LoggerFactory;
 
 import org.keinus.logparser.interfaces.OutputAdapter;
 
-public class BenchmarkAdapter implements OutputAdapter {
+public class BenchmarkAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( BenchmarkAdapter.class );
 	AtomicInteger ai = new AtomicInteger();
 	long startElapse = 0L;
 	
-	@Override
-	public void init(Map<String, String> obj) {
+	public BenchmarkAdapter(Map<String, String> obj) throws IOException {
+		super(obj);
 		LOGGER.info("Console Output Adapter created");
 		ai.set(0);
 	}
@@ -48,4 +48,5 @@ public class BenchmarkAdapter implements OutputAdapter {
 	public void flush() {
 		// nothing
 	}
+
 }

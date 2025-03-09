@@ -1,10 +1,31 @@
 package org.keinus.logparser.interfaces;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.Map;
 
-public interface OutputAdapter extends Closeable {
-	public void init(Map<String, String> obj);
-	public void send(Map<String, Object> json, String jsonString);
-	public void flush();
+public abstract class OutputAdapter implements Closeable {
+
+	protected OutputAdapter(Map<String, String> obj) throws IOException {
+		if (obj == null) {
+			throw new IOException("Property not found.");
+		}
+		this.type = obj.get("type");
+		this.addOriginText = Boolean.parseBoolean(obj.get("add_origin_text"));
+	}
+
+	private String type = "";
+	private boolean addOriginText = false;
+
+	public String getType() {
+		return this.type;
+	}
+
+	public boolean getAddOriginText() {
+		return this.addOriginText;
+	}
+
+	public abstract void send(Map<String, Object> json, String jsonString);
+	public abstract void flush();
+
 }

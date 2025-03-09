@@ -1,52 +1,89 @@
 package org.keinus.logparser.util;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-
-import org.keinus.logparser.config.ApplicationProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Service;
 
-@Service
-public class CustomExecutorService implements Closeable {
-    private static final Logger LOGGER = LoggerFactory.getLogger( CustomExecutorService.class );
-    
-    private ExecutorService executorService = null;
-    private CustomThreadFactory threadFactory = null;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
-    public CustomExecutorService(Environment environment, ApplicationProperties appProp) {
-		threadFactory = new CustomThreadFactory(environment.getProperty("spring.application.name"));
-		executorService = Executors.newFixedThreadPool(appProp.getThreads(), threadFactory);
-	}
 
-    public boolean execute(Runnable command) {
-        if(command == null || executorService.isShutdown())
-            return false;
-        try {
-            executorService.execute(command);
-        } catch(RejectedExecutionException e) {
-            return false;
+public class CustomExecutorService extends ThreadPoolExecutor {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CustomExecutorService.class);
+     private final Map<String, Thread> threads = new ConcurrentHashMap<>();
+
+    public CustomExecutorService(String threadName) {
+        super(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), new CustomThreadFactory(threadName));
+        super.setThreadFactory(new CustomThreadFactory(threadName));
+    }
+
+    public CustomExecutorService(String threadName, int nThreads) {
+        super(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), new CustomThreadFactory(threadName));
+        super.setThreadFactory(new CustomThreadFactory(threadName));
+    }
+
+    public void stopThread(String threadName) {
+        Thread thread = threads.get(threadName);
+        if (thread != null) {
+            thread.interrupt();
+        } else {
+            LOGGER.error("No thread found with the name {}", threadName);
         }
-        return true;
-	}
+    }
+
+    public void waitForAllThreadsToFinish() throws InterruptedException {
+        for (Thread thread : threads.values()) {
+            thread.join();
+        }
+    }
+
+    public List<String> getActiveThreads() {
+        return threads.entrySet().stream()
+                .filter(entry -> entry.getValue().isAlive())
+                .map(Map.Entry::getKey)
+                .toList();
+    }
 
     @Override
-    public void close() throws IOException {
-        executorService.shutdownNow();
-		int count = 0;
-		while(!executorService.isTerminated()) {
-            executorService.shutdownNow();
-            
-            count++;
-            if(count > 10) {
-                LOGGER.info("attempt to close, but still alive. closing.");
-                break;
+    public void close() {
+        if (!this.isShutdown()) {
+            this.shutdown();
+            try {
+                if (!this.awaitTermination(30, TimeUnit.SECONDS)) {
+                    this.shutdownNow();
+                    if (!this.awaitTermination(30, TimeUnit.SECONDS))
+                        LOGGER.warn("Executor service did not terminate after repeated attempts.");
+                }
+            } catch (InterruptedException ie) {
+                this.shutdownNow();
+                Thread.currentThread().interrupt(); // Interrupt status restore
             }
-		}
+        }
     }
+
+    @Override
+    protected void beforeExecute(Thread t, Runnable r) {
+        super.beforeExecute(t, r);
+        threads.put(t.getName(), t);
+        LOGGER.info("Thread {} is starting task: {}", t.getName(), r);
+    }
+
+    @Override
+    protected void afterExecute(Runnable r, Throwable t) {
+        super.afterExecute(r, t);
+        Thread current = Thread.currentThread();
+        threads.remove(current.getName());
+        LOGGER.info("Task completed by thread: {}, {}", current.getName(), t.getMessage());
+    }
+    
+    @Override
+    public void terminated() {
+        super.terminated();
+        LOGGER.info("ThreadPool has been terminated");
+    }
+    
 }
