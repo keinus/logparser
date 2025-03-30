@@ -6,6 +6,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.keinus.logparser.util.CustomExecutorService;
+import org.keinus.logparser.util.ThreadUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,14 +115,17 @@ public class MessageDispatcher {
             }
 
             if (this.transformService.transform(parsedStr, message.getType())) {
-                FilteredMessage outputMsg = new FilteredMessage(message.getOriginText(), parsedStr);
+                FilteredMessage outputMsg = new FilteredMessage(message.getOriginText(), parsedStr, message.getType());
                 putOutputMsg(outputMsg);
             }
 		}
 	}
 
     public static boolean putGlobalMsg(Message msg) {
-        return globalMessageQueue.offer(msg);
+        while (!globalMessageQueue.offer(msg)) {
+            ThreadUtil.sleep(100);
+        }
+        return true;
     }
 
     public static Message getGlobalMsg() {
@@ -129,7 +133,10 @@ public class MessageDispatcher {
     }
 
     public static boolean putOutputMsg(FilteredMessage msg) {
-        return outputMessageQueue.offer(msg);
+        while(!outputMessageQueue.offer(msg)) {
+            ThreadUtil.sleep(100);
+        }
+        return true;
     }
 
     public static FilteredMessage getOutputMsg() {

@@ -33,6 +33,5 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 
 	@Override
 	public void flush() {
-		System.out.println("ConsoleOutputAdapter Flushed.");
 	}
 }

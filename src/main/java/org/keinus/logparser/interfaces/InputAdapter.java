@@ -13,7 +13,7 @@ public abstract class InputAdapter implements Closeable {
 		if (obj == null) {
 			throw new IOException("Property not found.");
 		}
-		this.type = obj.get("type");
+		this.type = obj.get("messagetype");
 	}
 
 	public abstract Message run();

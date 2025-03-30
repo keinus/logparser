@@ -16,34 +16,49 @@ public class ParseService {
 
     private Map<String, List<IParser>> parsers = new HashMap<>();
 
+    private IParser loadLibrary(String parserClassName) {
+        String className = "org.keinus.logparser.parser." + parserClassName;
+        Class<?> testClass;
+        try {
+            testClass = Class.forName(className);
+        } catch (ClassNotFoundException e) {
+            LOGGER.error(className + " not found", e);
+            return null;
+        }
+        if (testClass == null || !IParser.class.isAssignableFrom(testClass)) {
+            LOGGER.error("{} is not a valid parser class", className);
+            return null;
+        }
+        IParser parserInterface;
+        try {
+            parserInterface = (IParser) testClass.getDeclaredConstructor().newInstance();
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+            LOGGER.error("{} can not call instantiated", className);
+            return null;
+        }
+        return parserInterface;
+    }
+
     public ParseService(List<Map<String, String>> parserList) {
-        if(parserList != null) {
-            for(Map<String, String> parser : parserList) {
-                String className = "org.keinus.logparser.parser." + parser.get("type");
-                try {
-                    Class<?> testClass = Class.forName(className);
-                    IParser parserInterface = (IParser) testClass.getDeclaredConstructor().newInstance();
-                    parserInterface.init(parser.get("param"));
-                    var typeList = parser.get("messagetype").split(",");
-                    for(String type : typeList) {
-                        if(parsers.get(type) == null) {
-                            parsers.put(type, new ArrayList<>());
-                        } 
-                        parsers.get(type).add(parserInterface);
-                    }
-                } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException
-                        | InvocationTargetException | NoSuchMethodException | SecurityException e) {
-                    e.printStackTrace();
-                    continue;
-                }
-                
-                LOGGER.info("Message Parser registerd {}", className);
+        for(Map<String, String> parser : parserList) {
+            String parserType = parser.get("type");
+            IParser parserInterface = loadLibrary(parserType);
+            if(parserInterface == null) {
+                continue;
             }
+            parserInterface.init(parser.get("param"));
+            var msgType = parser.get("messagetype");
+            parsers.computeIfAbsent(msgType, k -> new ArrayList<>());
+            parsers.get(msgType).add(parserInterface);
+            LOGGER.info("Message Parser registered {}", parserType);
         }
     }
 
     public Map<String, Object> parse(String text, String type) {
         List<IParser> parserList = parsers.get(type);
+        
+        
         for(IParser parser : parserList) {
             var parsered = parser.parse(text);
             if(parsered != null) {

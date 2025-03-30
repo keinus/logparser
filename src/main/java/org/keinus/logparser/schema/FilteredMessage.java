@@ -1,6 +1,5 @@
 package org.keinus.logparser.schema;
 
-import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -11,13 +10,18 @@ import lombok.Data;
 @Data
 @Builder
 @AllArgsConstructor
-public class FilteredMessage implements Serializable {
-    private static final long serialVersionUID = 2405172041950251807L;
+public class FilteredMessage {
     private String originText;
     private String type;
-
+    
     @Builder.Default
     private Map<String, Object> msg = new HashMap<>();
+
+    public FilteredMessage(String origin, Map<String, Object> body, String type) {
+        this.originText = origin;
+        this.msg.putAll(body);
+        this.type = type;
+    }
 
     public void fromMessage(Message message) {
         this.originText = message.getOriginText();

@@ -14,7 +14,7 @@ public class OutputFactory {
 		String type = param.get("type");
 		try {
 			Class<?> cls = Class.forName("org.keinus.logparser.output." + type);
-			return (OutputAdapter) cls.getDeclaredConstructor().newInstance();
+			return (OutputAdapter) cls.getDeclaredConstructor(Map.class).newInstance(param);
 		}
 		catch (InstantiationException | IllegalAccessException | IllegalArgumentException 
 			| InvocationTargetException | NoSuchMethodException 

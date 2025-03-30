@@ -20,8 +20,8 @@ import org.springframework.stereotype.Component;
 public class InputAdaptorComponent {
     private static final Logger LOGGER = LoggerFactory.getLogger(InputAdaptorComponent.class);
     /**
-	 * input adapter
-	 */
+     * input adapter
+     */
     private List<InputAdapter> inputList = new ArrayList<>();
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
@@ -34,7 +34,7 @@ public class InputAdaptorComponent {
                 this.inputList.add(adapter);
                 customExecutorService.execute(() -> this.processInputAdapter(adapter));
                 LOGGER.info("InputAdapter {} registered", adapter.getClass().getSimpleName());
-            } catch(Exception e) {
+            } catch (Exception e) {
                 LOGGER.error("InputAdapter {} initialize error. {}", param.get("type"), e.getMessage());
             }
         }
@@ -50,11 +50,11 @@ public class InputAdaptorComponent {
                 }
             }
             Message originMsg = mInputAdapter.run();
-            if(originMsg != null) {
+            if (originMsg != null) {
                 originMsg.setType(mInputAdapter.getType());
                 originMsg.setTimestamp(Instant.now());
-                
-                if(MessageDispatcher.putGlobalMsg(originMsg)) {
+
+                if (!MessageDispatcher.putGlobalMsg(originMsg)) {
                     LOGGER.warn("MessageQueue Full. Message discarded. {}", originMsg.getType());
                 }
             }
@@ -64,6 +64,11 @@ public class InputAdaptorComponent {
     public void close() {
         running.set(false);
     }
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Shutting down InputAdaptorComponent...");
+            running.set(false);
+        }));
+    }
 }
-
-

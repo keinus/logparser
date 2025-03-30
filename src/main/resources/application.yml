@@ -10,43 +10,27 @@ server:
 logparser:
   input: 
 #    -
-#      type : tcp
+#      type : TcpInputAdapter
 #      port : 21514
 #      messagetype : syslog
-    -
-     type : udp
-     port : 21514
-     messagetype : syslog
+    # -
+    #  type : UdpInputAdapter
+    #  port : 514
+    #  messagetype : syslog
 #    -
-#      type : http
+#      type : HttpInputAdapter
 #      port : 21515
 #      messagetype  : fe
 #      codec : json
 #    -
-#      type : kafka
+#      type : KafkaInputAdapter
 #      topicid : csas
 #      bootstrapservers: "192.168.254.8:9092"
-#    -
-#      type : file
-#      path: "/home/docker/bro/logs/conn.log"
-#      messagetype : idslog
     -
       type : FileInputAdapter
       path : "./eve.json"
       messagetype : eve
       isFromBeginning: true
-    # -
-    #   type : http
-    #   port : 9997
-    #   messagetype  : fe
-    # -
-    #   type : tcp
-    #   port : 9996
-    #   messagetype : agent
-    # -
-    #   type : udp
-    #   port : 9995
-    #   messagetype : applicationlog
     
   parser:
     # - type: GrokParser
@@ -61,9 +45,9 @@ logparser:
       messagetype: eve
       param:
         pass:
-          event_type: alert, anomaly, http, dns, tls, files
+          messagetype: alert, anomaly, http, dns, tls, files
         drop:
-          event_type: tls, files
+          messagetype: tls, files
     - type: AddProperty
       messagetype: eve
       param:
@@ -83,35 +67,41 @@ logparser:
 
   output: 
 #    -
-#      type : kafka
+#      type : KafkaOutputAdapter
 #      messagetype : all
 #      topicid : csas
 #      bootstrapservers : "192.168.254.8:9092"
 #    -
-#      type : http
+#      type : HttpOutputAdapter
 #      messagetype  : fe
 #      url : "http://192.168.254.53:21504/fe"
 #    -
-#      type : tcp
+#      type : TcpOutputAdapter
 #      messagetype : syslog
 #      host : 192.168.254.51
 #      port : 21514
 #    -
-#      type : elasticsearch
+#      type : RabbitMQAdapter
 #      messagetype : all
 #      host : "192.168.1.22"
-#      index : "%{messagetype}.%{yyMMdd}"
+#      username : "admin"
+#      password : "admin"
+#      port : 5672
+#      routingkey : "admin"
+#      exchange : "admin"
     -
       type : BenchmarkAdapter
-      messagetype : all
       add_origin_text : true
-    # -
-      # type : ConsoleOutputAdapter
-      # messagetype : all
     -
-      type : OpenSearchOutputAdapter
-      messagetype : all
-      host : "192.168.1.23"
-      port: 9200
-      index : "suricata-%{event_type}-%{yyMMdd}"
-      add_origin_text : true
+      type : ConsoleOutputAdapter
+      messagetype : syslog
+    -
+      type : ConsoleOutputAdapter
+      messagetype : eve
+    # -
+    #   type : OpenSearchOutputAdapter
+    #   messagetype : all
+    #   host : "192.168.1.23"
+    #   port: 9200
+    #   index : "suricata-%{event_type}-%{yyMMdd}"
+    #   add_origin_text : true

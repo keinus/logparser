@@ -34,19 +34,12 @@ public class OutputAdaptorComponent {
         for (Map<String, String> param : appProp.getOutput()) {
             OutputAdapter adapter = OutputFactory.getOutputAdapter(param);
             OutputAdapterProcedure procedure = new OutputAdapterProcedure(adapter);
-            var typeList = param.get("messagetype") != null ? param.get("messagetype").split(",") : new String[]{"all"};
-            for (String messagetype : typeList) {
-                if (messagetype.length() <= 1)
-                    continue;
+            String msgType = adapter.getType();
 
-                if (outputMap.get(messagetype) == null) {
-                    outputMap.put(messagetype, new ArrayList<>());
-                    
-                } 
-                outputMap.get(messagetype).add(procedure);
-                customExecutorService.execute(procedure);
-                LOGGER.info("OutputAdapter {} registered", adapter.getClass().getSimpleName());
-            }
+            outputMap.computeIfAbsent(msgType, k -> new ArrayList<>());
+            outputMap.get(msgType).add(procedure);
+            customExecutorService.execute(procedure);
+            LOGGER.info("OutputAdapter {} registered", adapter.getClass().getSimpleName());
         }
         customExecutorService.execute(this::processOutputAdapter);
     }
@@ -58,20 +51,21 @@ public class OutputAdaptorComponent {
                 continue;
 
             String messagetype = msg.getType();                
-            var procList = outputMap.get(messagetype);
-            if(procList != null) {
-                for(var proc : procList) {
-                    proc.enqueue(msg);
-                }
+            for(var proc : outputMap.getOrDefault(messagetype, new ArrayList<>())) {
+                proc.enqueue(msg);
             }
 
-            var allList = outputMap.get("all");
-            if(allList != null) {
-                for(var proc : allList) {
-                    proc.enqueue(msg);
-                }
+            for(var proc : outputMap.getOrDefault(OutputAdapter.ALL_MESSAGE_STRING, new ArrayList<>())) {
+                proc.enqueue(msg);
             }
         }
+    }
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Shutting down InputAdaptorComponent...");
+            running.set(false);
+        }));
     }
     
 }

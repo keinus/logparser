@@ -7,6 +7,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import com.google.gson.Gson;
 
 import org.keinus.logparser.schema.FilteredMessage;
+import org.keinus.logparser.util.ThreadUtil;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 public class OutputAdapterProcedure implements Runnable {
@@ -15,18 +16,23 @@ public class OutputAdapterProcedure implements Runnable {
     private BlockingQueue<FilteredMessage> outputMessageQueue = new LinkedBlockingQueue<>(100);
     
     private OutputAdapter outputAdapter;
+
+    private boolean isRunning = true;
+
     public OutputAdapterProcedure(OutputAdapter outputAdapter) {
         this.outputAdapter = outputAdapter;
     }
 
     public void enqueue(FilteredMessage message) {
-        this.outputMessageQueue.offer(message);
+        while(!this.outputMessageQueue.offer(message)) {
+            ThreadUtil.sleep(100);
+        }
     }
 
     @Override
     public void run() {
         boolean addOriginText = outputAdapter.getAddOriginText();
-        while(true) {
+        while(isRunning) {
             FilteredMessage message = outputMessageQueue.poll();
             
             if(message != null) {
@@ -44,6 +50,8 @@ public class OutputAdapterProcedure implements Runnable {
     public void close() {
         try {
             outputAdapter.close();
+            this.isRunning = false;
+            outputMessageQueue.clear();
         } catch (IOException e) {
             e.printStackTrace();
         }

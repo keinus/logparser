@@ -8,6 +8,8 @@ class LogparserApplicationTests {
 
 	@Test
 	void contextLoads() {
+		// None
+		
 	}
 
 }
