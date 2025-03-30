@@ -5,7 +5,8 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.keinus.logparser.util.CustomExecutorService;
+
+import org.keinus.logparser.util.ThreadManager;
 import org.keinus.logparser.util.ThreadUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,11 +47,10 @@ public class MessageDispatcher {
 	 */
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
-	/**
-	 * ExecutorService의 커스텀 구현
-	 */
-    private CustomExecutorService customExecutorService;
-
+    /**
+     * 스레드 관리자
+     */
+    private ThreadManager threadManager;
 
     /**
      * ParseService 인스턴스
@@ -64,22 +64,22 @@ public class MessageDispatcher {
 
     /**
      * MessageDispatcher 생성자.
-     * CustomExecutorService와 ApplicationProperties를 주입받아 초기화합니다.
+     * threadManager와 ApplicationProperties를 주입받아 초기화합니다.
      * 또한, 입력 어댑터와 출력 어댑터를 초기화하고,
      * parseAndTransform 메서드를 별도의 스레드로 실행시킵니다.
      *
-     * @param customThreadExecutor 사용자 정의 ExecutorService
+     * @param threadManager        사용자 정의 thread 관리자
      * @param appProp              ApplicationProperties 설정
      */
     public MessageDispatcher(
-            @Autowired CustomExecutorService customThreadExecutor, 
+            @Autowired ThreadManager threadManager, 
             @Autowired ApplicationProperties appProp) {
 
-        this.customExecutorService = customThreadExecutor;
+        this.threadManager = threadManager;
         this.parseService = new ParseService(appProp.getParser());
         this.transformService = new TransformService(appProp.getTransform());
 
-        customExecutorService.execute(this::parseAndTransform);
+        threadManager.startThread("parseAndTransform", this::parseAndTransform);
     }
 
 	/**
@@ -90,7 +90,7 @@ public class MessageDispatcher {
 	 */
     public void close() throws IOException {
         globalMessageQueue.clear();
-        customExecutorService.close();
+        this.threadManager.stopAllThreads();
         LOGGER.info("Message Dispatcher closed");
     }
 
@@ -117,13 +117,13 @@ public class MessageDispatcher {
             if (this.transformService.transform(parsedStr, message.getType())) {
                 FilteredMessage outputMsg = new FilteredMessage(message.getOriginText(), parsedStr, message.getType());
                 putOutputMsg(outputMsg);
-            }
+            } 
 		}
 	}
 
     public static boolean putGlobalMsg(Message msg) {
         while (!globalMessageQueue.offer(msg)) {
-            ThreadUtil.sleep(100);
+            ThreadUtil.sleep(1);
         }
         return true;
     }
@@ -134,7 +134,7 @@ public class MessageDispatcher {
 
     public static boolean putOutputMsg(FilteredMessage msg) {
         while(!outputMessageQueue.offer(msg)) {
-            ThreadUtil.sleep(100);
+            ThreadUtil.sleep(1);
         }
         return true;
     }

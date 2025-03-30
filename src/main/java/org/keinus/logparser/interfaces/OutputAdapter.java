@@ -5,14 +5,15 @@ import java.io.IOException;
 import java.util.Map;
 
 public abstract class OutputAdapter implements Closeable {
-	public static final String ALL_MESSAGE_STRING = "ALL_MESSAGE_TYPE";
+	private String name;
 
 	protected OutputAdapter(Map<String, String> obj) throws IOException {
 		if (obj == null) {
 			throw new IOException("Property not found.");
 		}
-		this.type = obj.getOrDefault("messagetype", ALL_MESSAGE_STRING);
+		this.type = obj.getOrDefault("messagetype", null);
 		this.addOriginText = Boolean.parseBoolean(obj.get("add_origin_text"));
+		this.name = getClass().getSimpleName() + ":" + obj.toString();
 	}
 
 	private String type = "";
@@ -29,4 +30,8 @@ public abstract class OutputAdapter implements Closeable {
 	public abstract void send(Map<String, Object> json, String jsonString);
 	public abstract void flush();
 
+	@Override
+	public String toString() {
+		return this.name;
+	}
 }

@@ -17,10 +17,10 @@ public class CustomThreadFactory implements ThreadFactory {
 
 	@Override
 	public Thread newThread(Runnable r) {
-		Thread thread = new Thread(r, String.format("%s-%d-%s",
+		Thread thread = new Thread(r, String.format("%s-%d",
 				this.namePrefix,
-				this.threadNum.getAndIncrement(),
-				r.getClass().getSimpleName()));
+				this.threadNum.getAndIncrement()
+				));
 		thread.setDaemon(false);
 		thread.setPriority(Thread.NORM_PRIORITY);
 		LOGGER.info("Thread created: {}", thread.getName());

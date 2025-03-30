@@ -3,27 +3,23 @@ package org.keinus.logparser.schema;
 import java.util.HashMap;
 import java.util.Map;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 
 @Data
-@Builder
-@AllArgsConstructor
 public class FilteredMessage {
     private String originText;
     private String type;
-    
-    @Builder.Default
-    private Map<String, Object> msg = new HashMap<>();
+    private Map<String, Object> msg;
 
     public FilteredMessage(String origin, Map<String, Object> body, String type) {
+        msg = new HashMap<>();
+
         this.originText = origin;
         this.msg.putAll(body);
         this.type = type;
     }
 
-    public void fromMessage(Message message) {
+    public FilteredMessage(Message message) {
         this.originText = message.getOriginText();
         msg.put("host", message.getHost());
         msg.put("type", message.getType());

@@ -9,12 +9,13 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.keinus.logparser.interfaces.IParser;
+import org.keinus.logparser.util.MergingHashMap;
 
 
 public class ParseService {
     private static final Logger LOGGER = LoggerFactory.getLogger( ParseService.class );
 
-    private Map<String, List<IParser>> parsers = new HashMap<>();
+    private MergingHashMap<IParser> parsers = new MergingHashMap<>();
 
     private IParser loadLibrary(String parserClassName) {
         String className = "org.keinus.logparser.parser." + parserClassName;
@@ -49,16 +50,14 @@ public class ParseService {
             }
             parserInterface.init(parser.get("param"));
             var msgType = parser.get("messagetype");
-            parsers.computeIfAbsent(msgType, k -> new ArrayList<>());
-            parsers.get(msgType).add(parserInterface);
+            parsers.put(msgType, parserInterface);
             LOGGER.info("Message Parser registered {}", parserType);
         }
     }
 
     public Map<String, Object> parse(String text, String type) {
         List<IParser> parserList = parsers.get(type);
-        
-        
+
         for(IParser parser : parserList) {
             var parsered = parser.parse(text);
             if(parsered != null) {

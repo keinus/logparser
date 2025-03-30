@@ -45,9 +45,9 @@ logparser:
       messagetype: eve
       param:
         pass:
-          messagetype: alert, anomaly, http, dns, tls, files
+          event_type: alert, anomaly, http, dns, tls, files
         drop:
-          messagetype: tls, files
+          event_type: tls, files
     - type: AddProperty
       messagetype: eve
       param:
@@ -95,9 +95,9 @@ logparser:
     -
       type : ConsoleOutputAdapter
       messagetype : syslog
-    -
-      type : ConsoleOutputAdapter
-      messagetype : eve
+    # -
+    #   type : ConsoleOutputAdapter
+    #   messagetype : eve
     # -
     #   type : OpenSearchOutputAdapter
     #   messagetype : all

@@ -1,10 +1,6 @@
 package org.keinus.logparser.components;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.config.ApplicationProperties;
@@ -12,6 +8,8 @@ import org.keinus.logparser.dispatch.OutputAdapterProcedure;
 import org.keinus.logparser.dispatch.OutputFactory;
 import org.keinus.logparser.interfaces.OutputAdapter;
 import org.keinus.logparser.schema.FilteredMessage;
+import org.keinus.logparser.util.MergingHashMap;
+import org.keinus.logparser.util.ThreadManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,20 +26,18 @@ public class OutputAdaptorComponent {
     /**
 	 * output adapter
 	 */
-    private Map<String, List<OutputAdapterProcedure>> outputMap = new HashMap<>();
+    private MergingHashMap<OutputAdapterProcedure> outputMap = new MergingHashMap<>();
   
-    public OutputAdaptorComponent(ApplicationProperties appProp, ExecutorService customExecutorService) {
+    public OutputAdaptorComponent(ApplicationProperties appProp, ThreadManager threadManager) {
         for (Map<String, String> param : appProp.getOutput()) {
             OutputAdapter adapter = OutputFactory.getOutputAdapter(param);
             OutputAdapterProcedure procedure = new OutputAdapterProcedure(adapter);
             String msgType = adapter.getType();
-
-            outputMap.computeIfAbsent(msgType, k -> new ArrayList<>());
-            outputMap.get(msgType).add(procedure);
-            customExecutorService.execute(procedure);
+            outputMap.put(msgType, procedure);
+            threadManager.startThread(adapter.toString(), procedure);
             LOGGER.info("OutputAdapter {} registered", adapter.getClass().getSimpleName());
         }
-        customExecutorService.execute(this::processOutputAdapter);
+        threadManager.startThread("processOutputAdapter", this::processOutputAdapter);
     }
 
     private void processOutputAdapter() {
@@ -51,11 +47,7 @@ public class OutputAdaptorComponent {
                 continue;
 
             String messagetype = msg.getType();                
-            for(var proc : outputMap.getOrDefault(messagetype, new ArrayList<>())) {
-                proc.enqueue(msg);
-            }
-
-            for(var proc : outputMap.getOrDefault(OutputAdapter.ALL_MESSAGE_STRING, new ArrayList<>())) {
+            for(var proc : outputMap.get(messagetype)) {
                 proc.enqueue(msg);
             }
         }

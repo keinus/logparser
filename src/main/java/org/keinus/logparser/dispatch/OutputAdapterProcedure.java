@@ -25,7 +25,7 @@ public class OutputAdapterProcedure implements Runnable {
 
     public void enqueue(FilteredMessage message) {
         while(!this.outputMessageQueue.offer(message)) {
-            ThreadUtil.sleep(100);
+            ThreadUtil.sleep(1);
         }
     }
 
