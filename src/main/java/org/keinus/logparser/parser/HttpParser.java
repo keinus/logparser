@@ -14,6 +14,7 @@ import org.keinus.logparser.interfaces.IParser;
 public class HttpParser implements IParser {
 	@Override
 	public void init(Object param) {
+		// 초기화 없음.
 	}
 
 	@Override
@@ -24,7 +25,6 @@ public class HttpParser implements IParser {
 		
 		try(BufferedReader br = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(message.getBytes(StandardCharsets.UTF_8 ))))) {
 			String line;
-			// Read request line
 			line = br.readLine();
 
 			while((line=br.readLine()) != null) {

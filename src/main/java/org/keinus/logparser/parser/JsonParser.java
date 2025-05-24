@@ -14,6 +14,7 @@ public class JsonParser implements IParser {
 
     @Override
 	public void init(Object param) {
+		// 초기화 없음.
 	}
 
 	@Override

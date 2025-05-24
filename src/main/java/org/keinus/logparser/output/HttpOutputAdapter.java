@@ -24,7 +24,7 @@ public class HttpOutputAdapter extends OutputAdapter {
 	public HttpOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
 		
-		String url = obj.get("url");	// "http://192.168.254.8:8070/fe"
+		String url = obj.get("url");
 		
 		int start = url.indexOf("://");
 		start += 3;

@@ -13,7 +13,7 @@ import org.keinus.logparser.interfaces.OutputAdapter;
 public class OutputAdapterProcedure implements Runnable {
     private Gson gson = new Gson();
 
-    private BlockingQueue<FilteredMessage> outputMessageQueue = new LinkedBlockingQueue<>(100);
+    private BlockingQueue<FilteredMessage> outputMessageQueue = new LinkedBlockingQueue<>(1000);
     
     private OutputAdapter outputAdapter;
 

@@ -19,7 +19,7 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 	public void send(Map<String, Object> json, String jsonString) {
 		try {
 			synchronized( this ) {
-				System.out.println(jsonString);
+				LOGGER.info(jsonString);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -28,10 +28,11 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 
 	@Override
 	public void close() throws IOException {
-		
+		// 불필요
 	}
 
 	@Override
 	public void flush() {
+		// 불필요
 	}
 }
