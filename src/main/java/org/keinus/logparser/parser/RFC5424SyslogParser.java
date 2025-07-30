@@ -307,7 +307,7 @@ public class RFC5424SyslogParser implements IParser {
         public static final String HOST = PREFIX + "HOST";
         public static final String TAG = PREFIX + "TAG";
 
-        //// RFC 5424 Parser:
+        // RFC 5424 Parser:
         public static final String MESSAGE = PREFIX + "MESSAGE";
         public static final String APP_NAME = PREFIX + "APP_NAME";
         public static final String PROCID = PREFIX + "PROCID";
