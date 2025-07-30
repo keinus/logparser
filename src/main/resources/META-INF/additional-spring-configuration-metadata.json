@@ -23,5 +23,10 @@
     "name": "logparser.output",
     "type": "java.util.List",
     "description": "A description for 'logparser.output'"
+  },
+  {
+    "name": "logparser.parser_threads",
+    "type": "java.lang.Integer",
+    "description": "A description for 'logparser.parser_threads'"
   }
 ]}

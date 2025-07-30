@@ -78,8 +78,10 @@ public class MessageDispatcher {
         this.threadManager = threadManager;
         this.parseService = new ParseService(appProp.getParser());
         this.transformService = new TransformService(appProp.getTransform());
-
-        threadManager.startThread("parseAndTransform", this::parseAndTransform);
+        int threads = appProp.getParserThreads();
+        for(int i = 1; i <= threads; i++) {
+            threadManager.startThread("parseAndTransform-"+i, this::parseAndTransform);
+        }
     }
 
 	/**
@@ -103,6 +105,7 @@ public class MessageDispatcher {
                 e.printStackTrace();
                 LOGGER.error("Interrupted while waiting for message", e);
                 Thread.currentThread().interrupt();
+                return;
             }
 
             if (message == null)

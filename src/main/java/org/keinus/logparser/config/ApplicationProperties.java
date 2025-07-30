@@ -16,5 +16,5 @@ public class ApplicationProperties {
 	private List<Map<String, String>> output;
 	private List<Map<String, String>> parser;
 	private List<TransformConfig> transform;
-	private int threads;
+	private int parserThreads;
 }
