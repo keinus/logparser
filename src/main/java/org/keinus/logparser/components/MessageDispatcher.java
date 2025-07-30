@@ -7,7 +7,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.util.ThreadManager;
-import org.keinus.logparser.util.ThreadUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,8 +101,7 @@ public class MessageDispatcher {
             try {
                 message = globalMessageQueue.take();
             } catch (InterruptedException e) {
-                e.printStackTrace();
-                LOGGER.error("Interrupted while waiting for message", e);
+                LOGGER.error("Interrupted while waiting for message in class {} method {}", this.getClass().getName(), Thread.currentThread().getStackTrace()[2].getMethodName());
                 Thread.currentThread().interrupt();
                 return;
             }
@@ -125,8 +123,11 @@ public class MessageDispatcher {
 	}
 
     public static boolean putGlobalMsg(Message msg) {
-        while (!globalMessageQueue.offer(msg)) {
-            ThreadUtil.sleep(1);
+        try {
+            globalMessageQueue.put(msg);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
         return true;
     }
@@ -136,8 +137,11 @@ public class MessageDispatcher {
     }
 
     public static boolean putOutputMsg(FilteredMessage msg) {
-        while(!outputMessageQueue.offer(msg)) {
-            ThreadUtil.sleep(1);
+        try {
+            outputMessageQueue.put(msg);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
         return true;
     }

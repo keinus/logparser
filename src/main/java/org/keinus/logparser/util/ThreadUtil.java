@@ -1,5 +1,8 @@
 package org.keinus.logparser.util;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class ThreadUtil {
     private ThreadUtil() {
         throw new IllegalStateException("Utility class");
@@ -34,7 +37,7 @@ public class ThreadUtil {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            log.error(e.getMessage());
             Thread.currentThread().interrupt();
         }
     }

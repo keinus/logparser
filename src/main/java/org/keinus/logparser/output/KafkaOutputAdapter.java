@@ -41,7 +41,7 @@ public class KafkaOutputAdapter extends OutputAdapter {
 				producer.send(new ProducerRecord<>(topic, jsonString));
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOGGER.error(e.getMessage());
 		}
 	}
 

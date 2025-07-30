@@ -27,7 +27,6 @@ public class TcpInputAdapter extends InputAdapter {
             
             LOGGER.info("TCP Input Adapter start at port {}", port);
         } catch (IOException e) {
-            e.printStackTrace();
             LOGGER.error(e.getMessage());
         }
 	}
@@ -56,7 +55,7 @@ public class TcpInputAdapter extends InputAdapter {
 				LOGGER.error("TcpInputAdaptor Server Socket Error(Terminate this Adapter): {}", e1.getMessage());
 			}
 		} catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error(e.getMessage());
         } 
         return null;
     }

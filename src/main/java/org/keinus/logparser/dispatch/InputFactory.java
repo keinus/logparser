@@ -4,7 +4,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
 import org.keinus.logparser.interfaces.InputAdapter;
 
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class InputFactory {
 	private InputFactory() {
 		throw new IllegalStateException("Utility class");
@@ -19,7 +21,7 @@ public class InputFactory {
 		catch (InstantiationException | IllegalAccessException | IllegalArgumentException 
 			| InvocationTargetException | NoSuchMethodException 
 			| SecurityException | ClassNotFoundException e) {
-			e.printStackTrace();
+			log.error("Invalid Input Adapter. {}", e.getMessage());
 			throw new IllegalStateException("Invalid Input Adapter.");
 		}
 	}

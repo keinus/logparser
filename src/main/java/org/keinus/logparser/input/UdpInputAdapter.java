@@ -44,7 +44,7 @@ public class UdpInputAdapter extends InputAdapter {
 			String host = receivePacket.getAddress().toString();
 			return new Message(payload, host);
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOGGER.error(e.getMessage());
 		}
 		return null;
 	}

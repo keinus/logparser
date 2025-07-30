@@ -7,10 +7,14 @@ import java.util.concurrent.TimeoutException;
 
 import org.keinus.logparser.interfaces.OutputAdapter;
 import com.rabbitmq.client.ConnectionFactory;
+
+import lombok.extern.slf4j.Slf4j;
+
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.BuiltinExchangeType;
 import com.rabbitmq.client.Channel;
 
+@Slf4j
 public class RabbitMQAdapter extends OutputAdapter {
 	private String routingkey = null;
 	private String exchange = null;
@@ -32,7 +36,7 @@ public class RabbitMQAdapter extends OutputAdapter {
 			channel = connection.createChannel();
 			channel.exchangeDeclare(exchange, BuiltinExchangeType.TOPIC);
 		} catch (IOException | TimeoutException e) {
-			e.printStackTrace();
+			log.error(e.getMessage());
 		}
 	}
 
@@ -42,7 +46,7 @@ public class RabbitMQAdapter extends OutputAdapter {
 			channel.close();
 			connection.close();
 		} catch (IOException | TimeoutException e) {
-			e.printStackTrace();
+			log.error(e.getMessage());
 		}
 
 	}
@@ -52,7 +56,7 @@ public class RabbitMQAdapter extends OutputAdapter {
 		try {
 			channel.basicPublish(exchange, routingkey, null, jsonString.getBytes(StandardCharsets.UTF_8));
 		} catch (IOException e) {
-			e.printStackTrace();
+			log.error(e.getMessage());
 		}
 	}
 

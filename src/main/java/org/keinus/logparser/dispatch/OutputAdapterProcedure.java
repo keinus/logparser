@@ -6,10 +6,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import com.google.gson.Gson;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.keinus.logparser.schema.FilteredMessage;
 import org.keinus.logparser.util.ThreadUtil;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
+@Slf4j
 public class OutputAdapterProcedure implements Runnable {
     private Gson gson = new Gson();
 
@@ -53,7 +56,7 @@ public class OutputAdapterProcedure implements Runnable {
             this.isRunning = false;
             outputMessageQueue.clear();
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Error: {}", e.getMessage());
         }
     }
 }

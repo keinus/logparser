@@ -10,7 +10,9 @@ import java.util.Map;
 
 import org.keinus.logparser.interfaces.IParser;
 
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class HttpParser implements IParser {
 	@Override
 	public void init(Object param) {
@@ -41,7 +43,7 @@ public class HttpParser implements IParser {
 				sb.append(System.getProperty("line.separator"));
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			log.error(e.getMessage());
 		}
 		retval.put("headers", headers);
 		retval.put("body", sb.toString());

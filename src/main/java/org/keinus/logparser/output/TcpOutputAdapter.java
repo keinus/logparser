@@ -8,14 +8,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 
+@Slf4j
 public class TcpOutputAdapter extends OutputAdapter {
-	private static final Logger LOGGER = LoggerFactory.getLogger( TcpOutputAdapter.class );
 	private Socket socket;
 	private String host = null;
 	private int port = 0;
@@ -27,7 +26,7 @@ public class TcpOutputAdapter extends OutputAdapter {
 		port = Integer.parseInt(obj.get("port"));
 		host = obj.get("host");
 		socket = new Socket();
-		LOGGER.info("TCP Output Adapter connected at ip, port {}, {}", host, port);
+		log.info("TCP Output Adapter connected at ip, port {}, {}", host, port);
 	}
 
 	public void send(Map<String, Object> json, String jsonString) {
@@ -42,8 +41,7 @@ public class TcpOutputAdapter extends OutputAdapter {
 					socket.setReuseAddress(true);
 					break;
 				} catch (IOException e) {
-					e.printStackTrace();
-					LOGGER.error(e.getMessage());
+					log.error(e.getMessage());
 					count++;
 				}
 			}
@@ -51,12 +49,12 @@ public class TcpOutputAdapter extends OutputAdapter {
 			try (DataOutputStream dos = new DataOutputStream(socket.getOutputStream())) {
 				dos.write(byteBuffer.array());
 			} catch (IOException e) {
-				e.printStackTrace();
+				log.error(e.getMessage());
 			}
 			try {
 				socket.close();
 			} catch (IOException e) {
-				e.printStackTrace();
+				log.error(e.getMessage());
 			}
 		}
 	}

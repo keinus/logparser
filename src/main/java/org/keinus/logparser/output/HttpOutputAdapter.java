@@ -57,7 +57,6 @@ public class HttpOutputAdapter extends OutputAdapter {
 					socket.setReuseAddress(true);
 					break;
 				} catch (IOException e) {
-					e.printStackTrace();
 					LOGGER.error(e.getMessage());
 					if(count > 1) return;
 					count++;
@@ -74,12 +73,12 @@ public class HttpOutputAdapter extends OutputAdapter {
 			try (DataOutputStream dos = new DataOutputStream(socket.getOutputStream())) {
 				dos.write(byteBuffer.array());
 			} catch (IOException e) {
-				e.printStackTrace();
+				LOGGER.error(e.getMessage());				
 			}
 			try {
 				socket.close();
 			} catch (IOException e) {
-				e.printStackTrace();
+				LOGGER.error(e.getMessage());				
 			}
 		}
 	}

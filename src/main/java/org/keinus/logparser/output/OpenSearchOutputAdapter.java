@@ -62,7 +62,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 			this.httpClient = HttpClients.custom().setSSLSocketFactory(scsf).build();
 
 		} catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
-			e.printStackTrace();
+			LOGGER.error(e.getMessage());
 		}
 	}
 
@@ -141,7 +141,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 				int processedPerSecond = (int) (count / elapsedSeconds); // Calculate count per second
 				LOGGER.info("{} item processed in {} second: {}/s", count, elapsedSeconds, processedPerSecond);
 			} catch (IOException e) {
-				e.printStackTrace();
+				LOGGER.error(e.getMessage());
 			}
 		}
 		this.dataMap.clear();

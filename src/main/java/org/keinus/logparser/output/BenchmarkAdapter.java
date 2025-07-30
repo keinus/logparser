@@ -35,7 +35,7 @@ public class BenchmarkAdapter extends OutputAdapter {
 				ai.set(0);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOGGER.error(e.getMessage());
 		}
 	}
 

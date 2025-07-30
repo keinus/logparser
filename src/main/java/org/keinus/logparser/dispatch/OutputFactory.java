@@ -4,7 +4,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
+import lombok.extern.slf4j.Slf4j;
 
+
+@Slf4j
 public class OutputFactory {
 	private OutputFactory() {
 		throw new IllegalStateException("Utility class");
@@ -19,7 +22,7 @@ public class OutputFactory {
 		catch (InstantiationException | IllegalAccessException | IllegalArgumentException 
 			| InvocationTargetException | NoSuchMethodException 
 			| SecurityException | ClassNotFoundException e) {
-			e.printStackTrace();
+			log.error("Invalid Output Adapter. {}", e.getMessage());
 			throw new IllegalStateException("Invalid Output Adapter.");
 		}
 	}

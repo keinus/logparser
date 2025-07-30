@@ -30,12 +30,16 @@ public class OutputAdaptorComponent {
   
     public OutputAdaptorComponent(ApplicationProperties appProp, ThreadManager threadManager) {
         for (Map<String, String> param : appProp.getOutput()) {
-            OutputAdapter adapter = OutputFactory.getOutputAdapter(param);
-            OutputAdapterProcedure procedure = new OutputAdapterProcedure(adapter);
-            String msgType = adapter.getType();
-            outputMap.put(msgType, procedure);
-            threadManager.startThread(adapter.toString(), procedure);
-            LOGGER.info("OutputAdapter {} registered", adapter.getClass().getSimpleName());
+            try {
+                OutputAdapter adapter = OutputFactory.getOutputAdapter(param);
+                OutputAdapterProcedure procedure = new OutputAdapterProcedure(adapter);
+                String msgType = adapter.getType();
+                outputMap.put(msgType, procedure);
+                threadManager.startThread(adapter.toString(), procedure);
+                LOGGER.info("OutputAdapter {} registered", adapter.getClass().getSimpleName());
+            } catch(Exception e) {
+                LOGGER.error("OutputAdapter {} initialize error. {}", param.get("type"), e.getMessage());
+            }
         }
         threadManager.startThread("processOutputAdapter", this::processOutputAdapter);
     }

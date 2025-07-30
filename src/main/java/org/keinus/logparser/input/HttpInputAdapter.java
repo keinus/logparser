@@ -12,9 +12,13 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import lombok.extern.slf4j.Slf4j;
+
 import org.keinus.logparser.interfaces.InputAdapter;
 import org.keinus.logparser.schema.Message;
 
+@Slf4j
 public class HttpInputAdapter extends InputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpInputAdapter.class);
 
@@ -28,7 +32,6 @@ public class HttpInputAdapter extends InputAdapter {
 
 			LOGGER.info("HTTP Input Adapter start at port {}", port);
 		} catch (IOException e) {
-			e.printStackTrace();
 			LOGGER.error(e.getMessage());
 		}
 	}
@@ -102,7 +105,7 @@ public class HttpInputAdapter extends InputAdapter {
 				serverSocket.close();
 			serverSocket = null;
 		} catch (IOException e) {
-			e.printStackTrace();
+			log.error("Error: {}", e.getMessage());
 		}
 	}
 }
