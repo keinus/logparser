@@ -51,7 +51,6 @@ public class TcpInputAdapter extends InputAdapter {
 			try {
 				initServerSocket();
 			} catch (IOException e1) {
-				e1.printStackTrace();
 				LOGGER.error("TcpInputAdaptor Server Socket Error(Terminate this Adapter): {}", e1.getMessage());
 			}
 		} catch (IOException e) {

@@ -1,6 +1,7 @@
 package org.keinus.logparser.transform;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,8 +17,14 @@ public class Filter implements ITransform {
     private void parseParam(Map<String, List<String>> paramMap, Map<String, String> param) {
 		if(param != null) {
 			param.forEach((key, value) -> {
-				String[] targetSplit = value.split(",");
-				paramMap.put(key, Arrays.asList(targetSplit));
+				List<String> values = new ArrayList<>();
+                for (String v : value.split(",")) {
+                    String trimmed = v.trim();
+                    if (!trimmed.isEmpty()) {
+                        values.add(trimmed);
+                    }
+                }
+                paramMap.put(key, values);
 			});
 		}
     }
@@ -34,13 +41,13 @@ public class Filter implements ITransform {
 			String prop = entry.getKey();
 			String targetProp = (String) message.get(prop);
 			if(entry.getValue().contains(targetProp))
-				return null;
+				return Collections.emptyMap();
 		}
 		for(Entry<String, List<String>> entry : pass.entrySet()) {
 			String prop = entry.getKey();
 			String targetProp = (String) message.get(prop);
 			if(!entry.getValue().contains(targetProp))
-				return null;
+				return Collections.emptyMap();
 		}
 		return message;
 	}

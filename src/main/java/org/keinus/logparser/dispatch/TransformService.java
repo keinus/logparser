@@ -61,7 +61,7 @@ public class TransformService {
     public boolean transform(Map<String, Object> parsedStr, String type) {
         for(ITransform trans : transformer.getOrDefault(type, new ArrayList<>())) {
             var ret = trans.parse(parsedStr);
-            if(ret == null)
+            if(ret.isEmpty())
                 return false;
         }
         return true;
