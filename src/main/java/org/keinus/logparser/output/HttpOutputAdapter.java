@@ -89,9 +89,4 @@ public class HttpOutputAdapter extends OutputAdapter {
 			socket.close();
 		
 	}
-
-	@Override
-	public void flush() {
-		// nothing
-	}
 }

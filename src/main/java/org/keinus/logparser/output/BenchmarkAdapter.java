@@ -43,10 +43,4 @@ public class BenchmarkAdapter extends OutputAdapter {
 	public void close() throws IOException {
 		LOGGER.info("Console Output Adapter closed"); 
 	}
-
-	@Override
-	public void flush() {
-		// nothing
-	}
-
 }

@@ -49,9 +49,4 @@ public class KafkaOutputAdapter extends OutputAdapter {
 	public void close() throws IOException {
 		producer.close();
 	}
-
-	@Override
-	public void flush() {
-		// nothing
-	}
 }

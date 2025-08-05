@@ -28,7 +28,6 @@ public abstract class OutputAdapter implements Closeable {
 	}
 
 	public abstract void send(Map<String, Object> json, String jsonString);
-	public abstract void flush();
 
 	@Override
 	public String toString() {

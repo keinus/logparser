@@ -13,6 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,7 +32,7 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContexts;
-import org.apache.http.conn.ssl.NoopHostnameVerifier; // Consider implications for production
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.keinus.logparser.interfaces.OutputAdapter;
 import org.keinus.logparser.util.ThreadUtil;
 
@@ -40,34 +43,36 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     private String indexTemplate;
     private String credentials = null;
     private List<String> indexVars = null;
-    
+
     private final ConcurrentHashMap<String, List<String>> dataMap = new ConcurrentHashMap<>();
-    private final AtomicInteger totalDocumentCount = new AtomicInteger(0); 
-    
+    private final AtomicInteger totalDocumentCount = new AtomicInteger(0);
+
     private CloseableHttpClient httpClient;
+    private ScheduledExecutorService scheduler;
 
     public OpenSearchOutputAdapter(Map<String, String> obj) throws IOException {
         super(obj);
 
         host = Objects.requireNonNull(obj.get("host"), "OpenSearch 'host' must not be null");
-        indexTemplate = Objects.requireNonNull(obj.get("index"), "OpenSearch 'index' must not be null"); // Use indexTemplate
+        indexTemplate = Objects.requireNonNull(obj.get("index"), "OpenSearch 'index' must not be null"); // Use
+                                                                                                         // indexTemplate
         String portStr = Objects.requireNonNull(obj.get("port"), "OpenSearch 'port' must not be null");
         try {
             port = Integer.parseInt(portStr);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("OpenSearch 'port' must be a valid number: " + portStr, e); // Pass original exception
+            throw new IllegalArgumentException("OpenSearch 'port' must be a valid number: " + portStr, e);
         }
-        
-        indexVars = extractBracedStrings(indexTemplate); // Use indexTemplate
+
+        indexVars = extractBracedStrings(indexTemplate);
         String username = obj.get("username");
         String password = obj.get("password");
-        if(username == null || username.isEmpty()) { // Check for empty username as well
+        if (username == null || username.isEmpty()) {
             credentials = null;
         } else {
             credentials = username + ":" + password;
         }
 
-        LOGGER.info("OpenSearch Output Adapter Init. {}:{}", host, port); // Corrected log message
+        LOGGER.info("OpenSearch Output Adapter Init. {}:{}", host, port);
 
         try {
             SSLConnectionSocketFactory scsf = new SSLConnectionSocketFactory(
@@ -77,8 +82,12 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
         } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
             LOGGER.error("Failed to initialize HTTP client for OpenSearch: {}", e.getMessage(), e);
-            throw new IOException("Failed to initialize HTTP client for OpenSearch", e); 
+            throw new IOException("Failed to initialize HTTP client for OpenSearch", e);
         }
+
+        this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        this.scheduler.scheduleAtFixedRate(this::flush, 10, 10, TimeUnit.SECONDS);
+        LOGGER.info("OpenSearch Output Adapter scheduled to flush every 10 seconds.");
     }
 
     private List<String> extractBracedStrings(String input) {
@@ -94,7 +103,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
     private void addJsonString(String index, String jsonString) {
         dataMap.computeIfAbsent(index, k -> Collections.synchronizedList(new ArrayList<>())).add(jsonString);
-        totalDocumentCount.incrementAndGet(); 
+        totalDocumentCount.incrementAndGet();
     }
 
     @Override
@@ -122,6 +131,21 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     @Override
     public void close() throws IOException {
         LOGGER.info("Closing OpenSearch Output Adapter and flushing remaining data.");
+
+        if (scheduler != null) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    LOGGER.warn("Scheduler did not terminate in 5 seconds, forcing shutdown.");
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                LOGGER.error("Scheduler shutdown interrupted: {}", e.getMessage(), e);
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+
         flush();
         dataMap.clear();
         totalDocumentCount.set(0);
@@ -143,15 +167,14 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         return sb;
     }
 
-    @Override
     public void flush() {
         Map<String, List<String>> failedItems = new ConcurrentHashMap<>();
 
         ConcurrentHashMap<String, List<String>> itemsToFlush = new ConcurrentHashMap<>();
-        synchronized (dataMap) { // Synchronize to ensure atomic swap
+        synchronized (dataMap) {
             itemsToFlush.putAll(dataMap);
             dataMap.clear();
-            totalDocumentCount.set(0); // Reset total count after moving items
+            totalDocumentCount.set(0);
         }
 
         if (itemsToFlush.isEmpty()) {
@@ -165,7 +188,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             String indexTarget = entry.getKey();
             List<String> documents = entry.getValue();
             int count = documents.size();
-            
+
             String url = "https://" + host + ":" + port + "/" + indexTarget + "/_bulk";
             String body = formatBulkRequestForIndex(indexTarget, documents).toString();
 
@@ -173,21 +196,25 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                 sendRest(url, body);
                 long endElapse = System.currentTimeMillis();
                 double elapsedSeconds = (endElapse - startElapse) / 1000.0;
-                int processedPerSecond = (int) (elapsedSeconds > 0 ? count / elapsedSeconds : count); 
-                LOGGER.info("{} items processed for index '{}' in {} seconds: {}/s", count, indexTarget, String.format("%.3f", elapsedSeconds), processedPerSecond);
+                int processedPerSecond = (int) (elapsedSeconds > 0 ? count / elapsedSeconds : count);
+                LOGGER.info("{} items processed for index '{}' in {} seconds: {}/s", count, indexTarget,
+                        String.format("%.3f", elapsedSeconds), processedPerSecond);
             } catch (IOException e) {
-                LOGGER.error("Failed to send data for index '{}'. Will retry later. Error: {}", indexTarget, e.getMessage());
-                failedItems.computeIfAbsent(indexTarget, k -> Collections.synchronizedList(new ArrayList<>())).addAll(documents);
+                LOGGER.error("Failed to send data for index '{}'. Will retry later. Error: {}", indexTarget,
+                        e.getMessage());
+                failedItems.computeIfAbsent(indexTarget, k -> Collections.synchronizedList(new ArrayList<>()))
+                        .addAll(documents);
 
-                ThreadUtil.sleep(5000); 
+                ThreadUtil.sleep(5000);
             }
         }
-        
+
         if (!failedItems.isEmpty()) {
-            synchronized (dataMap) { 
+            synchronized (dataMap) {
                 for (Map.Entry<String, List<String>> entry : failedItems.entrySet()) {
-                    dataMap.computeIfAbsent(entry.getKey(), k -> Collections.synchronizedList(new ArrayList<>())).addAll(entry.getValue());
-                    totalDocumentCount.addAndGet(entry.getValue().size()); // Update total count for retried items
+                    dataMap.computeIfAbsent(entry.getKey(), k -> Collections.synchronizedList(new ArrayList<>()))
+                            .addAll(entry.getValue());
+                    totalDocumentCount.addAndGet(entry.getValue().size());
                 }
             }
             LOGGER.warn("Re-queued {} items for retry.", totalDocumentCount.get());
@@ -199,7 +226,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         httpPost.setHeader("Content-Type", "application/json");
         httpPost.setEntity(new StringEntity(json, StandardCharsets.UTF_8));
 
-        if(credentials != null) {
+        if (credentials != null) {
             String base64Credentials = Base64.encodeBase64String(credentials.getBytes(StandardCharsets.UTF_8));
             String authorization = "Basic " + base64Credentials;
             httpPost.setHeader("Authorization", authorization);
@@ -209,7 +236,8 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             int statusCode = response.getStatusLine().getStatusCode();
             if (statusCode < 200 || statusCode >= 300) {
                 String responseBody = new BasicResponseHandler().handleResponse(response);
-                throw new IOException("OpenSearch indexing failed with status " + statusCode + ". Response: " + responseBody);
+                throw new IOException(
+                        "OpenSearch indexing failed with status " + statusCode + ". Response: " + responseBody);
             } else {
                 LOGGER.debug("Successfully sent data to OpenSearch. Status: {}", statusCode);
             }

@@ -30,9 +30,4 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 	public void close() throws IOException {
 		// 불필요
 	}
-
-	@Override
-	public void flush() {
-		// 불필요
-	}
 }

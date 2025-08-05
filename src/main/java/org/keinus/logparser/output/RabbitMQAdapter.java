@@ -59,10 +59,4 @@ public class RabbitMQAdapter extends OutputAdapter {
 			log.error(e.getMessage());
 		}
 	}
-
-	@Override
-	public void flush() {
-		// nothing
-	}
-
 }

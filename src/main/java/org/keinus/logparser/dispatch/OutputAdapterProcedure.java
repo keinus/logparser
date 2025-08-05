@@ -44,8 +44,6 @@ public class OutputAdapterProcedure implements Runnable {
                     msg.put("origin_text", message.getOriginText());
                 String jsonString = gson.toJson(msg);
                 outputAdapter.send(msg, jsonString);
-            } else {
-                outputAdapter.flush();
             }
         }
     }

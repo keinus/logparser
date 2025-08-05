@@ -64,9 +64,4 @@ public class TcpOutputAdapter extends OutputAdapter {
 		socket.close();
 		socket = null;
 	}
-
-	@Override
-	public void flush() {
-		// nothing
-	}
 }
