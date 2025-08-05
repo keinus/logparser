@@ -19,7 +19,7 @@ logparser:
 #      bootstrapservers: "192.168.254.8:9092"
     -
       type : FileInputAdapter
-      path : /home/keinus/suricata/log/eve.json
+      path : /app/log/eve.json
       messagetype : eve
       isFromBeginning: false
   parser:
