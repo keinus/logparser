@@ -10,6 +10,7 @@ import org.keinus.logparser.interfaces.OutputAdapter;
 import org.keinus.logparser.schema.FilteredMessage;
 import org.keinus.logparser.util.MergingHashMap;
 import org.keinus.logparser.util.ThreadManager;
+import org.keinus.logparser.util.ThreadUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -47,8 +48,10 @@ public class OutputAdaptorComponent {
     private void processOutputAdapter() {
         while (running.get()) {
             FilteredMessage msg = MessageDispatcher.getOutputMsg();
-            if(msg == null)
+            if(msg == null) {
+                ThreadUtil.sleep(1000);
                 continue;
+            }
 
             String messagetype = msg.getType();                
             for(var proc : outputMap.get(messagetype)) {

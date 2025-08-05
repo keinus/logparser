@@ -1,0 +1,12 @@
+services:
+  logparser:
+    image: keinus/logparser:latest
+    container_name: logparser
+    volumes:
+      - /home/keinus/suricata/log:/app/logs
+      - ./config/config.yaml:/app/config/config.yaml:ro
+    environment:
+      - JAVA_OPTS=-Xmx1G
+    # ports:
+    #   - "8080:8080"
+    restart: unless-stopped

@@ -9,7 +9,6 @@ import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.schema.FilteredMessage;
-import org.keinus.logparser.util.ThreadUtil;
 import org.keinus.logparser.interfaces.OutputAdapter;
 
 @Slf4j
@@ -27,8 +26,10 @@ public class OutputAdapterProcedure implements Runnable {
     }
 
     public void enqueue(FilteredMessage message) {
-        while(!this.outputMessageQueue.offer(message)) {
-            ThreadUtil.sleep(1);
+        try {
+            this.outputMessageQueue.put(message);
+        } catch (InterruptedException e) {
+            log.error("Queue is full.");
         }
     }
 
@@ -36,7 +37,12 @@ public class OutputAdapterProcedure implements Runnable {
     public void run() {
         boolean addOriginText = outputAdapter.getAddOriginText();
         while(isRunning) {
-            FilteredMessage message = outputMessageQueue.poll();
+            FilteredMessage message;
+            try {
+                message = outputMessageQueue.take();
+            } catch (InterruptedException e) {
+                continue;
+            }
             
             if(message != null) {
                 var msg = message.getMsg();
