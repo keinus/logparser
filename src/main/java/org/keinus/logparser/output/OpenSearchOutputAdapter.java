@@ -183,8 +183,6 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         }
 
         for (Map.Entry<String, List<String>> entry : itemsToFlush.entrySet()) {
-            long startElapse = System.currentTimeMillis();
-
             String indexTarget = entry.getKey();
             List<String> documents = entry.getValue();
             int count = documents.size();
@@ -194,11 +192,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
             try {
                 sendRest(url, body);
-                long endElapse = System.currentTimeMillis();
-                double elapsedSeconds = (endElapse - startElapse) / 1000.0;
-                int processedPerSecond = (int) (elapsedSeconds > 0 ? count / elapsedSeconds : count);
-                LOGGER.info("{} items processed for index '{}' in {} seconds: {}/s", count, indexTarget,
-                        String.format("%.3f", elapsedSeconds), processedPerSecond);
+                LOGGER.info("{} items processed for index '{}'", count, indexTarget);
             } catch (IOException e) {
                 LOGGER.error("Failed to send data for index '{}'. Will retry later. Error: {}", indexTarget,
                         e.getMessage());
