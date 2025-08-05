@@ -172,6 +172,7 @@ public class FileInputAdapter extends InputAdapter {
 
         } catch (IOException e) {
             logger.error("An error occurred while reading the file: {}", e.getMessage());
+            ThreadUtil.sleep(5000);
         }
         return null;
     }

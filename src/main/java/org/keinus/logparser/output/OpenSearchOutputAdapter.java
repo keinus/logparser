@@ -7,10 +7,12 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,36 +31,44 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.keinus.logparser.interfaces.OutputAdapter;
+import org.keinus.logparser.util.ThreadUtil;
 
 public class OpenSearchOutputAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(OpenSearchOutputAdapter.class);
-	String host;
-	int port;
-	String index;
-	String credentials = null;
-	List<String> indexVars = null;
-	int retry = 30;
+	private String host;
+	private int port;
+	private String index;
+	private String credentials = null;
+	private List<String> indexVars = null;
 	private final ConcurrentHashMap<String, List<String>> dataMap = new ConcurrentHashMap<>();
-	CloseableHttpClient httpClient;
+	private CloseableHttpClient httpClient;
 
 	public OpenSearchOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
 
-		host = obj.get("host");
-		port = Integer.parseInt(obj.get("port"));
-		index = obj.get("index");
+		host = Objects.requireNonNull(obj.get("host"), "OpenSearch 'host' must not be null");
+    	index = Objects.requireNonNull(obj.get("index"), "OpenSearch 'index' must not be null");
+    	String portStr = Objects.requireNonNull(obj.get("port"), "OpenSearch 'port' must not be null");
+		try {
+			port = Integer.parseInt(portStr);
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("OpenSearch 'port' must be a valid number: " + portStr);
+		}
+		
 		indexVars = extractBracedStrings(index);
 		String username = obj.get("username");
 		String password = obj.get("password");
-		credentials = username + ":" + password;
+		if(username == null)
+			credentials = null;
+		else
+			credentials = username + ":" + password;
 
 		LOGGER.info("Elastic Output Adapter Init. {}:{}", host, port);
 
 		try {
 			SSLConnectionSocketFactory scsf = new SSLConnectionSocketFactory(
-				SSLContexts.custom().loadTrustMaterial(null, new TrustSelfSignedStrategy()).build(), 
-				NoopHostnameVerifier.INSTANCE
-			);
+					SSLContexts.custom().loadTrustMaterial(null, new TrustSelfSignedStrategy()).build(),
+					NoopHostnameVerifier.INSTANCE);
 			this.httpClient = HttpClients.custom().setSSLSocketFactory(scsf).build();
 
 		} catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
@@ -79,7 +89,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 	}
 
 	private void addJsonString(String index, String jsonString) {
-		dataMap.computeIfAbsent(index, k -> new ArrayList<>()).add(jsonString);
+		dataMap.computeIfAbsent(index, k -> Collections.synchronizedList(new ArrayList<>())).add(jsonString);
 	}
 
 	@Override
@@ -126,6 +136,8 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
 	@Override
 	public void flush() {
+		Map<String, List<String>> failedItems = new ConcurrentHashMap<>();
+
 		for (Entry<String, List<String>> entry : this.dataMap.entrySet()) {
 			long startElapse = System.currentTimeMillis();
 
@@ -141,25 +153,30 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 				int processedPerSecond = (int) (count / elapsedSeconds); // Calculate count per second
 				LOGGER.info("{} item processed in {} second: {}/s", count, elapsedSeconds, processedPerSecond);
 			} catch (IOException e) {
-				LOGGER.error(e.getMessage());
+				LOGGER.error("Failed to send data for index {}. Will retry later. Error: {}", indexTarget, e.getMessage());
+				failedItems.put(indexTarget, value);
+
+				ThreadUtil.sleep(5000);
 			}
 		}
 		this.dataMap.clear();
+		this.dataMap.putAll(failedItems);
 	}
 
 	public void sendRest(String url, String json) throws IOException {
-
-		String base64Credentials = Base64.encodeBase64String(credentials.getBytes(StandardCharsets.UTF_8));
-		String authorization = "Basic " + base64Credentials;
 		HttpPost httpPost = new HttpPost(url);
-
 		httpPost.setHeader("Content-Type", "application/json");
-		httpPost.setHeader("Authorization", authorization);
 		httpPost.setEntity(new StringEntity(json));
+
+		if(credentials != null) {
+			String base64Credentials = Base64.encodeBase64String(credentials.getBytes(StandardCharsets.UTF_8));
+			String authorization = "Basic " + base64Credentials;
+			httpPost.setHeader("Authorization", authorization);
+		}
 
 		try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
 			int statusCode = response.getStatusLine().getStatusCode();
-			if (statusCode > 200 || statusCode > 300) {
+			if (statusCode < 200 || statusCode >= 300) {
 				String responseBody = new BasicResponseHandler().handleResponse(response);
 				throw new IOException("Index Failed. " + responseBody);
 			}

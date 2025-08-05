@@ -19,44 +19,41 @@ logparser:
 #      bootstrapservers: "192.168.254.8:9092"
     -
       type : FileInputAdapter
-      path : "./eve.json"
+      path : /home/keinus/suricata/log/eve.json
       messagetype : eve
       isFromBeginning: true
-    
   parser:
     # - type: GrokParser
     #   param : "<%{POSINT:syslog_pri}>%{POSINT:syslog_sev} %{GREEDYDATA:syslog_time} \\[%{GREEDYDATA:syslog_app}\\] \\[%{IP:syslog_host}\\]start_time=\"%{GREEDYDATA:start_time}\" end_time=\"%{GREEDYDATA:end_time}\" duration=%{WORD:duration} machine_name=%{WORD:machine_name} fw_rule_id=%{WORD:fw_rule_id} nat_rule_id=%{DATA:nat_rule_id} src_ip=%{IP:src_ip} userid=%{GREEDYDATA:userid} src_port=%{WORD:src_port} dst_ip=%{IP:dst_ip} dst_port=%{WORD:dst_port} protocol=%{GREEDYDATA:protocol} ingres_if=%{GREEDYDATA:ingres_if} interface=%{WORD:interface} packets_forward=%{WORD:packets_forward} packets_backward=%{WORD:packets_backward} bytes_forward=%{WORD:bytes_foward} bytes_backward=%{WORD:bytes_backward} fragment_info=%{GREEDYDATA:fragment_info} flag_record=%{GREEDYDATA:flag_record} terminate_reason=%{GREEDYDATA:terminate_reason}"
     #   messagetype : eve
-    - type: RFC5424SyslogParser
-      messagetype: syslog
+    # - type: RFC5424SyslogParser
+    #   messagetype: syslog
     - type: JsonParser
       messagetype: eve
   parser_threads: 4
   transform:
-    - type: Filter
-      messagetype: eve
-      param:
-        pass:
-          event_type: alert, anomaly, http, dns, tls, files
-        drop:
-          event_type: tls, files
-    - type: AddProperty
-      messagetype: eve
-      param:
-        add:
-          tag:
-            - src_ip
-            - src_port
-            - dest_ip
-            - dest_port
-            - proto
-    - type: RemoveProperty
-      messagetype: eve
-      param:
-        remove:
-          - "@timestamp"
-
-
+    # - type: Filter
+    #   messagetype: eve
+    #   param:
+    #     pass:
+    #       event_type: alert, anomaly, http, dns, tls, files
+    #     drop:
+    #       event_type: tls, files
+    # - type: AddProperty
+    #   messagetype: eve
+    #   param:
+    #     add:
+    #       tag:
+    #         - src_ip
+    #         - src_port
+    #         - dest_ip
+    #         - dest_port
+    #         - proto
+    # - type: RemoveProperty
+    #   messagetype: eve
+    #   param:
+    #     remove:
+    #       - "@timestamp"
   output: 
 #    -
 #      type : KafkaOutputAdapter
@@ -81,19 +78,21 @@ logparser:
 #      port : 5672
 #      routingkey : "admin"
 #      exchange : "admin"
-    -
-      type : BenchmarkAdapter
-      add_origin_text : true
     # -
-    #   type : ConsoleOutputAdapter
-    #   messagetype : eve
-    # -
-    #   type : ConsoleOutputAdapter
-    #   messagetype : eve
-    # -
-    #   type : OpenSearchOutputAdapter
-    #   messagetype : all
-    #   host : "192.168.50.25"
-    #   port: 9200
-    #   index : "suricata-%{event_type}-%{yyMMdd}"
+    #   type : BenchmarkAdapter
     #   add_origin_text : true
+    # -
+    #   type : ConsoleOutputAdapter
+    #   messagetype : eve
+    # -
+    #   type : ConsoleOutputAdapter
+    #   messagetype : eve
+    -
+      type : OpenSearchOutputAdapter
+      messagetype : eve
+      host : "192.168.50.25"
+      port: 9200
+      index : "suricata-%{event_type}-%{yyMMdd}"
+      # add_origin_text : true
+      username : "elastic"
+      password : "rlaqudwls1"
