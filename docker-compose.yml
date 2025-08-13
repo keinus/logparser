@@ -3,7 +3,7 @@ services:
     image: keinus/logparser:latest
     container_name: logparser
     volumes:
-      - /home/keinus/suricata/log:/app/logs
+      - /home/keinus/suricata/log:/app/log
       - ./config/config.yaml:/app/config/config.yaml:ro
     environment:
       - JAVA_OPTS=-Xmx1G
