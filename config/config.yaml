@@ -4,10 +4,10 @@ logparser:
 #      type : TcpInputAdapter
 #      port : 21514
 #      messagetype : syslog
-    # -
-    #  type : UdpInputAdapter
-    #  port : 514
-    #  messagetype : syslog
+    -
+     type : UdpInputAdapter
+     port : 514
+     messagetype : rfc3164
 #    -
 #      type : HttpInputAdapter
 #      port : 21515
@@ -28,6 +28,11 @@ logparser:
     #   messagetype : eve
     # - type: RFC5424SyslogParser
     #   messagetype: syslog
+    # - type: GrokParser
+    #   param: "^(?<timestamp>\\w+\\s+\\d+\\s+\\d+:\\d+:\\d+)\\s+(?<app>\\w+):\\s+(?<action>\\w+)\\s+(?<fields>.+)$"
+    #   messagetype: bsdsyslog
+    - type: RFC3164SyslogParser
+      messagetype: rfc3164
     - type: JsonParser
       messagetype: eve
   parser_threads: 4
@@ -94,5 +99,13 @@ logparser:
       port: 9200
       index : "suricata-%{event_type}-%{yyMMdd}"
       # add_origin_text : true
+      username : "elastic"
+      password : "rlaqudwls1"
+    -
+      type : OpenSearchOutputAdapter
+      messagetype : rfc3164
+      host : "192.168.50.25"
+      port: 9200
+      index : "router-%{yyMMdd}"
       username : "elastic"
       password : "rlaqudwls1"
