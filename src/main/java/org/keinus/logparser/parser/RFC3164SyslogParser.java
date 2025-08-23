@@ -209,16 +209,15 @@ public class RFC3164SyslogParser implements IParser {
 
     public final class SyslogHeaders {
         private SyslogHeaders() {}
-        public static final String PREFIX = "syslog_";
-        public static final String FACILITY = PREFIX + "FACILITY";
-        public static final String SEVERITY = PREFIX + "SEVERITY";
-        public static final String TIMESTAMP = PREFIX + "TIMESTAMP";
-        public static final String HOST = PREFIX + "HOST";
-        public static final String TAG = PREFIX + "TAG";
-        public static final String MESSAGE = PREFIX + "MESSAGE";
-        public static final String SEVERITY_TEXT = PREFIX + "SEVERITY_TEXT";
-        public static final String UNDECODED = PREFIX + "UNDECODED";
-        public static final String DECODE_ERRORS = PREFIX + "DECODE_ERRORS";
-        public static final String ERRORS = PREFIX + "ERRORS";
+        public static final String FACILITY = "FACILITY";
+        public static final String SEVERITY = "SEVERITY";
+        public static final String TIMESTAMP = "TIMESTAMP";
+        public static final String HOST = "HOST";
+        public static final String TAG = "TAG";
+        public static final String MESSAGE = "MESSAGE";
+        public static final String SEVERITY_TEXT = "SEVERITY_TEXT";
+        public static final String UNDECODED = "UNDECODED";
+        public static final String DECODE_ERRORS = "DECODE_ERRORS";
+        public static final String ERRORS = "ERRORS";
     }
 }

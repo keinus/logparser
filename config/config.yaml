@@ -6,7 +6,7 @@ logparser:
 #      messagetype : syslog
     -
      type : UdpInputAdapter
-     port : 514
+     port : 60514
      messagetype : rfc3164
 #    -
 #      type : HttpInputAdapter
@@ -17,11 +17,11 @@ logparser:
 #      type : KafkaInputAdapter
 #      topicid : csas
 #      bootstrapservers: "192.168.254.8:9092"
-    -
-      type : FileInputAdapter
-      path : /app/log/eve.json
-      messagetype : eve
-      isFromBeginning: false
+      # -
+      # type : FileInputAdapter
+      # path : /app/log/eve.json
+      # messagetype : eve
+      # isFromBeginning: false
   parser:
     # - type: GrokParser
     #   param : "<%{POSINT:syslog_pri}>%{POSINT:syslog_sev} %{GREEDYDATA:syslog_time} \\[%{GREEDYDATA:syslog_app}\\] \\[%{IP:syslog_host}\\]start_time=\"%{GREEDYDATA:start_time}\" end_time=\"%{GREEDYDATA:end_time}\" duration=%{WORD:duration} machine_name=%{WORD:machine_name} fw_rule_id=%{WORD:fw_rule_id} nat_rule_id=%{DATA:nat_rule_id} src_ip=%{IP:src_ip} userid=%{GREEDYDATA:userid} src_port=%{WORD:src_port} dst_ip=%{IP:dst_ip} dst_port=%{WORD:dst_port} protocol=%{GREEDYDATA:protocol} ingres_if=%{GREEDYDATA:ingres_if} interface=%{WORD:interface} packets_forward=%{WORD:packets_forward} packets_backward=%{WORD:packets_backward} bytes_forward=%{WORD:bytes_foward} bytes_backward=%{WORD:bytes_backward} fragment_info=%{GREEDYDATA:fragment_info} flag_record=%{GREEDYDATA:flag_record} terminate_reason=%{GREEDYDATA:terminate_reason}"
@@ -33,8 +33,8 @@ logparser:
     #   messagetype: bsdsyslog
     - type: RFC3164SyslogParser
       messagetype: rfc3164
-    - type: JsonParser
-      messagetype: eve
+    # - type: JsonParser
+    #   messagetype: eve
   parser_threads: 4
   transform:
     # - type: Filter
@@ -89,23 +89,23 @@ logparser:
     # -
     #   type : ConsoleOutputAdapter
     #   messagetype : eve
-    # -
-    #   type : ConsoleOutputAdapter
-    #   messagetype : eve
     -
-      type : OpenSearchOutputAdapter
-      messagetype : eve
-      host : "192.168.50.25"
-      port: 9200
-      index : "suricata-%{event_type}-%{yyMMdd}"
-      # add_origin_text : true
-      username : "elastic"
-      password : "rlaqudwls1"
-    -
-      type : OpenSearchOutputAdapter
+      type : ConsoleOutputAdapter
       messagetype : rfc3164
-      host : "192.168.50.25"
-      port: 9200
-      index : "router-%{yyMMdd}"
-      username : "elastic"
-      password : "rlaqudwls1"
+    # -
+    #   type : OpenSearchOutputAdapter
+    #   messagetype : eve
+    #   host : "192.168.50.25"
+    #   port: 9200
+    #   index : "suricata-%{event_type}-%{yyMMdd}"
+    #   # add_origin_text : true
+    #   username : "elastic"
+    #   password : "rlaqudwls1"
+    # -
+    #   type : OpenSearchOutputAdapter
+    #   messagetype : rfc3164
+    #   host : "192.168.50.25"
+    #   port: 9200
+    #   index : "router-%{yyMMdd}"
+    #   username : "elastic"
+    #   password : "rlaqudwls1"
