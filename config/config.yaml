@@ -1,4 +1,6 @@
 logparser:
+  parser_threads: 4
+  queue_size: 20000
   input: 
 #    -
 #      type : TcpInputAdapter
@@ -35,7 +37,7 @@ logparser:
       messagetype: rfc3164
     # - type: JsonParser
     #   messagetype: eve
-  parser_threads: 4
+  
   transform:
     # - type: Filter
     #   messagetype: eve

@@ -8,9 +8,23 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.interfaces.InputAdapter;
-import org.keinus.logparser.schema.Message;
+import org.keinus.logparser.core.interfaces.InputAdapter;
+import org.keinus.logparser.core.schema.LogEvent;
 
+/**
+ * UDP 데이터그램 패킷을 통해 메시지를 수신하는 입력 어댑터입니다.
+ * <p>
+ * 이 클래스는 지정된 포트에서 {@link DatagramSocket}을 열고 UDP 패킷을 기다립니다.
+ * 패킷을 수신하면, 그 내용을 문자열로 변환하여 {@link Message} 객체를 생성합니다.
+ * 각 데이터그램 패킷은 하나의 메시지로 처리됩니다.
+ * <p>
+ * {@code run()} 메서드는 블로킹 방식으로 동작하며, 새로운 UDP 패킷이 도착할 때까지 대기합니다.
+ * Syslog와 같은 비연결성 프로토콜을 통해 로그를 수신하는 데 주로 사용됩니다.
+ *
+ * @see org.keinus.logparser.core.interfaces.InputAdapter
+ * @see java.net.DatagramSocket
+ * @see java.net.DatagramPacket
+ */
 public class UdpInputAdapter extends InputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UdpInputAdapter.class);
 	private DatagramSocket serverSocket = null;
@@ -30,7 +44,7 @@ public class UdpInputAdapter extends InputAdapter {
 	}
 
 	@Override
-	public Message run() {
+	public LogEvent run() {
 		if(serverSocket == null)
 			return null;
 
@@ -42,7 +56,7 @@ public class UdpInputAdapter extends InputAdapter {
 			String payload = new String(receivePacket.getData(), 0, receivePacket.getLength());
 
 			String host = receivePacket.getAddress().toString();
-			return new Message(payload, host);
+			return createLogEvent(payload, host);
 		} catch (IOException e) {
 			LOGGER.error(e.getMessage());
 		}

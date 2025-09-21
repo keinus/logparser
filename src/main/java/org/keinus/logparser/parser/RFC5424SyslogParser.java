@@ -5,10 +5,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.keinus.logparser.interfaces.IParser;
+import org.keinus.logparser.core.interfaces.IParser;
+import org.keinus.logparser.core.schema.LogEvent;
 import org.springframework.util.Assert;
 
 public class RFC5424SyslogParser implements IParser {
+    /**
+     * Parser for RFC5424 (modern syslog) formatted log messages.
+     * Extracts priority, version, timestamp, hostname, app name, process ID, message ID, and structured data.
+     */
     protected static final char NILVALUE = '-';
     protected static final char SPACE = ' ';
 
@@ -22,59 +27,69 @@ public class RFC5424SyslogParser implements IParser {
     }
 
     @Override
-    public Map<String, Object> parse(String arg) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        String line = arg;
-        Reader r = new Reader(line);
-
+    public boolean parse(LogEvent logEvent) {
         try {
-            r.expect('<');
-            int pri = r.readInt();
-            r.expect('>');
+            Map<String, Object> map = new LinkedHashMap<>();
+            String line = logEvent.getOriginalText();
+            Reader r = new Reader(line);
 
-            int version = r.readInt();
-            r.expect(SPACE);
+            try {
+                r.expect('<');
+                int pri = r.readInt();
+                r.expect('>');
 
-            Object timestamp = getTimestamp(r);
+                int version = r.readInt();
+                r.expect(SPACE);
 
-            String host = r.getIdentifier();
-            String app = r.getIdentifier();
-            String procId = r.getIdentifier();
-            String msgId = r.getIdentifier();
+                Object timestamp = getTimestamp(r);
 
-            Object structuredData = getStructuredData(r);
+                String host = r.getIdentifier();
+                String app = r.getIdentifier();
+                String procId = r.getIdentifier();
+                String msgId = r.getIdentifier();
 
-            String message;
-            if (r.is(SPACE)) {
-                r.getc();
-                message = r.rest();
-            } else {
-                message = "";
+                Object structuredData = getStructuredData(r);
+
+                String message;
+                if (r.is(SPACE)) {
+                    r.getc();
+                    message = r.rest();
+                } else {
+                    message = "";
+                }
+
+                int severity = pri & 0x7; // NOSONAR magic number
+                int facility = pri >> 3; // NOSONAR magic number
+                map.put(SyslogHeaders.FACILITY, facility);
+                map.put(SyslogHeaders.SEVERITY, severity);
+                map.put(SyslogHeaders.SEVERITY_TEXT, Severity.parseInt(severity).label());
+                map.put(SyslogHeaders.VERSION, version);
+                map.put(SyslogHeaders.MESSAGE, message);
+                map.put(SyslogHeaders.DECODE_ERRORS, "false");
+                map.put(SyslogHeaders.TIMESTAMP, timestamp);
+                map.put(SyslogHeaders.HOST, host);
+                map.put(SyslogHeaders.APP_NAME, app);
+                map.put(SyslogHeaders.PROCID, procId);
+                map.put(SyslogHeaders.MSGID, msgId);
+                map.put(SyslogHeaders.STRUCTURED_DATA, structuredData);
+            } catch (IllegalStateException | StringIndexOutOfBoundsException ex) {
+                map.put(SyslogHeaders.DECODE_ERRORS, "true");
+                map.put(SyslogHeaders.ERRORS,
+                        (ex instanceof StringIndexOutOfBoundsException ? "Unexpected end of message: " : "") // NOSONAR
+                                + ex.getMessage());
+                map.put(SyslogHeaders.UNDECODED, line);
             }
 
-            int severity = pri & 0x7; // NOSONAR magic number
-            int facility = pri >> 3; // NOSONAR magic number
-            map.put(SyslogHeaders.FACILITY, facility);
-            map.put(SyslogHeaders.SEVERITY, severity);
-            map.put(SyslogHeaders.SEVERITY_TEXT, Severity.parseInt(severity).label());
-            map.put(SyslogHeaders.VERSION, version);
-            map.put(SyslogHeaders.MESSAGE, message);
-            map.put(SyslogHeaders.DECODE_ERRORS, "false");
-            map.put(SyslogHeaders.TIMESTAMP, timestamp);
-            map.put(SyslogHeaders.HOST, host);
-            map.put(SyslogHeaders.APP_NAME, app);
-            map.put(SyslogHeaders.PROCID, procId);
-            map.put(SyslogHeaders.MSGID, msgId);
-            map.put(SyslogHeaders.STRUCTURED_DATA, structuredData);
-        } catch (IllegalStateException | StringIndexOutOfBoundsException ex) {
-            map.put(SyslogHeaders.DECODE_ERRORS, "true");
-            map.put(SyslogHeaders.ERRORS,
-                    (ex instanceof StringIndexOutOfBoundsException ? "Unexpected end of message: " : "") // NOSONAR
-                            + ex.getMessage());
-            map.put(SyslogHeaders.UNDECODED, line);
+            if (!map.isEmpty()) {
+                logEvent.setFields(map);
+                return true;
+            }
+        } catch (Exception e) {
+            logEvent.markAsError("RFC5424 parsing failed: " + e.getMessage());
         }
-        return map;
+        return false;
     }
+
 
     protected Object getTimestamp(Reader r) {
 

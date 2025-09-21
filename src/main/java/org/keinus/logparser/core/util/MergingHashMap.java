@@ -1,14 +1,27 @@
-package org.keinus.logparser.util;
+package org.keinus.logparser.core.util;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * String 키와 ArrayList<T> 값을 가지는 HashMap 유사 자료구조.
- * - null 키를 지원하며 별도로 관리합니다.
- * - get(key) 호출 시 해당 key의 값 리스트와 null 키의 값 리스트를 병합하여 반환합니다.
+ * 특정 키의 값과 'null' 키(전역 값)의 값을 병합하여 반환하는 특수한 HashMap 유사 자료구조입니다.
+ * <p>
+ * 이 클래스는 '하나의 키에 여러 값을 매핑'하고, '전역적으로 적용되는 기본값'을 관리하는
+ * 시나리오를 위해 설계되었습니다. 예를 들어, 특정 메시지 타입에 대한 처리기와 모든 메시지 타입에
+ * 공통으로 적용되는 처리기를 함께 조회하는 데 유용합니다.
+ * <p>
+ * 주요 특징:
+ * <ul>
+ *     <li><b>값 병합 조회:</b> {@code get(key)} 호출 시, 해당 {@code key}에 매핑된 리스트와
+ *         {@code null} 키에 매핑된 리스트가 병합된 새로운 리스트를 반환합니다.</li>
+ *     <li><b>Null 키 지원:</b> {@code null}을 키로 사용하여 전역 또는 기본 값 목록을 관리합니다.</li>
+ *     <li><b>다중 값 저장:</b> 각 키는 값의 리스트({@code ArrayList<T>})를 가집니다.
+ *         {@code put(key, value)}은 해당 키의 리스트에 값을 추가합니다.</li>
+ * </ul>
  *
  * @param <T> 리스트에 저장될 요소의 타입
  */
@@ -154,5 +167,18 @@ public class MergingHashMap<T> {
             size++; // null 키도 하나의 키로 간주
         }
         return size;
+    }
+
+        /**
+     * 맵의 모든 키를 반환합니다 (null 키 포함).
+     *
+     * @return 모든 키를 포함한 Set
+     */
+    public Set<String> getAllKeys() {
+        Set<String> keys = new HashSet<>(this.internalMap.keySet());
+        if (!this.nullKeyValueList.isEmpty()) {
+            keys.add(null);
+        }
+        return keys;
     }
 }

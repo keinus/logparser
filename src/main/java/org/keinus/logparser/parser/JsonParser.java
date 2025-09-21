@@ -1,10 +1,10 @@
 package org.keinus.logparser.parser;
 
 import java.lang.reflect.Type;
-import java.util.HashMap;
 import java.util.Map;
 
-import org.keinus.logparser.interfaces.IParser;
+import org.keinus.logparser.core.interfaces.IParser;
+import org.keinus.logparser.core.schema.LogEvent;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -13,6 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class JsonParser implements IParser {
+	/**
+	 * Parser that converts JSON-formatted log messages into a map of key-value pairs.
+	 * Uses Gson for deserialization.
+	 */
     Gson gson = new Gson();
     Type type = new TypeToken<Map<String, Object>>() {}.getType();
 
@@ -22,13 +26,18 @@ public class JsonParser implements IParser {
 	}
 
 	@Override
-	public Map<String, Object> parse(String message) {
+	public boolean parse(LogEvent logEvent) {
 		try {
-			return gson.fromJson(message, type);
-		} catch(IllegalStateException e) {
-			log.error(e.getMessage());
-			return null;
+			Map<String, Object> parsed = gson.fromJson(logEvent.getOriginalText(), type);
+			if (parsed != null && !parsed.isEmpty()) {
+				logEvent.setFields(parsed);
+				return true;
+			}
+		} catch(Exception e) {
+			log.error("JSON parsing failed: {}", e.getMessage());
+			logEvent.markAsError("JSON parsing failed: " + e.getMessage());
 		}
-		
+		return false;
 	}
+
 }

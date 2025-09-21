@@ -33,9 +33,29 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.keinus.logparser.interfaces.OutputAdapter;
-import org.keinus.logparser.util.ThreadUtil;
+import org.keinus.logparser.core.interfaces.OutputAdapter;
+import org.keinus.logparser.core.util.ThreadUtil;
 
+/**
+ * 처리된 메시지를 OpenSearch 또는 Elasticsearch 클러스터로 전송하는 출력 어댑터입니다.
+ * <p>
+ * 이 클래스는 {@link OutputAdapter}를 구현하며, 높은 처리량을 위해 OpenSearch의
+ * 벌크(Bulk) API를 사용합니다. 메시지들은 내부 버퍼에 수집되었다가, 버퍼가 가득 차거나
+ * 주기적인 스케줄러에 의해 일괄적으로 전송됩니다.
+ * <p>
+ * 주요 기능:
+ * <ul>
+ *     <li><b>벌크 인덱싱:</b> 여러 문서를 하나의 HTTP 요청으로 묶어 전송하여 네트워크 오버헤드를 최소화합니다.</li>
+ *     <li><b>배치 처리:</b> 2000개의 문서가 쌓이거나, 10초의 시간이 경과하면 자동으로 flush하여 데이터를 전송합니다.</li>
+ *     <li><b>동적 인덱스 이름:</b> 인덱스 이름 템플릿에 {@code %{fieldname}} 또는 날짜 형식(예: {@code yyyy.MM.dd})을
+ *         사용하여 메시지 내용이나 시간에 따라 동적으로 인덱스 이름을 결정할 수 있습니다.</li>
+ *     <li><b>HTTPS 및 인증 지원:</b> SSL/TLS 및 기본 인증(username/password)을 지원합니다.</li>
+ *     <li><b>신뢰할 수 있는 전송:</b> 데이터 전송 실패 시, 실패한 항목들을 다시 큐에 넣어 재전송을 시도합니다.</li>
+ * </ul>
+ *
+ * @see org.keinus.logparser.core.interfaces.OutputAdapter
+ * @see org.apache.http.impl.client.CloseableHttpClient
+ */
 public class OpenSearchOutputAdapter extends OutputAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenSearchOutputAdapter.class);
     private String host;

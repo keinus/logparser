@@ -1,0 +1,433 @@
+# ETL Logparser Configuration Schema
+# 이 파일은 config.yaml의 각 항목에 대한 메타데이터와 스키마를 정의합니다.
+
+schema_version: "1.0"
+description: "ETL 로그파서 설정 스키마"
+
+# =============================================================================
+# 전역 설정
+# =============================================================================
+global:
+  parser_threads:
+    type: integer
+    required: true
+    range: [1, 100]
+    default: 4
+    description: "동시 파싱 작업을 수행할 스레드 수"
+  queue_size:
+    type: integer
+    required: true
+    range: [1, 100000]
+    default: 10000
+    description: "내부 queue 크기."
+
+# =============================================================================
+# 입력 어댑터 설정
+# =============================================================================
+input_adapters:
+  common_fields:
+    type:
+      type: string
+      required: true
+      enum: ["FileInputAdapter", "TcpInputAdapter", "UdpInputAdapter", "HttpInputAdapter", "KafkaInputAdapter"]
+      description: "입력 어댑터 클래스명"
+
+    messagetype:
+      type: string
+      required: true
+      pattern: "^[a-zA-Z0-9_-]+$"
+      description: "메시지 타입 식별자 (파서와 매핑됨)"
+
+    enabled:
+      type: boolean
+      default: true
+      description: "어댑터 활성화 여부"
+
+  adapters:
+    FileInputAdapter:
+      required_fields: [type, messagetype, path]
+      fields:
+        path:
+          type: string
+          required: true
+          description: "읽어올 파일 경로"
+          validation: "파일 접근 권한 확인"
+
+        isFromBeginning:
+          type: boolean
+          default: false
+          description: "파일을 처음부터 읽을지 여부 (false면 tail 모드)"
+
+        bufferSize:
+          type: integer
+          range: [1024, 1048576]
+          default: 8192
+          description: "파일 읽기 버퍼 크기 (바이트)"
+
+    TcpInputAdapter:
+      required_fields: [type, messagetype, port]
+      fields:
+        port:
+          type: integer
+          required: true
+          range: [1, 65535]
+          description: "TCP 서버 포트"
+
+        host:
+          type: string
+          default: "0.0.0.0"
+          description: "바인딩할 호스트 주소"
+
+        maxConnections:
+          type: integer
+          range: [1, 1000]
+          default: 100
+          description: "최대 동시 연결 수"
+
+    UdpInputAdapter:
+      required_fields: [type, messagetype, port]
+      fields:
+        port:
+          type: integer
+          required: true
+          range: [1, 65535]
+          description: "UDP 서버 포트"
+
+        host:
+          type: string
+          default: "0.0.0.0"
+          description: "바인딩할 호스트 주소"
+
+    HttpInputAdapter:
+      required_fields: [type, messagetype, port]
+      fields:
+        port:
+          type: integer
+          required: true
+          range: [1, 65535]
+          description: "HTTP 서버 포트"
+
+        host:
+          type: string
+          default: "0.0.0.0"
+          description: "바인딩할 호스트 주소"
+
+        codec:
+          type: string
+          enum: ["json", "plain", "multipart"]
+          default: "plain"
+          description: "HTTP 요청 본문 인코딩 방식"
+
+        path_pattern:
+          type: string
+          default: "/"
+          description: "HTTP 엔드포인트 경로 패턴"
+
+    KafkaInputAdapter:
+      required_fields: [type, messagetype, topicid, bootstrapservers]
+      fields:
+        topicid:
+          type: string
+          required: true
+          description: "Kafka 토픽명"
+
+        bootstrapservers:
+          type: string
+          required: true
+          description: "Kafka 브로커 서버 목록 (host:port,host:port)"
+          example: "localhost:9092,localhost:9093"
+
+        groupId:
+          type: string
+          description: "Kafka 컨슈머 그룹 ID"
+          default: "logparser-group"
+
+# =============================================================================
+# 파서 설정
+# =============================================================================
+parsers:
+  common_fields:
+    type:
+      type: string
+      required: true
+      enum: ["JsonParser", "GrokParser", "RegexParser", "RFC3164SyslogParser", "RFC5424SyslogParser", "HttpParser"]
+      description: "파서 클래스명"
+
+    messagetype:
+      type: string
+      required: true
+      description: "처리할 메시지 타입"
+
+    priority:
+      type: integer
+      range: [0, 100]
+      default: 0
+      description: "파서 우선순위 (낮을수록 먼저 실행)"
+
+  parsers:
+    JsonParser:
+      required_fields: [type, messagetype]
+      description: "JSON 형식 로그 파싱"
+
+    GrokParser:
+      required_fields: [type, messagetype, param]
+      fields:
+        param:
+          type: string
+          required: true
+          description: "Grok 패턴 문자열"
+          example: "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:level} %{DATA:message}"
+
+    RegexParser:
+      required_fields: [type, messagetype, param]
+      fields:
+        param:
+          type: string
+          required: true
+          description: "정규식 패턴 (named group 사용)"
+          example: "^(?<timestamp>\\d{4}-\\d{2}-\\d{2}) (?<level>\\w+) (?<message>.*)$"
+
+    RFC3164SyslogParser:
+      required_fields: [type, messagetype]
+      description: "RFC 3164 Syslog 형식 파싱"
+
+    RFC5424SyslogParser:
+      required_fields: [type, messagetype]
+      description: "RFC 5424 Syslog 형식 파싱"
+
+# =============================================================================
+# 변환 설정
+# =============================================================================
+transforms:
+  common_fields:
+    type:
+      type: string
+      required: true
+      enum: ["Filter", "AddProperty", "RemoveProperty"]
+      description: "변환 클래스명"
+
+    messagetype:
+      type: string
+      required: true
+      description: "처리할 메시지 타입"
+
+  transforms:
+    Filter:
+      description: "메시지 필터링"
+      fields:
+        param:
+          type: object
+          required: true
+          properties:
+            pass:
+              type: object
+              description: "통과시킬 조건"
+            drop:
+              type: object
+              description: "제거할 조건"
+
+    AddProperty:
+      description: "필드 추가"
+      fields:
+        param:
+          type: object
+          required: true
+          properties:
+            add:
+              type: object
+              description: "추가할 필드와 값"
+
+    RemoveProperty:
+      description: "필드 제거"
+      fields:
+        param:
+          type: object
+          required: true
+          properties:
+            remove:
+              type: array
+              items:
+                type: string
+              description: "제거할 필드 목록"
+
+# =============================================================================
+# 출력 어댑터 설정
+# =============================================================================
+output_adapters:
+  common_fields:
+    type:
+      type: string
+      required: true
+      enum: ["ConsoleOutputAdapter", "KafkaOutputAdapter", "HttpOutputAdapter", "TcpOutputAdapter", "OpenSearchOutputAdapter", "RabbitMQAdapter", "BenchmarkAdapter"]
+      description: "출력 어댑터 클래스명"
+
+    messagetype:
+      type: string
+      description: "처리할 메시지 타입 (null이면 모든 타입)"
+
+    add_origin_text:
+      type: boolean
+      default: false
+      description: "원본 텍스트를 출력에 포함할지 여부"
+
+  adapters:
+    ConsoleOutputAdapter:
+      required_fields: [type]
+      description: "콘솔/로그 출력"
+
+    KafkaOutputAdapter:
+      required_fields: [type, topicid, bootstrapservers]
+      fields:
+        topicid:
+          type: string
+          required: true
+          description: "Kafka 토픽명"
+
+        bootstrapservers:
+          type: string
+          required: true
+          description: "Kafka 브로커 서버 목록"
+
+    HttpOutputAdapter:
+      required_fields: [type, url]
+      fields:
+        url:
+          type: string
+          required: true
+          format: uri
+          description: "HTTP 엔드포인트 URL"
+
+        method:
+          type: string
+          enum: ["POST", "PUT", "PATCH"]
+          default: "POST"
+          description: "HTTP 메서드"
+
+    OpenSearchOutputAdapter:
+      required_fields: [type, host, index]
+      fields:
+        host:
+          type: string
+          required: true
+          description: "OpenSearch 호스트"
+
+        port:
+          type: integer
+          range: [1, 65535]
+          default: 9200
+          description: "OpenSearch 포트"
+
+        index:
+          type: string
+          required: true
+          description: "인덱스 이름 (템플릿 지원)"
+          example: "logs-%{event_type}-%{yyMMdd}"
+
+        username:
+          type: string
+          description: "인증 사용자명"
+
+        password:
+          type: string
+          sensitive: true
+          description: "인증 비밀번호"
+
+    RabbitMQAdapter:
+      required_fields: [type, host, routingkey, exchange]
+      fields:
+        host:
+          type: string
+          required: true
+          description: "RabbitMQ 호스트"
+
+        port:
+          type: integer
+          range: [1, 65535]
+          default: 5672
+          description: "RabbitMQ 포트"
+
+        routingkey:
+          type: string
+          required: true
+          description: "라우팅 키"
+
+        exchange:
+          type: string
+          required: true
+          description: "익스체인지명"
+
+        username:
+          type: string
+          description: "RabbitMQ 사용자명"
+
+        password:
+          type: string
+          sensitive: true
+          description: "RabbitMQ 비밀번호"
+
+        tagpass:
+          type: object
+          description: "태그 기반 필터링"
+          example: { "event_type": ["flow", "alarm"] }
+
+    BenchmarkAdapter:
+      required_fields: [type]
+      description: "성능 측정용 어댑터"
+
+# =============================================================================
+# 설정 예제
+# =============================================================================
+examples:
+  minimal_file_to_console:
+    description: "파일에서 콘솔로 출력하는 최소 설정"
+    config:
+      logparser:
+        parser_threads: 2
+        input:
+          - type: FileInputAdapter
+            path: ./logs/app.log
+            messagetype: app
+        parser:
+          - type: JsonParser
+            messagetype: app
+        output:
+          - type: ConsoleOutputAdapter
+            messagetype: app
+
+  complete_pipeline:
+    description: "완전한 ETL 파이프라인 예제"
+    config:
+      logparser:
+        parser_threads: 4
+        input:
+          - type: FileInputAdapter
+            path: ./logs/suricata.json
+            messagetype: suricata
+            isFromBeginning: true
+          - type: TcpInputAdapter
+            port: 5140
+            messagetype: syslog
+        parser:
+          - type: JsonParser
+            messagetype: suricata
+          - type: RFC3164SyslogParser
+            messagetype: syslog
+        transform:
+          - type: Filter
+            messagetype: suricata
+            param:
+              pass:
+                event_type: alert,anomaly
+          - type: AddProperty
+            messagetype: suricata
+            param:
+              add:
+                pipeline: logparser
+        output:
+          - type: OpenSearchOutputAdapter
+            messagetype: suricata
+            host: localhost
+            port: 9200
+            index: suricata-%{yyMMdd}
+          - type: ConsoleOutputAdapter
+            messagetype: syslog

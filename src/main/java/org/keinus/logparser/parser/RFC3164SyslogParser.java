@@ -3,9 +3,14 @@ package org.keinus.logparser.parser;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.keinus.logparser.interfaces.IParser;
+import org.keinus.logparser.core.interfaces.IParser;
+import org.keinus.logparser.core.schema.LogEvent;
 
 public class RFC3164SyslogParser implements IParser {
+    /**
+     * Parser for RFC3164 (BSD syslog) formatted log messages.
+     * Extracts priority, timestamp, hostname, and message body into a map.
+     */
     protected static final char SPACE = ' ';
 
     public RFC3164SyslogParser() {
@@ -18,59 +23,69 @@ public class RFC3164SyslogParser implements IParser {
     }
 
     @Override
-    public Map<String, Object> parse(String arg) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        String line = arg;
-        Reader r = new Reader(line);
-
+    public boolean parse(LogEvent logEvent) {
         try {
-            // <PRI>
-            r.expect('<');
-            int pri = r.readInt();
-            r.expect('>');
+            Map<String, Object> map = new LinkedHashMap<>();
+            String line = logEvent.getOriginalText();
+            Reader r = new Reader(line);
 
-            // RFC3164 TIMESTAMP (MMM dd HH:mm:ss)
-            String timestamp = getTimestamp(r);
+            try {
+                // <PRI>
+                r.expect('<');
+                int pri = r.readInt();
+                r.expect('>');
 
-            // HOST
-            String host = r.getIdentifier();
+                // RFC3164 TIMESTAMP (MMM dd HH:mm:ss)
+                String timestamp = getTimestamp(r);
 
-            // TAG (until ':' or SPACE)
-            String tag = r.getIdentifierUntil(':');
-            if (r.is(':')) {
-                r.getc(); // skip ':'
+                // HOST
+                String host = r.getIdentifier();
+
+                // TAG (until ':' or SPACE)
+                String tag = r.getIdentifierUntil(':');
+                if (r.is(':')) {
+                    r.getc(); // skip ':'
+                }
+                if (r.is(SPACE)) {
+                    r.getc();
+                }
+
+                // MESSAGE (rest of line)
+                String message = r.rest();
+
+                // 기본 syslog 메타데이터
+                int severity = pri & 0x7;
+                int facility = pri >> 3;
+                map.put(SyslogHeaders.FACILITY, facility);
+                map.put(SyslogHeaders.SEVERITY, severity);
+                map.put(SyslogHeaders.SEVERITY_TEXT, Severity.parseInt(severity).label());
+                map.put(SyslogHeaders.TIMESTAMP, timestamp);
+                map.put(SyslogHeaders.HOST, host);
+                map.put(SyslogHeaders.TAG, tag);
+                map.put(SyslogHeaders.MESSAGE, message);
+                map.put(SyslogHeaders.DECODE_ERRORS, "false");
+
+                // iptables key=value 필드 파싱
+                parseKeyValueFields(message, map);
+
+            } catch (IllegalStateException | StringIndexOutOfBoundsException ex) {
+                map.put(SyslogHeaders.DECODE_ERRORS, "true");
+                map.put(SyslogHeaders.ERRORS,
+                        (ex instanceof StringIndexOutOfBoundsException ? "Unexpected end of message: " : "")
+                                + ex.getMessage());
+                map.put(SyslogHeaders.UNDECODED, line);
             }
-            if (r.is(SPACE)) {
-                r.getc();
+
+            if (!map.isEmpty()) {
+                logEvent.setFields(map);
+                return true;
             }
-
-            // MESSAGE (rest of line)
-            String message = r.rest();
-
-            // 기본 syslog 메타데이터
-            int severity = pri & 0x7;
-            int facility = pri >> 3;
-            map.put(SyslogHeaders.FACILITY, facility);
-            map.put(SyslogHeaders.SEVERITY, severity);
-            map.put(SyslogHeaders.SEVERITY_TEXT, Severity.parseInt(severity).label());
-            map.put(SyslogHeaders.TIMESTAMP, timestamp);
-            map.put(SyslogHeaders.HOST, host);
-            map.put(SyslogHeaders.TAG, tag);
-            map.put(SyslogHeaders.MESSAGE, message);
-            map.put(SyslogHeaders.DECODE_ERRORS, "false");
-
-            // iptables key=value 필드 파싱
-            parseKeyValueFields(message, map);
-
-        } catch (IllegalStateException | StringIndexOutOfBoundsException ex) {
-            map.put(SyslogHeaders.DECODE_ERRORS, "true");
-            map.put(SyslogHeaders.ERRORS,
-                    (ex instanceof StringIndexOutOfBoundsException ? "Unexpected end of message: " : "")
-                            + ex.getMessage());
-            map.put(SyslogHeaders.UNDECODED, line);
+        } catch (Exception e) {
+            logEvent.markAsError("RFC3164 parsing failed: " + e.getMessage());
         }
-        return map;
+        return false;
     }
+
 
     /** iptables 메시지에서 key=value 형태 필드 추출 */
     private void parseKeyValueFields(String message, Map<String, Object> map) {

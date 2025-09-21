@@ -8,8 +8,24 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.keinus.logparser.config.TransformParamConfig;
-import org.keinus.logparser.interfaces.ITransform;
+import org.keinus.logparser.core.interfaces.ITransform;
+import org.keinus.logparser.core.schema.LogEvent;
 
+/**
+ * 메시지의 특정 필드 값을 기준으로 메시지를 필터링하는 변환(Transform) 클래스입니다.
+ * <p>
+ * 이 클래스는 {@link ITransform} 인터페이스를 구현하며, 두 가지 조건으로 필터링을 수행합니다:
+ * <ul>
+ *     <li><b>drop:</b> 지정된 필드의 값이 'drop' 목록에 포함된 경우, 해당 메시지를 파이프라인에서 제거합니다.
+ *         (빈 맵을 반환하여 제거 신호를 보냅니다.)</li>
+ *     <li><b>pass:</b> 'pass' 목록이 설정된 경우, 지정된 필드의 값이 'pass' 목록에 포함되어야만
+ *         메시지가 파이프라인을 계속 진행할 수 있습니다. 그렇지 않으면 제거됩니다.</li>
+ * </ul>
+ * 필터링 규칙은 {@link TransformParamConfig}를 통해 초기화됩니다.
+ *
+ * @see org.keinus.logparser.core.interfaces.ITransform
+ * @see org.keinus.logparser.config.TransformParamConfig
+ */
 public class Filter implements ITransform {
     private Map<String, List<String>> pass = new HashMap<>();
     private Map<String, List<String>> drop = new HashMap<>();
@@ -36,19 +52,26 @@ public class Filter implements ITransform {
 	}
 
 	@Override
-	public Map<String, Object> parse(Map<String, Object> message) {
+	public boolean transform(LogEvent logEvent) {
+		Map<String, Object> fields = logEvent.getFields();
+
+		// Drop 조건 검사
 		for(Entry<String, List<String>> entry : drop.entrySet()) {
 			String prop = entry.getKey();
-			String targetProp = (String) message.get(prop);
+			String targetProp = (String) fields.get(prop);
 			if(entry.getValue().contains(targetProp))
-				return Collections.emptyMap();
+				return false; // 필터링됨
 		}
+
+		// Pass 조건 검사
 		for(Entry<String, List<String>> entry : pass.entrySet()) {
 			String prop = entry.getKey();
-			String targetProp = (String) message.get(prop);
+			String targetProp = (String) fields.get(prop);
 			if(!entry.getValue().contains(targetProp))
-				return Collections.emptyMap();
+				return false; // 필터링됨
 		}
-		return message;
+
+		return true; // 통과
 	}
+
 }

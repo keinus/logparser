@@ -1,9 +1,21 @@
-package org.keinus.logparser.interfaces;
+package org.keinus.logparser.core.interfaces;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 
+/**
+ * 처리된 메시지를 최종 목적지(sink)로 전송하는 모든 출력 어댑터의 추상 기반 클래스입니다.
+ * <p>
+ * 이 클래스는 다양한 출력 방식(예: Console, Kafka, OpenSearch)을 표준화된 인터페이스로 추상화합니다.
+ * 모든 구체적인 출력 어댑터는 이 클래스를 상속받아 {@link #send(Map, String)} 메서드를 구현해야 합니다.
+ * <p>
+ * 각 어댑터는 특정 메시지 타입({@code messagetype})에 바인딩될 수 있으며,
+ * 최종 출력에 원본 로그 텍스트를 포함할지 여부({@code add_origin_text})를 설정할 수 있습니다.
+ *
+ * @see java.io.Closeable
+ * @see org.keinus.logparser.core.dispatch.OutputAdapterProcedure
+ */
 public abstract class OutputAdapter implements Closeable {
 	private String name;
 

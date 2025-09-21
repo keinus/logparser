@@ -1,4 +1,4 @@
-package org.keinus.logparser.dispatch;
+package org.keinus.logparser.core.dispatch;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -9,9 +9,15 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.keinus.logparser.config.TransformConfig;
-import org.keinus.logparser.interfaces.ITransform;
+import org.keinus.logparser.core.interfaces.ITransform;
+import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.config.ApplicationProperties;
+import org.springframework.stereotype.Service;
 
-
+/**
+ * 파싱된 메시지 데이터에 대해 다양한 변환 작업을 수행하는 서비스 클래스입니다.
+ */
+@Service
 public class TransformService {
     private static final Logger LOGGER = LoggerFactory.getLogger( TransformService.class );
 
@@ -45,7 +51,8 @@ public class TransformService {
         return transformInterface;
     }
 
-    public TransformService(List<TransformConfig> transformList) {
+    public TransformService(ApplicationProperties applicationProperties) {
+        List<TransformConfig> transformList = applicationProperties.getTransform();
         for(TransformConfig trans : transformList) {
             ITransform transformInterface = loadLibrary(trans.getType());
             if(transformInterface == null)
@@ -58,11 +65,15 @@ public class TransformService {
         }
     }
 
-    public boolean transform(Map<String, Object> parsedStr, String type) {
-        for(ITransform trans : transformer.getOrDefault(type, new ArrayList<>())) {
-            var ret = trans.parse(parsedStr);
-            if(ret.isEmpty())
+    /**
+     * LogEvent를 변환합니다.
+     */
+    public boolean transform(LogEvent logEvent) {
+        String messageType = logEvent.getMessageType();
+        for(ITransform trans : transformer.getOrDefault(messageType, new ArrayList<>())) {
+            if(!trans.transform(logEvent)) {
                 return false;
+            }
         }
         return true;
     }

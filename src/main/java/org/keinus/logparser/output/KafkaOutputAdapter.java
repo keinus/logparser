@@ -12,9 +12,25 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.keinus.logparser.interfaces.OutputAdapter;
+import org.keinus.logparser.core.interfaces.OutputAdapter;
 
 
+/**
+ * 처리된 메시지를 Apache Kafka 토픽으로 전송하는 출력 어댑터입니다.
+ * <p>
+ * 이 클래스는 {@link OutputAdapter}를 구현하며, 내부적으로 {@link KafkaProducer}를 사용하여
+ * 메시지를 비동기적으로 Kafka 브로커에 전송합니다.
+ * <p>
+ * 주요 설정:
+ * <ul>
+ *     <li>{@code bootstrapservers}: 접속할 Kafka 브로커의 주소 목록</li>
+ *     <li>{@code topicid}: 메시지를 전송할 대상 토픽의 이름</li>
+ * </ul>
+ * 메시지의 키는 null이며, 값은 JSON 형식의 문자열입니다.
+ *
+ * @see org.keinus.logparser.core.interfaces.OutputAdapter
+ * @see org.apache.kafka.clients.producer.KafkaProducer
+ */
 public class KafkaOutputAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( KafkaOutputAdapter.class );
 	Producer<String, String> producer = null;
