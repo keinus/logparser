@@ -8,8 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import org.keinus.logparser.core.interfaces.OutputAdapter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -27,13 +27,16 @@ import org.slf4j.LoggerFactory;
  * @see org.keinus.logparser.core.interfaces.OutputAdapter
  * @see java.net.Socket
  */
+@Slf4j
 public class HttpOutputAdapter extends OutputAdapter {
-	private static final Logger LOGGER = LoggerFactory.getLogger( HttpOutputAdapter.class );
 	private Socket socket;
     String path = null;
     String host;
     int port;
 	int retry = 3;
+	private boolean keepAlive = true;
+	private long lastUsed = 0;
+	private static final long CONNECTION_TIMEOUT = 30000; // 30초
     
 	public HttpOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -58,49 +61,91 @@ public class HttpOutputAdapter extends OutputAdapter {
 		
 		path = url.substring(pathIndex);
 		
-		LOGGER.info("TCP Output Adapter connected at ip, port {}, {}.", host, port);
+		log.info("TCP Output Adapter connected at ip, port {}, {}.", host, port);
+	}
+
+	private void ensureConnection() throws IOException {
+		long currentTime = System.currentTimeMillis();
+
+		// 연결이 없거나 타임아웃된 경우 새 연결 생성
+		if (socket == null || socket.isClosed() || !socket.isConnected() ||
+			(currentTime - lastUsed > CONNECTION_TIMEOUT)) {
+			closeConnection();
+			createConnection();
+		}
+		lastUsed = currentTime;
+	}
+
+	private void createConnection() throws IOException {
+		int count = 0;
+		while(count < retry) {
+			try {
+				socket = new Socket(host, port);
+				socket.setReuseAddress(true);
+				socket.setKeepAlive(keepAlive);
+				socket.setSoTimeout(5000); // 5초 읽기 타임아웃
+				log.debug("New connection established to {}:{}", host, port);
+				break;
+			} catch (IOException e) {
+				log.error("Connection attempt {} failed: {}", count + 1, e.getMessage());
+				count++;
+				if(count >= retry) {
+					throw e;
+				}
+			}
+		}
+	}
+
+	private void closeConnection() {
+		if (socket != null && !socket.isClosed()) {
+			try {
+				socket.close();
+			} catch (IOException e) {
+				log.error("Error closing connection: {}", e.getMessage());
+			}
+		}
+		socket = null;
 	}
 
 	public void send(Map<String, Object> json, String jsonString) {
 		synchronized( this ) {
-			int count = 0;
-			while(true) {
-				if(count >= retry) return;
-				try {
-					socket = new Socket(host, 9200);
-					socket.setReuseAddress(true);
-					break;
-				} catch (IOException e) {
-					LOGGER.error(e.getMessage());
-					if(count > 1) return;
-					count++;
-				}
-			}
-
-			StringBuilder sb = new StringBuilder();
-			sb.append("POST " + path + " HTTP/1.0\r\n");
-			sb.append("Content-Length: " + jsonString.length() + "\r\n");
-			sb.append("Content-Type: application/json\r\n");
-			sb.append("\r\n");
-			sb.append(jsonString);
-			ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(sb.toString());
-			try (DataOutputStream dos = new DataOutputStream(socket.getOutputStream())) {
-				dos.write(byteBuffer.array());
-			} catch (IOException e) {
-				LOGGER.error(e.getMessage());				
-			}
 			try {
-				socket.close();
+				ensureConnection();
+
+				StringBuilder sb = new StringBuilder();
+				sb.append("POST " + path + " HTTP/1.1\r\n"); // HTTP/1.1로 변경
+				sb.append("Host: " + host + ":" + port + "\r\n");
+				sb.append("Content-Length: " + jsonString.length() + "\r\n");
+				sb.append("Content-Type: application/json\r\n");
+				if (keepAlive) {
+					sb.append("Connection: keep-alive\r\n");
+				} else {
+					sb.append("Connection: close\r\n");
+				}
+				sb.append("\r\n");
+				sb.append(jsonString);
+
+				ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(sb.toString());
+				try (DataOutputStream dos = new DataOutputStream(socket.getOutputStream())) {
+					dos.write(byteBuffer.array());
+					dos.flush();
+				}
+
+				// Keep-Alive가 아닌 경우에만 연결 닫기
+				if (!keepAlive) {
+					closeConnection();
+				}
+
 			} catch (IOException e) {
-				LOGGER.error(e.getMessage());				
+				log.error("Send failed: {}", e.getMessage());
+				closeConnection(); // 오류 시 연결 재설정
 			}
 		}
 	}
 
 	@Override
 	public void close() throws IOException {
-		if(socket != null)
-			socket.close();
-		
+		closeConnection();
+		log.info("HTTP Output Adapter closed");
 	}
 }

@@ -54,11 +54,17 @@ public class TcpInputAdapter extends InputAdapter {
         try {
             Socket socket = serverSocket.accept();
             if (socket.isConnected()) {
-            	BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
-            	String payload = br.readLine();
-                String host = socket.getInetAddress().toString();
-				return createLogEvent(payload, host);
+                // try-with-resources를 사용하여 리소스 자동 해제
+            	try (BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+                    String payload = br.readLine();
+                    String host = socket.getInetAddress().toString();
+                    return createLogEvent(payload, host);
+                } finally {
+                    // 소켓도 명시적으로 닫기
+                    if (!socket.isClosed()) {
+                        socket.close();
+                    }
+                }
             }
         } catch(SocketException e) {
 			try {
@@ -68,7 +74,7 @@ public class TcpInputAdapter extends InputAdapter {
 			}
 		} catch (IOException e) {
             LOGGER.error(e.getMessage());
-        } 
+        }
         return null;
     }
 	

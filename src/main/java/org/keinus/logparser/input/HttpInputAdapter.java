@@ -10,9 +10,6 @@ import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.core.interfaces.InputAdapter;
@@ -34,8 +31,6 @@ import org.keinus.logparser.core.schema.LogEvent;
  */
 @Slf4j
 public class HttpInputAdapter extends InputAdapter {
-	private static final Logger LOGGER = LoggerFactory.getLogger(HttpInputAdapter.class);
-
 	private ServerSocket serverSocket;
 
 	public HttpInputAdapter(Map<String, String> obj) throws IOException {
@@ -44,9 +39,9 @@ public class HttpInputAdapter extends InputAdapter {
 			int port = Integer.parseInt(obj.get("port"));
 			serverSocket = new ServerSocket(port);
 
-			LOGGER.info("HTTP Input Adapter start at port {}", port);
+			log.info("HTTP Input Adapter start at port {}", port);
 		} catch (IOException e) {
-			LOGGER.error(e.getMessage());
+			log.error(e.getMessage());
 		}
 	}
 
@@ -74,7 +69,22 @@ public class HttpInputAdapter extends InputAdapter {
 					headers.put(split[0].toUpperCase().trim(), split[1].toUpperCase().trim());
 				}
 			}
-			int contentLength = Integer.parseInt(headers.get("CONTENT-LENGTH"));
+			// Content-Length 검증 및 파싱
+			int contentLength = 0;
+			String contentLengthStr = headers.get("CONTENT-LENGTH");
+			if (contentLengthStr != null) {
+				try {
+					contentLength = Integer.parseInt(contentLengthStr);
+					// 최대 10MB 제한
+					if (contentLength < 0 || contentLength > 10 * 1024 * 1024) {
+						throw new SecurityException("Content-Length 값이 허용 범위를 벗어남: " + contentLength);
+					}
+				} catch (NumberFormatException e) {
+					log.error("Invalid Content-Length header: {}", contentLengthStr);
+					throw new IllegalArgumentException("Invalid Content-Length format", e);
+				}
+			}
+
 			if (contentLength > 0) {
 				readed = 0;
 				while ((rc = br.read(buffer, 0, 1024)) != -1) {
@@ -82,6 +92,11 @@ public class HttpInputAdapter extends InputAdapter {
 					sb.append(new String(buffer, 0, rc));
 					if (readed >= contentLength)
 						break;
+				}
+
+				// 실제 읽은 데이터와 Content-Length 일치 검증
+				if (readed != contentLength) {
+					log.warn("Content-Length mismatch: expected {}, actual {}", contentLength, readed);
 				}
 			}
 
@@ -98,7 +113,7 @@ public class HttpInputAdapter extends InputAdapter {
 			var content = read(serverSocket.accept());
 			msg = (String) content[1];
 		} catch (IOException e) {
-			LOGGER.error(e.getMessage());
+			log.error(e.getMessage());
 			return null;
 		}
 

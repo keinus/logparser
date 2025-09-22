@@ -6,8 +6,8 @@ import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+
 import org.keinus.logparser.core.interfaces.InputAdapter;
 import org.keinus.logparser.core.schema.LogEvent;
 
@@ -25,8 +25,9 @@ import org.keinus.logparser.core.schema.LogEvent;
  * @see java.net.DatagramSocket
  * @see java.net.DatagramPacket
  */
+@Slf4j
 public class UdpInputAdapter extends InputAdapter {
-	private static final Logger LOGGER = LoggerFactory.getLogger(UdpInputAdapter.class);
+	private static final int MAX_PACKET_SIZE = 1600; 
 	private DatagramSocket serverSocket = null;
 
 	public UdpInputAdapter(Map<String, String> obj) throws IOException {
@@ -36,11 +37,11 @@ public class UdpInputAdapter extends InputAdapter {
 		try {
 			serverSocket = new DatagramSocket(port);
 		} catch (SocketException e) {
-			LOGGER.error("Socket Initialize Error: {}", e.getMessage());
+			log.error("Socket Initialize Error: {}", e.getMessage());
 			return;
 		}
 
-		LOGGER.info("UDP Input Adapter start at port {}", port);
+		log.info("UDP Input Adapter start at port {}", port);
 	}
 
 	@Override
@@ -49,16 +50,21 @@ public class UdpInputAdapter extends InputAdapter {
 			return null;
 
 		try {
-			byte[] buffer = new byte[1024];
+			byte[] buffer = new byte[MAX_PACKET_SIZE];
 			DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
+			serverSocket.setSoTimeout(5000);
 			serverSocket.receive(receivePacket);
+			int actualLength = receivePacket.getLength();
+			if (actualLength > MAX_PACKET_SIZE) {
+				throw new SecurityException("패킷 크기가 제한을 초과했습니다");
+			}
 
 			String payload = new String(receivePacket.getData(), 0, receivePacket.getLength());
 
 			String host = receivePacket.getAddress().toString();
 			return createLogEvent(payload, host);
 		} catch (IOException e) {
-			LOGGER.error(e.getMessage());
+			log.error(e.getMessage());
 		}
 		return null;
 	}

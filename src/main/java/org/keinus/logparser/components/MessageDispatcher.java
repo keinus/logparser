@@ -14,7 +14,6 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.config.ApplicationProperties;
-import org.keinus.logparser.core.dispatch.OutputAdapterProcedure;
 import org.keinus.logparser.core.dispatch.ParseService;
 import org.keinus.logparser.core.dispatch.TransformService;
 import org.keinus.logparser.core.util.ThreadManager;

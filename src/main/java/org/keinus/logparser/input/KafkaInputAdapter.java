@@ -45,7 +45,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 public class KafkaInputAdapter extends InputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(KafkaInputAdapter.class);
 
-	private static final BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
+	private final BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
 	private KafkaConsumer<String, String> consumer = null;
 	private String host = null;
 
