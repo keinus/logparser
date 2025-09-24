@@ -27,6 +27,7 @@ public class ApplicationProperties {
     private List<ParserAdapterConfig> parser;
     private List<TransformConfig> transform;
     private int parserThreads;
+    private long flushInterval;
 
     // === 설정 검증기 ===
     private final ConfigValidator configValidator;
@@ -41,6 +42,9 @@ public class ApplicationProperties {
     private void validateBasicProperties() {
         if (parserThreads <= 0) {
             throw new IllegalArgumentException("Parser threads must be greater than zero.");
+        }
+        if (flushInterval <= 0) {
+            throw new IllegalArgumentException("Flush interval must be greater than zero.");
         }
     }
 

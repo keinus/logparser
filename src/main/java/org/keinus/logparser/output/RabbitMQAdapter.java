@@ -54,7 +54,27 @@ public class RabbitMQAdapter extends OutputAdapter {
 			channel = connection.createChannel();
 			channel.exchangeDeclare(exchange, BuiltinExchangeType.TOPIC);
 		} catch (IOException | TimeoutException e) {
-			log.error(e.getMessage());
+			log.error("Failed to initialize RabbitMQ connection: {}", e.getMessage());
+			// Clean up partially initialized resources
+			closeResources();
+			throw new IOException("Failed to initialize RabbitMQ adapter", e);
+		}
+	}
+
+	private void closeResources() {
+		if (channel != null) {
+			try {
+				channel.close();
+			} catch (IOException | TimeoutException e) {
+				log.warn("Failed to close channel: {}", e.getMessage());
+			}
+		}
+		if (connection != null) {
+			try {
+				connection.close();
+			} catch (IOException e) {
+				log.warn("Failed to close connection: {}", e.getMessage());
+			}
 		}
 	}
 

@@ -66,6 +66,9 @@ public class HttpInputAdapter extends InputAdapter {
 					break;
 				if (line.contains(":")) {
 					String[] split = line.split(":");
+					if (split.length >= 2) {
+						headers.put(split[0].toUpperCase().trim(), split[1].toUpperCase().trim());
+					}
 					headers.put(split[0].toUpperCase().trim(), split[1].toUpperCase().trim());
 				}
 			}

@@ -1,6 +1,7 @@
 logparser:
   parser_threads: 4
   queue_size: 20000
+  flush_interval: 5000
   input: 
 #    -
 #      type : TcpInputAdapter

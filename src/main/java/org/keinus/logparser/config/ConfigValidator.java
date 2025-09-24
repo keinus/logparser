@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
-import java.net.URL;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -44,13 +44,12 @@ public class ConfigValidator {
         String fieldName = field.getName();
 
         // Required 검증
-        if (field.isAnnotationPresent(Required.class)) {
-            if (value == null || (value instanceof String && ((String) value).trim().isEmpty())) {
+        if (field.isAnnotationPresent(Required.class) && (value == null || (value instanceof String str && str.trim().isEmpty()))) {
                 Required req = field.getAnnotation(Required.class);
                 result.addError(fieldName + ": " + req.message());
                 return;
             }
-        }
+        
 
         // null 값이면 다른 검증 스킵
         if (value == null) {
@@ -58,9 +57,9 @@ public class ConfigValidator {
         }
 
         // Range 검증
-        if (field.isAnnotationPresent(Range.class) && value instanceof Number) {
+        if (field.isAnnotationPresent(Range.class) && value instanceof Number number) {
             Range range = field.getAnnotation(Range.class);
-            int intValue = ((Number) value).intValue();
+            int intValue = number.intValue();
             if (intValue < range.min() || intValue > range.max()) {
                 result.addError(fieldName + ": value must be between " + range.min() + " and " + range.max());
             }
@@ -76,18 +75,20 @@ public class ConfigValidator {
         }
 
         // URL 검증
-        if (field.isAnnotationPresent(Url.class) && value instanceof String) {
+        if (field.isAnnotationPresent(Url.class) && value instanceof String str) {
             try {
-                new URL((String) value);
+                URI uri = new URI(str);
+                if(uri.getScheme() == null || uri.getHost() == null)
+                    throw new IllegalArgumentException("Invalid URI: missing scheme or host");
             } catch (Exception e) {
                 result.addError(fieldName + ": invalid URL format");
             }
         }
 
         // FilePath 검증
-        if (field.isAnnotationPresent(FilePath.class) && value instanceof String) {
+        if (field.isAnnotationPresent(FilePath.class) && value instanceof String str) {
             FilePath filePath = field.getAnnotation(FilePath.class);
-            if (filePath.mustExist() && !Files.exists(Paths.get((String) value))) {
+            if (filePath.mustExist() && !Files.exists(Paths.get(str))) {
                 result.addError(fieldName + ": file does not exist: " + value);
             }
         }

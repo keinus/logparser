@@ -7,8 +7,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.keinus.logparser.core.schema.LogEvent;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,7 +44,7 @@ class HttpInputAdapterTest {
 
     @Test
     @DisplayName("생성자 테스트 - 유효한 설정으로 생성")
-    void testConstructorWithValidConfig() throws IOException {
+    void testConstructorWithValidConfig() {
         // When & Then
         assertDoesNotThrow(() -> {
             adapter = new HttpInputAdapter(validConfig);
@@ -139,23 +137,6 @@ class HttpInputAdapterTest {
 
         // Then
         assertNull(result);
-    }
-
-    /**
-     * HTTP 요청 시뮬레이션을 위한 테스트 클라이언트
-     */
-    private void sendHttpRequest(int port, String request) {
-        try (Socket client = new Socket("localhost", port);
-             OutputStream out = client.getOutputStream()) {
-
-            out.write(request.getBytes());
-            out.flush();
-
-            // 잠시 대기하여 서버가 응답할 시간을 줌
-            Thread.sleep(100);
-        } catch (Exception e) {
-            // 테스트에서는 연결 오류를 무시
-        }
     }
 
     @Test
