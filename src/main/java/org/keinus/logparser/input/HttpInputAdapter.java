@@ -31,6 +31,8 @@ import org.keinus.logparser.core.schema.LogEvent;
  */
 @Slf4j
 public class HttpInputAdapter extends InputAdapter {
+	private static final int MAX_CONTENT_LENGTH = 10 * 1024 * 1024; // 10MB
+
 	private ServerSocket serverSocket;
 
 	public HttpInputAdapter(Map<String, String> obj) throws IOException {
@@ -65,11 +67,10 @@ public class HttpInputAdapter extends InputAdapter {
 				if (line.equals(""))
 					break;
 				if (line.contains(":")) {
-					String[] split = line.split(":");
+					String[] split = line.split(":", 2);
 					if (split.length >= 2) {
 						headers.put(split[0].toUpperCase().trim(), split[1].toUpperCase().trim());
 					}
-					headers.put(split[0].toUpperCase().trim(), split[1].toUpperCase().trim());
 				}
 			}
 			// Content-Length 검증 및 파싱
@@ -79,7 +80,7 @@ public class HttpInputAdapter extends InputAdapter {
 				try {
 					contentLength = Integer.parseInt(contentLengthStr);
 					// 최대 10MB 제한
-					if (contentLength < 0 || contentLength > 10 * 1024 * 1024) {
+					if (contentLength < 0 || contentLength > MAX_CONTENT_LENGTH) {
 						throw new SecurityException("Content-Length 값이 허용 범위를 벗어남: " + contentLength);
 					}
 				} catch (NumberFormatException e) {
@@ -112,11 +113,11 @@ public class HttpInputAdapter extends InputAdapter {
 		if (serverSocket == null)
 			return null;
 		String msg = null;
-		try {
-			var content = read(serverSocket.accept());
+		try (Socket socket = serverSocket.accept()) {
+			var content = read(socket);
 			msg = (String) content[1];
 		} catch (IOException e) {
-			log.error(e.getMessage());
+			log.error("Failed to read HTTP request: {}", e.getMessage());
 			return null;
 		}
 

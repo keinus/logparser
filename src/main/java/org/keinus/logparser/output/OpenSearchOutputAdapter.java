@@ -58,6 +58,8 @@ import org.keinus.logparser.core.util.ThreadUtil;
  */
 public class OpenSearchOutputAdapter extends OutputAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenSearchOutputAdapter.class);
+    private static final int MAX_BATCH_SIZE = 2000;
+
     private String host;
     private int port;
     private String indexTemplate;
@@ -143,7 +145,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         }
         addJsonString(targetIndex, jsonString);
 
-        if (totalDocumentCount.get() >= 2000) {
+        if (totalDocumentCount.get() >= MAX_BATCH_SIZE) {
             this.flush();
         }
     }

@@ -36,8 +36,9 @@ import com.rabbitmq.client.Channel;
 public class RabbitMQAdapter extends OutputAdapter {
 	private String routingkey = null;
 	private String exchange = null;
-	Channel channel = null;
-	Connection connection = null;
+	private final Object lock = new Object();
+	private Channel channel = null;
+	private Connection connection = null;
 
 	public RabbitMQAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -62,39 +63,45 @@ public class RabbitMQAdapter extends OutputAdapter {
 	}
 
 	private void closeResources() {
-		if (channel != null) {
-			try {
-				channel.close();
-			} catch (IOException | TimeoutException e) {
-				log.warn("Failed to close channel: {}", e.getMessage());
+		synchronized (lock) {
+			if (channel != null) {
+				try {
+					channel.close();
+				} catch (IOException | TimeoutException e) {
+					log.warn("Failed to close channel: {}", e.getMessage());
+				} finally {
+					channel = null;
+				}
 			}
-		}
-		if (connection != null) {
-			try {
-				connection.close();
-			} catch (IOException e) {
-				log.warn("Failed to close connection: {}", e.getMessage());
+			if (connection != null) {
+				try {
+					connection.close();
+				} catch (IOException e) {
+					log.warn("Failed to close connection: {}", e.getMessage());
+				} finally {
+					connection = null;
+				}
 			}
 		}
 	}
 
 	@Override
 	public void close() throws IOException {
-		try {
-			channel.close();
-			connection.close();
-		} catch (IOException | TimeoutException e) {
-			log.error(e.getMessage());
-		}
-
+		closeResources();
 	}
 
 	@Override
 	public void send(Map<String, Object> json, String jsonString) {
-		try {
-			channel.basicPublish(exchange, routingkey, null, jsonString.getBytes(StandardCharsets.UTF_8));
-		} catch (IOException e) {
-			log.error(e.getMessage());
+		synchronized (lock) {
+			if (channel != null) {
+				try {
+					channel.basicPublish(exchange, routingkey, null, jsonString.getBytes(StandardCharsets.UTF_8));
+				} catch (IOException e) {
+					log.error("Failed to publish message to RabbitMQ: {}", e.getMessage());
+				}
+			} else {
+				log.warn("Cannot send message: RabbitMQ channel is not initialized");
+			}
 		}
 	}
 }
