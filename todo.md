@@ -37,18 +37,13 @@
 
 ## Other Issues
 
-### Code Cleanup
-- `HttpOutputAdapter.java:11-12` - 사용하지 않는 Logger, LoggerFactory import 제거 필요
-
 ## 코드 검토 결과 발견된 문제점
 
 ### 보안 관련
 - `build.gradle:25-26` - HTTP 프로토콜 사용으로 인한 보안 취약점 (HTTPS 사용 권장)
-- `HttpInputAdapter.java:79-81` - Content-Length 검증은 있으나 추가 보안 검증 필요
 
 ### 성능 및 리소스 관리
 - `KafkaInputAdapter.java:48` - messageQueue가 인스턴스 변수이지만 static으로 선언된 부분이 있어 여러 인스턴스 간 큐 공유 우려
-- `HttpOutputAdapter.java:67-97` - 연결 재사용을 위한 로직이 있으나 복잡하고 오류 가능성 존재
 - `MessageDispatcher.java:45` - static running 변수로 인해 여러 인스턴스에서 동시 제어 문제 가능성
 
 ### 코드 품질
@@ -63,8 +58,6 @@
 
 ### 설정 및 구성
 - `build.gradle:36` - Spring Boot Elasticsearch 버전이 다른 의존성들과 일치하지 않음 (3.3.5 vs 3.4.10)
-- `HttpOutputAdapter.java:50-58` - URL 파싱 로직이 복잡하고 예외 상황 처리 부족
 
 ### 동시성 및 스레드 안전성
 - `MessageDispatcher.java:198-203` - shutdown hook에서 static 변수만 설정하여 완전한 종료 보장 어려움
-- `HttpOutputAdapter.java:111` - synchronized 블록 사용하나 전체 메서드 동기화로 성능 저하 가능
