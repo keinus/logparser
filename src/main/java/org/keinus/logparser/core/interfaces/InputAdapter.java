@@ -6,6 +6,8 @@ import java.util.Map;
 
 import org.keinus.logparser.core.schema.LogEvent;
 
+import lombok.Getter;
+
 /**
  * 데이터 소스(source)로부터 로그 이벤트를 수신하는 모든 입력 어댑터의 추상 기반 클래스입니다.
  * <p>
@@ -19,8 +21,11 @@ import org.keinus.logparser.core.schema.LogEvent;
  * @see org.keinus.logparser.core.util.schema.LogEvent
  */
 public abstract class InputAdapter implements Closeable {
+	@Getter
 	private String messageType = "";
+	@Getter
 	private String name;
+	@Getter
 	private String sourceHost;
 
 	protected InputAdapter(Map<String, String> obj) throws IOException {
@@ -29,7 +34,7 @@ public abstract class InputAdapter implements Closeable {
 		}
 		this.messageType = obj.get("messagetype");
 		this.sourceHost = obj.getOrDefault("host", "localhost");
-		this.name = getClass().getSimpleName() + ":" + obj.toString();
+		this.name = getClass().getSimpleName();
 	}
 
 	/**
@@ -38,14 +43,6 @@ public abstract class InputAdapter implements Closeable {
 	 * @return 새로운 LogEvent 객체, 또는 읽을 데이터가 없으면 null
 	 */
 	public abstract LogEvent run();
-
-	public String getType() {
-		return this.messageType;
-	}
-
-	public String getSourceHost() {
-		return this.sourceHost;
-	}
 
 	/**
 	 * 새로운 LogEvent를 생성하는 헬퍼 메서드입니다.

@@ -106,7 +106,7 @@ class HttpInputAdapterTest {
         adapter = new HttpInputAdapter(validConfig);
 
         // When
-        String type = adapter.getType();
+        String type = adapter.getMessageType();
 
         // Then
         assertEquals("http-message", type);
@@ -148,7 +148,7 @@ class HttpInputAdapterTest {
         // When & Then
         // run() 메서드가 블로킹이므로 실제 HTTP 요청 없이는 테스트하기 어려움
         // 대신 getType()과 getSourceHost() 같은 기본 동작만 테스트
-        assertEquals("http-message", adapter.getType());
+        assertEquals("http-message", adapter.getMessageType());
         assertEquals("localhost", adapter.getSourceHost());
 
         // close() 메서드도 테스트

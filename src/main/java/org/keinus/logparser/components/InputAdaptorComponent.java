@@ -54,21 +54,11 @@ public class InputAdaptorComponent {
             try {
                 InputAdapter adapter = InputFactory.getInputAdapter(param);
                 this.inputList.add(adapter);
-
                 log.info("InputAdapter {} registered", adapter.getClass().getSimpleName());
+
             } catch (Exception e) {
                 log.error("InputAdapter {} initialize error. {}, {}", param.getMessagetype(), e.getMessage());
             }
-        }
-    }
-
-    public void initialize() {
-        log.info("Starting Input Adaptor Component with {} adapters...", inputList.size());
-        running.set(true);
-        int count = 1;
-        for (InputAdapter adapter : inputList) {
-            threadManager.executeWithName(adapter.toString() + "-" + count++, () -> this.processInputAdapter(adapter));
-            log.info("Started adapter: {}", adapter);
         }
     }
 
@@ -79,7 +69,10 @@ public class InputAdaptorComponent {
             running.set(true);
             int count = 1;
             for (InputAdapter adapter : inputList) {
-                threadManager.executeWithName(adapter.toString() + "-" + count++, () -> this.processInputAdapter(adapter));
+                String threadName = adapter.getName() + "-" + count++;
+                log.info("Submitting task for adapter: {} with thread name: {}", adapter.getClass().getSimpleName(), threadName);
+                Runnable lamda = () -> this.processInputAdapter(adapter);
+                threadManager.executeWithName(threadName, lamda);
                 log.info("Started adapter: {}", adapter);
             }
         } catch (Exception e) {
@@ -99,13 +92,16 @@ public class InputAdaptorComponent {
     }
 
     private void processInputAdapter(InputAdapter mInputAdapter) {
+        log.info("processInputAdapter started for adapter: {}", mInputAdapter.getClass().getSimpleName());
         while (running.get()) {
             if (Thread.currentThread().isInterrupted()) {
+                log.info("Thread interrupted, closing adapter: {}", mInputAdapter.getClass().getSimpleName());
                 try {
                     mInputAdapter.close();
                 } catch (IOException e) {
                     log.error("Failed to close InputAdapter", e);
                 }
+                break;
             }
             LogEvent logEvent = mInputAdapter.run();
             if (logEvent != null) {
@@ -115,6 +111,7 @@ public class InputAdaptorComponent {
                 }
             }
         }
+        log.info("processInputAdapter finished for adapter: {}", mInputAdapter.getClass().getSimpleName());
     }
 
     public void close() {

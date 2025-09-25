@@ -105,7 +105,7 @@ class UdpInputAdapterTest {
         adapter = new UdpInputAdapter(validConfig);
 
         // When
-        String type = adapter.getType();
+        String type = adapter.getMessageType();
 
         // Then
         assertEquals("udp-message", type);
@@ -147,7 +147,7 @@ class UdpInputAdapterTest {
         // When & Then
         // run() 메서드가 블로킹이므로 실제 패킷 없이는 테스트하기 어려움
         // 대신 기본 동작들만 테스트
-        assertEquals("udp-message", adapter.getType());
+        assertEquals("udp-message", adapter.getMessageType());
         assertEquals("localhost", adapter.getSourceHost());
 
         // close() 메서드도 테스트

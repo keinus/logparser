@@ -227,7 +227,7 @@ public class OutputAdaptorComponent {
      * 특정 어댑터에 배치 전송
      */
     private void sendBulkToAdapter(OutputAdapter adapter, List<LogEvent> events) {
-        boolean addOriginText = adapter.getAddOriginText();
+        boolean addOriginText = adapter.isAddOriginText();
 
         for (LogEvent event : events) {
             Map<String, Object> outputMap = event.toOutputMap(addOriginText);

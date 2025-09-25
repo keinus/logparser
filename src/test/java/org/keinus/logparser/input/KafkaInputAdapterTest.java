@@ -146,7 +146,7 @@ class KafkaInputAdapterTest {
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
 
             // When
-            String type = adapter.getType();
+            String type = adapter.getMessageType();
 
             // Then
             assertEquals("test-message", type);

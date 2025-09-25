@@ -22,6 +22,6 @@ import org.springframework.context.annotation.Configuration;
 public class ThreadManagerBean {
     @Bean
     ThreadManager threadManager() {
-        return new ThreadManager("LogParser");
+        return new ThreadManager("LogParser", 8);
     }
 }

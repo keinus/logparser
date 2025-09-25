@@ -105,7 +105,7 @@ class TcpInputAdapterTest {
         adapter = new TcpInputAdapter(validConfig);
 
         // When
-        String type = adapter.getType();
+        String type = adapter.getMessageType();
 
         // Then
         assertEquals("tcp-message", type);
@@ -133,7 +133,7 @@ class TcpInputAdapterTest {
         // When & Then
         // run() 메서드가 블로킹이므로 실제 연결 없이는 테스트하기 어려움
         // 대신 기본 동작들만 테스트
-        assertEquals("tcp-message", adapter.getType());
+        assertEquals("tcp-message", adapter.getMessageType());
         assertEquals("localhost", adapter.getSourceHost());
 
         // close() 메서드도 테스트

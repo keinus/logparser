@@ -87,7 +87,7 @@ class HttpOutputAdapterTest {
 
         // Then
         assertNotNull(adapter);
-        assertEquals("http-output", adapter.getType());
+        assertEquals("http-output", adapter.getMessageType());
     }
 
     @Test
@@ -97,7 +97,7 @@ class HttpOutputAdapterTest {
         adapter = new HttpOutputAdapter(validConfig);
 
         // When
-        String type = adapter.getType();
+        String type = adapter.getMessageType();
 
         // Then
         assertEquals("http-output", type);
@@ -111,7 +111,7 @@ class HttpOutputAdapterTest {
         adapter = new HttpOutputAdapter(validConfig);
 
         // When
-        boolean addOriginText = adapter.getAddOriginText();
+        boolean addOriginText = adapter.isAddOriginText();
 
         // Then
         assertTrue(addOriginText);

@@ -4,6 +4,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 
+import lombok.Getter;
+
 /**
  * 처리된 메시지를 최종 목적지(sink)로 전송하는 모든 출력 어댑터의 추상 기반 클래스입니다.
  * <p>
@@ -17,7 +19,14 @@ import java.util.Map;
  * @see org.keinus.logparser.core.dispatch.OutputAdapterProcedure
  */
 public abstract class OutputAdapter implements Closeable {
+	@Getter
 	private String name;
+
+	@Getter
+	private String type = "";
+
+	@Getter
+	private boolean addOriginText = false;
 
 	protected OutputAdapter(Map<String, String> obj) throws IOException {
 		if (obj == null) {
@@ -28,15 +37,8 @@ public abstract class OutputAdapter implements Closeable {
 		this.name = getClass().getSimpleName() + ":" + obj.toString();
 	}
 
-	private String type = "";
-	private boolean addOriginText = false;
-
-	public String getType() {
-		return this.type;
-	}
-
-	public boolean getAddOriginText() {
-		return this.addOriginText;
+	public String getMessageType() {
+		return type;
 	}
 
 	public abstract void send(Map<String, Object> json, String jsonString);
