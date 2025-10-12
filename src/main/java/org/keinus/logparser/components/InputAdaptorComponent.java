@@ -10,6 +10,7 @@ import org.keinus.logparser.config.InputAdapterConfig;
 import org.keinus.logparser.core.dispatch.InputFactory;
 import org.keinus.logparser.core.interfaces.InputAdapter;
 import org.keinus.logparser.core.util.ThreadManager;
+import org.keinus.logparser.core.util.ThreadUtil;
 import org.keinus.logparser.core.schema.LogEvent;
 
 import org.springframework.stereotype.Component;
@@ -105,9 +106,9 @@ public class InputAdaptorComponent {
             }
             LogEvent logEvent = mInputAdapter.run();
             if (logEvent != null) {
-
                 if (!dispatcher.putGlobalMsg(logEvent)) {
                     log.warn("MessageQueue Full. Message discarded. {}", logEvent.getMessageType());
+                    ThreadUtil.sleep(1000);
                 }
             }
         }

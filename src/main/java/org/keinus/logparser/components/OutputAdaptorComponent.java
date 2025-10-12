@@ -107,8 +107,7 @@ public class OutputAdaptorComponent {
         });
 
         // 주기적으로 배치 전송
-        flushScheduler.scheduleAtFixedRate(this::flushAllBuffers,
-            flushInterval, flushInterval, TimeUnit.MILLISECONDS);
+        flushScheduler.scheduleAtFixedRate(this::flushAllBuffers, flushInterval, flushInterval, TimeUnit.MILLISECONDS);
     }
 
     @PostConstruct
@@ -148,35 +147,28 @@ public class OutputAdaptorComponent {
                 continue;
             }
 
-            enqueueLogEvent(logEvent);
-        }
-    }
+            String messageType = logEvent.getMessageType();
+            var adapters = outputAdapterMap.get(messageType);
 
-    /**
-     * LogEvent를 적절한 배치 버퍼에 추가
-     */
-    private void enqueueLogEvent(LogEvent logEvent) {
-        String messageType = logEvent.getMessageType();
-        var adapters = outputAdapterMap.get(messageType);
-
-        if (adapters.isEmpty()) {
-            log.error("No output adapters found for message type: {}", messageType);
-            return;
-        }
-
-        synchronized (bufferLock) {
-            // 특정 메시지 타입 어댑터가 있는 경우
-            if (batchBuffers.containsKey(messageType)) {
-                batchBuffers.get(messageType).add(logEvent);
+            if (adapters.isEmpty()) {
+                log.error("No output adapters found for message type: {}", messageType);
+                return;
             }
 
-            // 전역 어댑터 (null 키)가 있는 경우
-            if (batchBuffers.containsKey(null) && !outputAdapterMap.get(null).isEmpty()) {
-                batchBuffers.get(null).add(logEvent);
-            }
-        }
+            synchronized (bufferLock) {
+                // 특정 메시지 타입 어댑터가 있는 경우
+                if (batchBuffers.containsKey(messageType)) {
+                    batchBuffers.get(messageType).add(logEvent);
+                }
 
-        log.debug("Enqueued log event for message type: {}", messageType);
+                // 전역 어댑터 (null 키)가 있는 경우
+                if (batchBuffers.containsKey(null) && !outputAdapterMap.get(null).isEmpty()) {
+                    batchBuffers.get(null).add(logEvent);
+                }
+            }
+
+            log.debug("Enqueued log event for message type: {}", messageType);
+        }
     }
 
     /**
@@ -213,7 +205,13 @@ public class OutputAdaptorComponent {
 
         for (OutputAdapter adapter : adapters) {
             try {
-                sendBulkToAdapter(adapter, events);
+                boolean addOriginText = adapter.isAddOriginText();
+
+                for (LogEvent event : events) {
+                    Map<String, Object> outputMap = event.toOutputMap(addOriginText);
+                    String jsonString = gson.toJson(outputMap);
+                    adapter.send(outputMap, jsonString);
+                }
             } catch (Exception e) {
                 log.error("Error sending bulk to adapter {} for message type {}: {}",
                     adapter.getClass().getSimpleName(), messageType, e.getMessage());
@@ -221,19 +219,6 @@ public class OutputAdaptorComponent {
         }
 
         log.debug("Flushed {} events for message type: {}", events.size(), messageType);
-    }
-
-    /**
-     * 특정 어댑터에 배치 전송
-     */
-    private void sendBulkToAdapter(OutputAdapter adapter, List<LogEvent> events) {
-        boolean addOriginText = adapter.isAddOriginText();
-
-        for (LogEvent event : events) {
-            Map<String, Object> outputMap = event.toOutputMap(addOriginText);
-            String jsonString = gson.toJson(outputMap);
-            adapter.send(outputMap, jsonString);
-        }
     }
 
     /**
