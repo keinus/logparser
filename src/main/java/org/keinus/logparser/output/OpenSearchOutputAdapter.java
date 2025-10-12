@@ -58,7 +58,7 @@ import org.keinus.logparser.core.util.ThreadUtil;
  */
 public class OpenSearchOutputAdapter extends OutputAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenSearchOutputAdapter.class);
-    private static final int MAX_BATCH_SIZE = 2000;
+    private static final int MAX_BATCH_SIZE = 10000;
 
     private String host;
     private int port;
@@ -71,6 +71,9 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
     private CloseableHttpClient httpClient;
     private ScheduledExecutorService scheduler;
+
+    // 처리량 측정을 위한 변수들
+    private long lastFlushTime = System.currentTimeMillis();
 
     public OpenSearchOutputAdapter(Map<String, String> obj) throws IOException {
         super(obj);
@@ -204,17 +207,27 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             return;
         }
 
+        // 처리량 계산을 위한 시간 측정
+        long currentTime = System.currentTimeMillis();
+        long elapsedTimeMs = currentTime - lastFlushTime;
+        double elapsedTimeSec = elapsedTimeMs / 1000.0;
+
         for (Map.Entry<String, List<String>> entry : itemsToFlush.entrySet()) {
             String indexTarget = entry.getKey();
             List<String> documents = entry.getValue();
             int count = documents.size();
 
-            String url = "https://" + host + ":" + port + "/" + indexTarget + "/_bulk";
+            String url = "http://" + host + ":" + port + "/" + indexTarget + "/_bulk";
             String body = formatBulkRequestForIndex(indexTarget, documents).toString();
 
             try {
                 sendRest(url, body);
-                LOGGER.info("{} items processed for index '{}'", count, indexTarget);
+
+                // 초당 처리량 계산
+                double throughput = elapsedTimeSec > 0 ? count / elapsedTimeSec : 0;
+
+                LOGGER.info("{} items processed for index '{}' (throughput: {} docs/sec)",
+                    count, indexTarget, String.format("%.2f", throughput));
             } catch (IOException e) {
                 LOGGER.error("Failed to send data for index '{}'. Will retry later. Error: {}", indexTarget,
                         e.getMessage());
@@ -224,6 +237,9 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                 ThreadUtil.sleep(5000);
             }
         }
+
+        // 다음 flush를 위해 시간 업데이트
+        lastFlushTime = currentTime;
 
         if (!failedItems.isEmpty()) {
             synchronized (dataMap) {

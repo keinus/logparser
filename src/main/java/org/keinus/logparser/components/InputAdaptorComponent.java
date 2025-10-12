@@ -107,10 +107,11 @@ public class InputAdaptorComponent {
             LogEvent logEvent = mInputAdapter.run();
             if (logEvent != null) {
                 if (!dispatcher.putGlobalMsg(logEvent)) {
-                    log.warn("MessageQueue Full. Message discarded. {}", logEvent.getMessageType());
+                    log.error("MessageQueue Full. Message discarded. {}", logEvent.getMessageType());
                     ThreadUtil.sleep(1000);
                 }
             }
+
         }
         log.info("processInputAdapter finished for adapter: {}", mInputAdapter.getClass().getSimpleName());
     }

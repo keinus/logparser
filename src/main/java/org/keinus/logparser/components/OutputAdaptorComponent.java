@@ -1,12 +1,7 @@
 package org.keinus.logparser.components;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.time.Instant;
 import java.util.Map;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.config.ApplicationProperties;
@@ -24,17 +19,22 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonSerializer;
+import com.google.gson.JsonPrimitive;
+
 
 /**
- * 출력 어댑터들을 관리하고 배치 전송을 처리하는 통합 컴포넌트입니다.
+ * 출력 어댑터들을 관리하고 즉시 전송을 처리하는 통합 컴포넌트입니다.
  * <p>
  * 이 클래스는 애플리케이션 설정({@link ApplicationProperties})을 바탕으로
  * 다양한 출력 어댑터({@link OutputAdapter})를 생성하고 관리합니다.
  * <p>
  * 주요 기능:
  * <ul>
- *   <li>메시지 타입별 배치 버퍼 관리</li>
- *   <li>설정된 주기(flush_interval)마다 배치 전송</li>
+ *   <li>메시지 타입별 출력 어댑터 관리</li>
+ *   <li>메시지 수신 시 즉시 전송</li>
  *   <li>출력 어댑터별 독립적인 처리</li>
  * </ul>
  *
@@ -47,29 +47,38 @@ public class OutputAdaptorComponent {
 
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
-    private final Gson gson = new Gson();
+    private final Gson gson;
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
-    private final long flushInterval;
 
     // 출력 어댑터를 메시지 타입별로 그룹화
     private final MergingHashMap<OutputAdapter> outputAdapterMap = new MergingHashMap<>();
 
-    // 메시지 타입별 배치 버퍼
-    private final Map<String, List<LogEvent>> batchBuffers = new HashMap<>();
-    private final Object bufferLock = new Object();
+    /**
+     * Instant를 ISO-8601 문자열로 직렬화하는 JsonSerializer
+     */
+    private static final JsonSerializer<Instant> instantSerializer = (src, typeOfSrc, context) -> {
+        return new JsonPrimitive(src.toString());
+    };
 
-    // 배치 전송 스케줄러
-    private ScheduledExecutorService flushScheduler;
+    /**
+     * ISO-8601 문자열을 Instant로 역직렬화하는 JsonDeserializer
+     */
+    private static final JsonDeserializer<Instant> instantDeserializer = (json, typeOfT, context) -> {
+        return Instant.parse(json.getAsString());
+    };
 
     public OutputAdaptorComponent(ApplicationProperties appProp, ThreadManager threadManager, MessageDispatcher dispatcher) {
         this.threadManager = threadManager;
         this.dispatcher = dispatcher;
-        this.flushInterval = appProp.getFlushInterval();
+
+        // Gson 초기화 with Instant serializer/deserializer
+        this.gson = new GsonBuilder()
+                .registerTypeAdapter(Instant.class, instantSerializer)
+                .registerTypeAdapter(Instant.class, instantDeserializer)
+                .create();
 
         initializeOutputAdapters(appProp);
-        initializeBatchBuffers();
-        initializeScheduler();
     }
 
     private void initializeOutputAdapters(ApplicationProperties appProp) {
@@ -86,34 +95,11 @@ public class OutputAdaptorComponent {
         }
     }
 
-    private void initializeBatchBuffers() {
-        synchronized (bufferLock) {
-            // 모든 등록된 메시지 타입에 대해 배치 버퍼 초기화
-            for (String msgType : outputAdapterMap.getAllKeys()) {
-                batchBuffers.put(msgType, new ArrayList<>());
-            }
-            // null 키 (전역 어댑터)를 위한 버퍼도 초기화
-            if (!outputAdapterMap.get(null).isEmpty()) {
-                batchBuffers.put(null, new ArrayList<>());
-            }
-        }
-    }
-
-    private void initializeScheduler() {
-        flushScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "OutputFlushScheduler");
-            t.setDaemon(true);
-            return t;
-        });
-
-        // 주기적으로 배치 전송
-        flushScheduler.scheduleAtFixedRate(this::flushAllBuffers, flushInterval, flushInterval, TimeUnit.MILLISECONDS);
-    }
 
     @PostConstruct
     public void startPipeline() {
         try {
-            log.info("Starting Output Adaptor Component with flush interval: {}ms", flushInterval);
+            log.info("Starting Output Adaptor Component");
             running.set(true);
 
             // 메시지 처리 스레드 시작
@@ -137,7 +123,7 @@ public class OutputAdaptorComponent {
     }
 
     /**
-     * 메시지 처리 메인 루프
+     * 메시지 처리 메인 루프 - 즉시 전송
      */
     private void processOutputMessages() {
         while (running.get()) {
@@ -152,74 +138,33 @@ public class OutputAdaptorComponent {
 
             if (adapters.isEmpty()) {
                 log.error("No output adapters found for message type: {}", messageType);
-                return;
+                continue;
             }
 
-            synchronized (bufferLock) {
-                // 특정 메시지 타입 어댑터가 있는 경우
-                if (batchBuffers.containsKey(messageType)) {
-                    batchBuffers.get(messageType).add(logEvent);
-                }
+            // 즉시 전송
+            sendToAdapters(adapters, logEvent);
 
-                // 전역 어댑터 (null 키)가 있는 경우
-                if (batchBuffers.containsKey(null) && !outputAdapterMap.get(null).isEmpty()) {
-                    batchBuffers.get(null).add(logEvent);
-                }
-            }
-
-            log.debug("Enqueued log event for message type: {}", messageType);
+            log.debug("Sent log event for message type: {}", messageType);
         }
     }
 
     /**
-     * 모든 배치 버퍼를 flush
+     * 어댑터들에게 로그 이벤트를 즉시 전송
      */
-    private void flushAllBuffers() {
-        Map<String, List<LogEvent>> buffersToFlush = new HashMap<>();
-
-        synchronized (bufferLock) {
-            for (Map.Entry<String, List<LogEvent>> entry : batchBuffers.entrySet()) {
-                if (!entry.getValue().isEmpty()) {
-                    buffersToFlush.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-                    entry.getValue().clear();
-                }
-            }
-        }
-
-        // 각 메시지 타입별로 배치 전송
-        for (Map.Entry<String, List<LogEvent>> entry : buffersToFlush.entrySet()) {
-            String messageType = entry.getKey();
-            List<LogEvent> events = entry.getValue();
-
-            if (!events.isEmpty()) {
-                flushBuffer(messageType, events);
-            }
-        }
-    }
-
-    /**
-     * 특정 메시지 타입의 배치 버퍼를 flush
-     */
-    private void flushBuffer(String messageType, List<LogEvent> events) {
-        var adapters = outputAdapterMap.get(messageType);
-
+    private void sendToAdapters(Iterable<OutputAdapter> adapters, LogEvent event) {
         for (OutputAdapter adapter : adapters) {
             try {
                 boolean addOriginText = adapter.isAddOriginText();
-
-                for (LogEvent event : events) {
-                    Map<String, Object> outputMap = event.toOutputMap(addOriginText);
-                    String jsonString = gson.toJson(outputMap);
-                    adapter.send(outputMap, jsonString);
-                }
+                Map<String, Object> outputMap = event.toOutputMap(addOriginText);
+                String jsonString = gson.toJson(outputMap);
+                adapter.send(outputMap, jsonString);
             } catch (Exception e) {
-                log.error("Error sending bulk to adapter {} for message type {}: {}",
-                    adapter.getClass().getSimpleName(), messageType, e.getMessage());
+                log.error("Error sending to adapter {} for message type {}: {}",
+                    adapter.getClass().getSimpleName(), event.getMessageType(), e.getMessage());
             }
         }
-
-        log.debug("Flushed {} events for message type: {}", events.size(), messageType);
     }
+
 
     /**
      * 컴포넌트 종료
@@ -230,38 +175,13 @@ public class OutputAdaptorComponent {
         // 실행 중단
         running.set(false);
 
-        // 마지막으로 남은 데이터 전송
-        flushAllBuffers();
-
-        // 스케줄러 종료
-        shutdownScheduler();
-
         // 모든 어댑터 종료
         closeAllAdapters();
-
-        // 버퍼 정리
-        synchronized (bufferLock) {
-            batchBuffers.clear();
-        }
 
         // ThreadManager 종료
         shutdownThreadManager();
 
         log.info("OutputAdaptorComponent shutdown completed");
-    }
-
-    private void shutdownScheduler() {
-        if (flushScheduler != null && !flushScheduler.isShutdown()) {
-            flushScheduler.shutdown();
-            try {
-                if (!flushScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                    flushScheduler.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                flushScheduler.shutdownNow();
-            }
-        }
     }
 
     private void closeAllAdapters() {

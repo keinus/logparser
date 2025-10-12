@@ -16,7 +16,8 @@ public class InputAdapterConfig {
         "TcpInputAdapter",
         "UdpInputAdapter",
         "HttpInputAdapter",
-        "KafkaInputAdapter"
+        "KafkaInputAdapter",
+        "FakeInputAdapter"
     })
     @Description("입력 어댑터의 타입")
     private String type;
@@ -125,6 +126,8 @@ public class InputAdapterConfig {
                 if (topicid == null || bootstrapservers == null) {
                     throw new IllegalArgumentException("KafkaInputAdapter requires 'topicid' and 'bootstrapservers' fields");
                 }
+                break;
+            case "FakeInputAdapter":
                 break;
         }
     }

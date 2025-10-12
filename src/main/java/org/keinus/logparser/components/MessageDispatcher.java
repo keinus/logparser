@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.ExceptionTypeFilter;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -17,6 +18,7 @@ import org.keinus.logparser.config.ApplicationProperties;
 import org.keinus.logparser.core.dispatch.ParseService;
 import org.keinus.logparser.core.dispatch.TransformService;
 import org.keinus.logparser.core.util.ThreadManager;
+import org.keinus.logparser.core.util.ThreadUtil;
 import org.keinus.logparser.core.schema.LogEvent;
 
 
@@ -139,7 +141,8 @@ public class MessageDispatcher {
                 LogEvent logEvent = globalMessageQueue.take();
                 if (logEvent != null) {
                     processLogEvent(logEvent);
-                }
+                } else
+                    ThreadUtil.sleep(100);
             } catch (InterruptedException e) {
                 log.error("Interrupted while waiting for message in class {} method {}", this.getClass().getName(), Thread.currentThread().getStackTrace()[2].getMethodName());
                 Thread.currentThread().interrupt();
@@ -164,7 +167,7 @@ public class MessageDispatcher {
                 boolean transformResult = transformService.transform(logEvent);
                 if (transformResult) {
                     logEvent.markAsTransformed();
-                    boolean queued = outputMessageQueue.offer(logEvent);
+                    boolean queued = putOutputMsg(logEvent);
                     log.debug("Log event processed and queued: {}, queue size: {}", queued, outputMessageQueue.size());
                 } else {
                     log.debug("Log event filtered out by transform service");
@@ -180,19 +183,35 @@ public class MessageDispatcher {
     }
 
     public boolean putGlobalMsg(LogEvent logEvent) {
-        return globalMessageQueue.offer(logEvent);
-    }
-
-    public LogEvent getGlobalMsg() {
-        return globalMessageQueue.poll();
+        try {
+            globalMessageQueue.put(logEvent);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return true;
     }
 
     public boolean putOutputMsg(LogEvent logEvent) {
-        return outputMessageQueue.offer(logEvent);
+        try {
+            outputMessageQueue.put(logEvent);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return true;
     }
 
     public LogEvent getOutputMsg() {
-        return outputMessageQueue.poll();
+        try {
+            return outputMessageQueue.take();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            Thread.currentThread().interrupt();
+            return null;
+        }
     }
 
     static {
