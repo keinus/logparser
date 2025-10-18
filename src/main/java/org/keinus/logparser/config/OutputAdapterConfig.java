@@ -38,14 +38,13 @@ public class OutputAdapterConfig {
     @Description("TCP 연결 포트")
     private Integer port;
 
-    @AdapterSpecific(adapters = {"TcpOutputAdapter", "HttpOutputAdapter", "OpenSearchOutputAdapter", "RabbitMQAdapter"})
+    @AdapterSpecific(adapters = {"TcpOutputAdapter", "HttpOutputAdapter", "RabbitMQAdapter"})
     @Description("대상 호스트")
     private String host;
 
     // === HTTP 관련 설정 ===
-
     @Url
-    @AdapterSpecific(adapters = {"HttpOutputAdapter"})
+    @AdapterSpecific(adapters = {"HttpOutputAdapter, OpenSearchOutputAdapter"})
     @Description("HTTP 엔드포인트 URL")
     private String url;
 
@@ -175,7 +174,7 @@ public class OutputAdapterConfig {
                 }
                 break;
             case "OpenSearchOutputAdapter":
-                if (host == null || index == null) {
+                if (url == null) {
                     throw new IllegalArgumentException("OpenSearchOutputAdapter requires 'host' and 'index' fields");
                 }
                 break;
