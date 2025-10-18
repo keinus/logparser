@@ -60,8 +60,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenSearchOutputAdapter.class);
     private static final int MAX_BATCH_SIZE = 10000;
 
-    private String host;
-    private int port;
+    private String baseUrl;
     private String indexTemplate;
     private String credentials = null;
     private List<String> indexVars = null;
@@ -78,16 +77,9 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     public OpenSearchOutputAdapter(Map<String, String> obj) throws IOException {
         super(obj);
 
-        host = Objects.requireNonNull(obj.get("host"), "OpenSearch 'host' must not be null");
+        baseUrl = Objects.requireNonNull(obj.get("url"), "OpenSearch 'url' must not be null");
         indexTemplate = Objects.requireNonNull(obj.get("index"), "OpenSearch 'index' must not be null"); // Use
                                                                                                          // indexTemplate
-        String portStr = Objects.requireNonNull(obj.get("port"), "OpenSearch 'port' must not be null");
-        try {
-            port = Integer.parseInt(portStr);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("OpenSearch 'port' must be a valid number: " + portStr, e);
-        }
-
         indexVars = extractBracedStrings(indexTemplate);
         String username = obj.get("username");
         String password = obj.get("password");
@@ -97,7 +89,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             credentials = username + ":" + password;
         }
 
-        LOGGER.info("OpenSearch Output Adapter Init. {}:{}", host, port);
+        LOGGER.info("OpenSearch Output Adapter Init. {}", baseUrl);
 
         try {
             SSLConnectionSocketFactory scsf = new SSLConnectionSocketFactory(
@@ -217,7 +209,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             List<String> documents = entry.getValue();
             int count = documents.size();
 
-            String url = "http://" + host + ":" + port + "/" + indexTarget + "/_bulk";
+            String url = baseUrl + "/" + indexTarget + "/_bulk";
             String body = formatBulkRequestForIndex(indexTarget, documents).toString();
 
             try {

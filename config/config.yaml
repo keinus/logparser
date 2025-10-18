@@ -101,17 +101,8 @@ logparser:
     -
       type : OpenSearchOutputAdapter
       messagetype : eve
-      host : "192.168.50.23"
-      port: 9200
+      url : "https://192.168.50.25:9200"
       index : "suricata-%{event_type}-%{yyMMdd}"
       # add_origin_text : true
       osUsername : "admin"
       osPassword : "admin"
-    # -
-    #   type : OpenSearchOutputAdapter
-    #   messagetype : rfc3164
-    #   host : "192.168.50.25"
-    #   port: 9200
-    #   index : "router-%{yyMMdd}"
-    #   username : "elastic"
-    #   password : "rlaqudwls1"
