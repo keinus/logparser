@@ -1,0 +1,148 @@
+openapi: 3.0.0
+info:
+  title: Logparser Configuration API
+  description: API to manage the Logparser configuration file (config.yaml).
+  version: 1.0.0
+
+paths:
+  /api/config:
+    get:
+      summary: Get the current configuration
+      responses:
+        '200':
+          description: The current configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+  /api/config/common:
+    put:
+      summary: Update common settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommonConfig'
+      responses:
+        '200':
+          description: The updated configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+  /api/config/{section}:
+    post:
+      summary: Add a new configuration to a section
+      parameters:
+        - name: section
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [input, parser, transform, output]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: The updated configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+  /api/config/{section}/{index}:
+    put:
+      summary: Update an existing configuration in a section
+      parameters:
+        - name: section
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [input, parser, transform, output]
+        - name: index
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: The updated configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+    delete:
+      summary: Delete a configuration from a section
+      parameters:
+        - name: section
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [input, parser, transform, output]
+        - name: index
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The updated configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+components:
+  schemas:
+    Config:
+      type: object
+      properties:
+        logparser:
+          type: object
+          properties:
+            parser_threads:
+              type: integer
+            queue_size:
+              type: integer
+            flush_interval:
+              type: integer
+            input:
+              type: array
+              items:
+                type: object
+            parser:
+              type: array
+              items:
+                type: object
+            transform:
+              type: array
+              items:
+                type: object
+            output:
+              type: array
+              items:
+                type: object
+    CommonConfig:
+      type: object
+      properties:
+        parser_threads:
+          type: integer
+        queue_size:
+          type: integer
+        flush_interval:
+          type: integer
