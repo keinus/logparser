@@ -62,10 +62,29 @@ public class FileInputAdapter extends InputAdapter {
     }
 
     /**
+     * Safely closes the current reader if it exists.
+     */
+    private void safeCloseReader() {
+        if (reader != null) {
+            try {
+                reader.close();
+                logger.debug("Reader closed successfully");
+            } catch (IOException e) {
+                logger.warn("Error closing reader: {}", e.getMessage());
+            } finally {
+                reader = null;
+            }
+        }
+    }
+
+    /**
      * Opens the file and sets the initial line position.
      * This method is called lazily when needed.
      */
     private void openFile() {
+        // 기존 reader가 있으면 먼저 닫기
+        safeCloseReader();
+
         while (fileOpenRetryCount < MAX_FILE_OPEN_RETRY) {
             try {
                 if (!Files.exists(filePath)) {
@@ -96,11 +115,39 @@ public class FileInputAdapter extends InputAdapter {
                 return;
             } catch (IOException e) {
                 logger.error("Failed to open file for {}: {}", filePath, e.getMessage());
+                safeCloseReader(); // 실패 시에도 reader 정리
                 ThreadUtil.sleep(5000);
                 fileOpenRetryCount++;
             }
         }
         throw new IllegalStateException("File could not be opened after multiple retries: " + filePath);
+    }
+
+    /**
+     * Safely reopens the file from a specific line number.
+     * This is used when detecting file growth or rotation.
+     */
+    private void reopenFile(long fromLineNumber) throws IOException {
+        safeCloseReader();
+
+        try {
+            this.reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8);
+            this.lastFileSize = Files.size(filePath);
+
+            // Skip to the desired line number
+            for (long i = 0; i < fromLineNumber; i++) {
+                if (reader.readLine() == null) {
+                    logger.warn("Expected {} lines but found fewer. File may have rotated.", fromLineNumber);
+                    currentLineNumber = i;
+                    return;
+                }
+            }
+            currentLineNumber = fromLineNumber;
+            logger.debug("File reopened at line {}", currentLineNumber);
+        } catch (IOException e) {
+            safeCloseReader();
+            throw e;
+        }
     }
 
     @Override
@@ -126,7 +173,6 @@ public class FileInputAdapter extends InputAdapter {
             if (currentFileSize < lastFileSize) {
                 logger.info("Log rotation detected (file size decreased: {} -> {}). Re-opening file.",
                     lastFileSize, currentFileSize);
-                close();
                 openFile();
                 if (reader == null) {
                     return null;
@@ -149,32 +195,15 @@ public class FileInputAdapter extends InputAdapter {
             // reader를 닫고 다시 열어서 새로운 내용을 읽음
             long newFileSize = Files.size(filePath);
             if (newFileSize > currentFileSize) {
-                logger.debug("File size increased. Re-opening to read new content.");
+                logger.debug("File size increased ({} -> {}). Re-opening to read new content.",
+                    currentFileSize, newFileSize);
                 long savedLineNumber = currentLineNumber;
-                close();
-
-                // 파일을 다시 열고 이전 위치까지 스킵
-                this.reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8);
-                this.lastFileSize = newFileSize;
-
-                for (long i = 0; i < savedLineNumber; i++) {
-                    if (reader.readLine() == null) {
-                        // 파일이 rotation 되었을 가능성
-                        logger.warn("Expected {} lines but found fewer. File may have rotated.", savedLineNumber);
-                        currentLineNumber = i;
-                        break;
-                    }
-                }
-                currentLineNumber = savedLineNumber;
+                reopenFile(savedLineNumber);
             }
 
         } catch (IOException e) {
             logger.error("An error occurred while reading the file: {}", e.getMessage());
-            try {
-                close();
-            } catch (IOException closeEx) {
-                logger.error("Error closing file: {}", closeEx.getMessage());
-            }
+            safeCloseReader();
             ThreadUtil.sleep(5000);
         }
 
@@ -183,10 +212,7 @@ public class FileInputAdapter extends InputAdapter {
 
     @Override
     public void close() throws IOException {
-        if (reader != null) {
-            reader.close();
-            reader = null;
-        }
-        logger.debug("File Input Adapter closed for: {}", filePath);
+        safeCloseReader();
+        logger.info("File Input Adapter closed for: {}", filePath);
     }
 }

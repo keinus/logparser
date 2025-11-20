@@ -19,7 +19,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
-
 /**
  * 입력 어댑터들을 관리하고 실행하는 컴포넌트입니다.
  * <p>
@@ -47,7 +46,8 @@ public class InputAdaptorComponent {
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
 
-    public InputAdaptorComponent(ApplicationProperties appProp, ThreadManager threadManager, MessageDispatcher dispatcher) {
+    public InputAdaptorComponent(ApplicationProperties appProp, ThreadManager threadManager,
+            MessageDispatcher dispatcher) {
         this.threadManager = threadManager;
         this.dispatcher = dispatcher;
 
@@ -71,7 +71,8 @@ public class InputAdaptorComponent {
             int count = 1;
             for (InputAdapter adapter : inputList) {
                 String threadName = adapter.getName() + "-" + count++;
-                log.info("Submitting task for adapter: {} with thread name: {}", adapter.getClass().getSimpleName(), threadName);
+                log.info("Submitting task for adapter: {} with thread name: {}", adapter.getClass().getSimpleName(),
+                        threadName);
                 Runnable lamda = () -> this.processInputAdapter(adapter);
                 threadManager.executeWithName(threadName, lamda);
                 log.info("Started adapter: {}", adapter);
@@ -110,8 +111,9 @@ public class InputAdaptorComponent {
                     log.error("MessageQueue Full. Message discarded. {}", logEvent.getMessageType());
                     ThreadUtil.sleep(1000);
                 }
+            } else {
+                ThreadUtil.sleep(100); // 데이터가 없을 때 대기
             }
-
         }
         log.info("processInputAdapter finished for adapter: {}", mInputAdapter.getClass().getSimpleName());
     }

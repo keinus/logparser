@@ -31,6 +31,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.keinus.logparser.core.interfaces.OutputAdapter;
@@ -59,16 +60,48 @@ import org.keinus.logparser.core.util.ThreadUtil;
 public class OpenSearchOutputAdapter extends OutputAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenSearchOutputAdapter.class);
     private static final int MAX_BATCH_SIZE = 10000;
+    private static final int MAX_RETRIES = 3;
+    private static final int MAX_TOTAL_ITEMS = 50000;
+    private static final int MAX_ITEM_AGE_MS = 300000; // 5분
+
+    /**
+     * 재시도 가능한 항목을 추적하는 내부 클래스
+     */
+    private static class RetryableItem {
+        final String data;
+        int retryCount;
+        final long firstAttemptTime;
+
+        RetryableItem(String data) {
+            this.data = data;
+            this.retryCount = 0;
+            this.firstAttemptTime = System.currentTimeMillis();
+        }
+
+        boolean isExpired() {
+            return (System.currentTimeMillis() - firstAttemptTime) > MAX_ITEM_AGE_MS;
+        }
+
+        boolean shouldRetry() {
+            return retryCount < MAX_RETRIES && !isExpired();
+        }
+
+        void incrementRetry() {
+            retryCount++;
+        }
+    }
 
     private String baseUrl;
     private String indexTemplate;
     private String credentials = null;
     private List<String> indexVars = null;
 
-    private final ConcurrentHashMap<String, List<String>> dataMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, List<RetryableItem>> dataMap = new ConcurrentHashMap<>();
     private final AtomicInteger totalDocumentCount = new AtomicInteger(0);
+    private final AtomicInteger deadLetterCount = new AtomicInteger(0);
 
     private CloseableHttpClient httpClient;
+    private PoolingHttpClientConnectionManager connectionManager;
     private ScheduledExecutorService scheduler;
 
     // 처리량 측정을 위한 변수들
@@ -95,7 +128,19 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             SSLConnectionSocketFactory scsf = new SSLConnectionSocketFactory(
                     SSLContexts.custom().loadTrustMaterial(null, new TrustSelfSignedStrategy()).build(),
                     NoopHostnameVerifier.INSTANCE);
-            this.httpClient = HttpClients.custom().setSSLSocketFactory(scsf).build();
+
+            // Connection pool 설정
+            this.connectionManager = new PoolingHttpClientConnectionManager();
+            this.connectionManager.setDefaultMaxPerRoute(50); // 라우트당 최대 연결 수
+            this.connectionManager.setMaxTotal(100); // 전체 최대 연결 수
+            this.connectionManager.closeIdleConnections(30, TimeUnit.SECONDS); // 30초 유휴 연결 정리
+
+            this.httpClient = HttpClients.custom()
+                    .setConnectionManager(connectionManager)
+                    .setSSLSocketFactory(scsf)
+                    .build();
+
+            LOGGER.info("HTTP client initialized with connection pool (max: 100, per-route: 50)");
 
         } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
             LOGGER.error("Failed to initialize HTTP client for OpenSearch: {}", e.getMessage(), e);
@@ -105,6 +150,16 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.scheduler.scheduleAtFixedRate(this::flush, 10, 10, TimeUnit.SECONDS);
         LOGGER.info("OpenSearch Output Adapter scheduled to flush every 10 seconds.");
+
+        // Shutdown hook 추가하여 프로그램 종료 시 자동으로 리소스 정리
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOGGER.info("Shutdown hook triggered for OpenSearch Output Adapter");
+            try {
+                close();
+            } catch (IOException e) {
+                LOGGER.error("Error during shutdown hook execution", e);
+            }
+        }));
     }
 
     private List<String> extractBracedStrings(String input) {
@@ -118,8 +173,57 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         return extractedStrings;
     }
 
+    /**
+     * Dead Letter Queue에 메시지를 저장합니다.
+     * 재시도 횟수를 초과하거나 만료된 항목들을 로깅하여 추후 분석할 수 있도록 합니다.
+     */
+    private void sendToDeadLetterQueue(String index, RetryableItem item) {
+        deadLetterCount.incrementAndGet();
+        LOGGER.error("Item sent to Dead Letter Queue [index: {}, retryCount: {}, age: {}ms]: {}",
+                index,
+                item.retryCount,
+                System.currentTimeMillis() - item.firstAttemptTime,
+                item.data.length() > 200 ? item.data.substring(0, 200) + "..." : item.data);
+        // TODO: 필요시 파일이나 별도 데이터베이스에 저장
+    }
+
+    /**
+     * 큐가 최대 크기를 초과할 때 가장 오래된 항목들을 제거합니다.
+     */
+    private void dropOldestItems() {
+        int itemsToRemove = totalDocumentCount.get() - MAX_TOTAL_ITEMS + MAX_BATCH_SIZE;
+        if (itemsToRemove <= 0) {
+            return;
+        }
+
+        LOGGER.warn("Queue overflow detected. Current size: {}, max: {}. Dropping oldest {} items.",
+                totalDocumentCount.get(), MAX_TOTAL_ITEMS, itemsToRemove);
+
+        synchronized (dataMap) {
+            int removed = 0;
+            for (Map.Entry<String, List<RetryableItem>> entry : dataMap.entrySet()) {
+                List<RetryableItem> items = entry.getValue();
+                while (!items.isEmpty() && removed < itemsToRemove) {
+                    RetryableItem removedItem = items.remove(0);
+                    sendToDeadLetterQueue(entry.getKey(), removedItem);
+                    removed++;
+                    totalDocumentCount.decrementAndGet();
+                }
+                if (removed >= itemsToRemove) {
+                    break;
+                }
+            }
+        }
+    }
+
     private void addJsonString(String index, String jsonString) {
-        dataMap.computeIfAbsent(index, k -> Collections.synchronizedList(new ArrayList<>())).add(jsonString);
+        // 큐 크기 제한 확인
+        if (totalDocumentCount.get() >= MAX_TOTAL_ITEMS) {
+            dropOldestItems();
+        }
+
+        RetryableItem item = new RetryableItem(jsonString);
+        dataMap.computeIfAbsent(index, k -> Collections.synchronizedList(new ArrayList<>())).add(item);
         totalDocumentCount.incrementAndGet();
     }
 
@@ -166,6 +270,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         flush();
         dataMap.clear();
         totalDocumentCount.set(0);
+
         if (httpClient != null) {
             try {
                 httpClient.close();
@@ -173,21 +278,38 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                 LOGGER.error("Error closing HTTP client: {}", e.getMessage(), e);
             }
         }
+
+        if (connectionManager != null) {
+            try {
+                connectionManager.close();
+                LOGGER.info("Connection manager closed");
+            } catch (Exception e) {
+                LOGGER.error("Error closing connection manager: {}", e.getMessage(), e);
+            }
+        }
+
+        LOGGER.info("OpenSearch Output Adapter closed. DLQ count: {}", deadLetterCount.get());
     }
 
-    private static StringBuilder formatBulkRequestForIndex(String index, List<String> list) {
+    private static StringBuilder formatBulkRequestForIndex(String index, List<RetryableItem> list) {
         StringBuilder sb = new StringBuilder();
-        for (String str : list) {
+        for (RetryableItem item : list) {
             sb.append("{ \"index\": { \"_index\": \"").append(index).append("\" } }").append("\n");
-            sb.append(str).append("\n");
+            sb.append(item.data).append("\n");
         }
         return sb;
     }
 
     public void flush() {
-        Map<String, List<String>> failedItems = new ConcurrentHashMap<>();
+        // Interrupt 체크
+        if (Thread.currentThread().isInterrupted()) {
+            LOGGER.info("Flush interrupted, returning");
+            return;
+        }
 
-        ConcurrentHashMap<String, List<String>> itemsToFlush = new ConcurrentHashMap<>();
+        Map<String, List<RetryableItem>> failedItems = new ConcurrentHashMap<>();
+
+        ConcurrentHashMap<String, List<RetryableItem>> itemsToFlush = new ConcurrentHashMap<>();
         synchronized (dataMap) {
             itemsToFlush.putAll(dataMap);
             dataMap.clear();
@@ -204,9 +326,14 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         long elapsedTimeMs = currentTime - lastFlushTime;
         double elapsedTimeSec = elapsedTimeMs / 1000.0;
 
-        for (Map.Entry<String, List<String>> entry : itemsToFlush.entrySet()) {
+        int successCount = 0;
+        int failedCount = 0;
+        int expiredCount = 0;
+        int retriesExceededCount = 0;
+
+        for (Map.Entry<String, List<RetryableItem>> entry : itemsToFlush.entrySet()) {
             String indexTarget = entry.getKey();
-            List<String> documents = entry.getValue();
+            List<RetryableItem> documents = entry.getValue();
             int count = documents.size();
 
             String url = baseUrl + "/" + indexTarget + "/_bulk";
@@ -220,11 +347,37 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
                 LOGGER.info("{} items processed for index '{}' (throughput: {} docs/sec)",
                     count, indexTarget, String.format("%.2f", throughput));
+
+                successCount += count;
             } catch (IOException e) {
                 LOGGER.error("Failed to send data for index '{}'. Will retry later. Error: {}", indexTarget,
                         e.getMessage());
-                failedItems.computeIfAbsent(indexTarget, k -> Collections.synchronizedList(new ArrayList<>()))
-                        .addAll(documents);
+
+                // 실패한 항목들의 재시도 가능 여부 확인
+                List<RetryableItem> itemsToRetry = new ArrayList<>();
+                for (RetryableItem item : documents) {
+                    item.incrementRetry();
+
+                    if (item.isExpired()) {
+                        expiredCount++;
+                        sendToDeadLetterQueue(indexTarget, item);
+                        LOGGER.warn("Item expired after {}ms, moved to DLQ [index: {}, retryCount: {}]",
+                                System.currentTimeMillis() - item.firstAttemptTime, indexTarget, item.retryCount);
+                    } else if (!item.shouldRetry()) {
+                        retriesExceededCount++;
+                        sendToDeadLetterQueue(indexTarget, item);
+                        LOGGER.warn("Item exceeded max retries ({}), moved to DLQ [index: {}]",
+                                MAX_RETRIES, indexTarget);
+                    } else {
+                        itemsToRetry.add(item);
+                    }
+                }
+
+                if (!itemsToRetry.isEmpty()) {
+                    failedItems.computeIfAbsent(indexTarget, k -> Collections.synchronizedList(new ArrayList<>()))
+                            .addAll(itemsToRetry);
+                    failedCount += itemsToRetry.size();
+                }
 
                 ThreadUtil.sleep(5000);
             }
@@ -233,15 +386,23 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         // 다음 flush를 위해 시간 업데이트
         lastFlushTime = currentTime;
 
+        // 재시도 가능한 실패 항목만 다시 큐에 추가
         if (!failedItems.isEmpty()) {
             synchronized (dataMap) {
-                for (Map.Entry<String, List<String>> entry : failedItems.entrySet()) {
+                for (Map.Entry<String, List<RetryableItem>> entry : failedItems.entrySet()) {
                     dataMap.computeIfAbsent(entry.getKey(), k -> Collections.synchronizedList(new ArrayList<>()))
                             .addAll(entry.getValue());
                     totalDocumentCount.addAndGet(entry.getValue().size());
                 }
             }
-            LOGGER.warn("Re-queued {} items for retry.", totalDocumentCount.get());
+            LOGGER.warn("Re-queued {} items for retry. DLQ stats - expired: {}, retries exceeded: {}, total DLQ: {}",
+                    failedCount, expiredCount, retriesExceededCount, deadLetterCount.get());
+        }
+
+        // 통계 로깅
+        if (successCount > 0 || failedCount > 0) {
+            LOGGER.info("Flush completed - success: {}, retry: {}, DLQ: {} (expired: {}, max retries: {})",
+                    successCount, failedCount, expiredCount + retriesExceededCount, expiredCount, retriesExceededCount);
         }
     }
 

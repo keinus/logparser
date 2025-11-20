@@ -99,7 +99,16 @@ public class KafkaInputAdapter extends InputAdapter {
 
 	@Override
 	public void close() throws IOException {
-		consumer.close();
-
+		messageQueue.clear();
+		if (consumer != null) {
+			try {
+				consumer.close(Duration.ofSeconds(5));
+				LOGGER.info("Kafka consumer closed successfully");
+			} catch (Exception e) {
+				LOGGER.error("Error closing Kafka consumer: {}", e.getMessage(), e);
+			} finally {
+				consumer = null;
+			}
+		}
 	}
 }

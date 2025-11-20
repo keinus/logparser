@@ -19,12 +19,13 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * 주요 기능:
  * <ul>
- *     <li><b>스레드 이름 지정 실행:</b> {@code executeWithName(name, task)} 메서드를 통해
- *         실행될 작업에 특정 스레드 이름을 동적으로 할당할 수 있습니다.</li>
- *     <li><b>스레드 추적:</b> 실행 전후({@code beforeExecute}, {@code afterExecute})에 스레드를
- *         내부 맵에 등록하고 제거하여 현재 실행 중인 스레드를 추적합니다.</li>
- *     <li><b>스레드 중지:</b> 이름으로 특정 스레드를 찾아 인터럽트를 발생시킬 수 있습니다. ({@code stopThread})</li>
- *     <li><b>활성 스레드 조회:</b> 현재 활성 상태인 스레드들의 이름 목록을 조회할 수 있습니다.</li>
+ * <li><b>스레드 이름 지정 실행:</b> {@code executeWithName(name, task)} 메서드를 통해
+ * 실행될 작업에 특정 스레드 이름을 동적으로 할당할 수 있습니다.</li>
+ * <li><b>스레드 추적:</b> 실행 전후({@code beforeExecute}, {@code afterExecute})에 스레드를
+ * 내부 맵에 등록하고 제거하여 현재 실행 중인 스레드를 추적합니다.</li>
+ * <li><b>스레드 중지:</b> 이름으로 특정 스레드를 찾아 인터럽트를 발생시킬 수 있습니다.
+ * ({@code stopThread})</li>
+ * <li><b>활성 스레드 조회:</b> 현재 활성 상태인 스레드들의 이름 목록을 조회할 수 있습니다.</li>
  * </ul>
  *
  * @see java.util.concurrent.ThreadPoolExecutor
@@ -36,11 +37,13 @@ public class ThreadManager extends ThreadPoolExecutor {
     private final Map<String, Thread> threads = new ConcurrentHashMap<>();
 
     public ThreadManager(String threadName) {
-        super(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new CustomThreadFactory(threadName));
+        super(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
+                new CustomThreadFactory(threadName));
     }
 
     public ThreadManager(String threadName, int nThreads) {
-        super(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), new CustomThreadFactory(threadName));
+        super(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                new CustomThreadFactory(threadName));
     }
 
     public void executeWithName(String threadName, Runnable task) {
@@ -130,5 +133,9 @@ public class ThreadManager extends ThreadPoolExecutor {
     public void terminated() {
         super.terminated();
         LOGGER.info("ThreadPool has been terminated");
+    }
+
+    private void cleanupDeadThreads() {
+        threads.values().removeIf(value -> !value.isAlive());
     }
 }

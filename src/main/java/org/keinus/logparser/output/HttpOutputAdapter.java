@@ -39,7 +39,9 @@ public class HttpOutputAdapter extends OutputAdapter {
 	private static final int RETRY_COUNT = 3;
 	private static final boolean KEEP_ALIVE = true;
 	private long lastUsed = 0;
-	private static final long CONNECTION_TIMEOUT = 30000;
+	private long connectionCreatedAt = 0;
+	private static final long CONNECTION_TIMEOUT = 30000; // 30초 유휴 타임아웃
+	private static final long MAX_CONNECTION_AGE = 300000; // 5분 최대 연결 수명
 
 	public HttpOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -60,6 +62,16 @@ public class HttpOutputAdapter extends OutputAdapter {
 		}
 
 		log.info("HTTP Output Adapter configured for {}:{}{}", host, port, path);
+
+		// Shutdown hook 추가
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			log.info("Shutdown hook triggered for HTTP Output Adapter");
+			try {
+				close();
+			} catch (IOException e) {
+				log.error("Error during shutdown hook execution", e);
+			}
+		}));
 	}
 
 	private static class UrlParts {
@@ -127,9 +139,19 @@ public class HttpOutputAdapter extends OutputAdapter {
 	private void ensureConnection() throws IOException {
 		long currentTime = System.currentTimeMillis();
 
-		// 연결이 없거나 타임아웃된 경우 새 연결 생성
-		if (socket == null || socket.isClosed() || !socket.isConnected() ||
-			(currentTime - lastUsed > CONNECTION_TIMEOUT)) {
+		// 연결이 없거나 타임아웃되었거나 연결 수명이 다한 경우 새 연결 생성
+		boolean needsReconnect = socket == null ||
+								 socket.isClosed() ||
+								 !socket.isConnected() ||
+								 (currentTime - lastUsed > CONNECTION_TIMEOUT) ||
+								 (currentTime - connectionCreatedAt > MAX_CONNECTION_AGE);
+
+		if (needsReconnect) {
+			if (socket != null) {
+				log.debug("Reconnecting - idle: {}ms, age: {}ms",
+						currentTime - lastUsed,
+						currentTime - connectionCreatedAt);
+			}
 			closeConnection();
 			createConnection();
 		}
@@ -143,12 +165,13 @@ public class HttpOutputAdapter extends OutputAdapter {
 				socket = new Socket();
 				socket.setReuseAddress(true);
 				socket.setKeepAlive(KEEP_ALIVE);
-				socket.setSoTimeout(5000);
+				socket.setSoTimeout(5000); // Read timeout
 				socket.setTcpNoDelay(true);
 
 				// 연결 타임아웃 설정
 				socket.connect(new java.net.InetSocketAddress(host, port), 10000);
 
+				connectionCreatedAt = System.currentTimeMillis();
 				log.debug("New connection established to {}:{}", host, port);
 				break;
 			} catch (IOException e) {
@@ -228,7 +251,12 @@ public class HttpOutputAdapter extends OutputAdapter {
 	}
 
 	private void readHttpResponse() throws IOException {
-		try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+		// Note: InputStream을 닫지 않음 - socket을 재사용하기 위해
+		// try-with-resources를 사용하지 않고 직접 관리
+		BufferedReader reader = null;
+		try {
+			reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+
 			String statusLine = reader.readLine();
 			if (statusLine == null) {
 				throw new IOException("No HTTP response received");
@@ -244,21 +272,40 @@ public class HttpOutputAdapter extends OutputAdapter {
 			// 헤더 읽기 (Content-Length 확인용)
 			String line;
 			int contentLength = 0;
+			boolean isChunked = false;
 			while ((line = reader.readLine()) != null && !line.isEmpty()) {
-				if (line.toLowerCase().startsWith("content-length:")) {
+				String lowerLine = line.toLowerCase();
+				if (lowerLine.startsWith("content-length:")) {
 					try {
 						contentLength = Integer.parseInt(line.substring(15).trim());
 					} catch (NumberFormatException e) {
 						log.warn("Invalid Content-Length header: {}", line);
 					}
+				} else if (lowerLine.startsWith("transfer-encoding:") && lowerLine.contains("chunked")) {
+					isChunked = true;
 				}
 			}
 
 			// 응답 바디 읽기 (버퍼 비우기)
 			if (contentLength > 0) {
-				char[] buffer = new char[Math.min(contentLength, 1024)];
-				reader.read(buffer);
+				char[] buffer = new char[Math.min(contentLength, 8192)];
+				int remaining = contentLength;
+				while (remaining > 0) {
+					int toRead = Math.min(remaining, buffer.length);
+					int read = reader.read(buffer, 0, toRead);
+					if (read == -1) break;
+					remaining -= read;
+				}
+			} else if (isChunked) {
+				// Chunked encoding인 경우 간단히 처리
+				while ((line = reader.readLine()) != null) {
+					if (line.equals("0")) break; // 마지막 청크
+				}
 			}
+			// Note: reader를 닫지 않음 - 소켓을 재사용하기 위해
+		} catch (IOException e) {
+			// 읽기 오류 발생 시 연결 종료 필요
+			throw e;
 		}
 	}
 

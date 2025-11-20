@@ -47,6 +47,8 @@ public class RabbitMQAdapter extends OutputAdapter {
 		factory.setUsername(obj.get("username"));
 		factory.setPassword(obj.get("password"));
 		factory.setPort(Integer.parseInt(obj.get("port")));
+		factory.setConnectionTimeout(10000); // 10초 연결 타임아웃
+		factory.setHandshakeTimeout(10000); // 10초 핸드셰이크 타임아웃
 		routingkey = obj.get("routingkey");
 		exchange = obj.get("exchange");
 
@@ -54,30 +56,58 @@ public class RabbitMQAdapter extends OutputAdapter {
 			connection = factory.newConnection();
 			channel = connection.createChannel();
 			channel.exchangeDeclare(exchange, BuiltinExchangeType.TOPIC);
+			log.info("RabbitMQ adapter initialized for exchange: {}", exchange);
 		} catch (IOException | TimeoutException e) {
 			log.error("Failed to initialize RabbitMQ connection: {}", e.getMessage());
 			// Clean up partially initialized resources
 			closeResources();
 			throw new IOException("Failed to initialize RabbitMQ adapter", e);
 		}
+
+		// Shutdown hook 추가
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			log.info("Shutdown hook triggered for RabbitMQ Adapter");
+			try {
+				close();
+			} catch (IOException e) {
+				log.error("Error during shutdown hook execution", e);
+			}
+		}));
 	}
 
 	private void closeResources() {
 		synchronized (lock) {
 			if (channel != null) {
 				try {
-					channel.close();
+					// 먼저 graceful close 시도 (타임아웃 5초)
+					channel.close(5000, "Adapter closing");
+					log.info("RabbitMQ channel closed gracefully");
 				} catch (IOException | TimeoutException e) {
-					log.warn("Failed to close channel: {}", e.getMessage());
+					log.warn("Graceful channel close failed, forcing abort: {}", e.getMessage());
+					try {
+						// Graceful close 실패 시 즉시 종료
+						channel.abort();
+					} catch (Exception abortEx) {
+						log.error("Failed to abort channel: {}", abortEx.getMessage());
+					}
 				} finally {
 					channel = null;
 				}
 			}
+
 			if (connection != null) {
 				try {
-					connection.close();
+					// 먼저 graceful close 시도 (타임아웃 5초)
+					connection.close(5000);
+					log.info("RabbitMQ connection closed gracefully");
 				} catch (IOException e) {
-					log.warn("Failed to close connection: {}", e.getMessage());
+					log.warn("Graceful connection close failed, forcing abort: {}", e.getMessage());
+					try {
+						// Graceful close 실패 시 즉시 종료
+						connection.abort();
+					} catch (Exception abortEx) {
+						log.error("Failed to abort connection: {}", abortEx.getMessage());
+					}
 				} finally {
 					connection = null;
 				}
