@@ -1,7 +1,6 @@
 package org.keinus.logparser.controller;
 
 import org.keinus.logparser.service.ConfigService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,7 +22,6 @@ public class ConfigController {
 
     private final ConfigService configService;
 
-    @Autowired
     public ConfigController(ConfigService configService) {
         this.configService = configService;
     }

@@ -5,8 +5,6 @@ import org.keinus.logparser.config.ConfigValidator;
 import org.keinus.logparser.config.InputAdapterConfig;
 import org.keinus.logparser.config.OutputAdapterConfig;
 import org.keinus.logparser.config.ParserAdapterConfig;
-import org.keinus.logparser.config.TransformConfig;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.yaml.snakeyaml.Yaml;
 
@@ -21,23 +19,24 @@ import java.util.Map;
 @Service
 public class ConfigService {
 
-    private final String configFilePath = "./config/config.yaml";
+    private static final String CONFIG_FILE_PATH = "./config/config.yaml";
+    private final ConfigValidator configValidator;
+    private final ObjectMapper objectMapper;
 
-    @Autowired
-    private ConfigValidator configValidator;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    public ConfigService(ConfigValidator configValidator, ObjectMapper objectMapper) {
+        this.configValidator = configValidator;
+        this.objectMapper = objectMapper;
+    }
 
     public Map<String, Object> getConfig() throws FileNotFoundException {
         Yaml yaml = new Yaml();
-        InputStream inputStream = new FileInputStream(configFilePath);
+        InputStream inputStream = new FileInputStream(CONFIG_FILE_PATH);
         return yaml.load(inputStream);
     }
 
     public void saveConfig(Map<String, Object> config) throws IOException {
         Yaml yaml = new Yaml();
-        FileWriter writer = new FileWriter(configFilePath);
+        FileWriter writer = new FileWriter(CONFIG_FILE_PATH);
         yaml.dump(config, writer);
     }
 

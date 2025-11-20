@@ -2,9 +2,11 @@ package org.keinus.logparser.parser;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.keinus.logparser.core.interfaces.IParser;
 import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.core.util.PatternCache;
 
 public class RFC3164SyslogParser implements IParser {
     /**
@@ -12,6 +14,10 @@ public class RFC3164SyslogParser implements IParser {
      * Extracts priority, timestamp, hostname, and message body into a map.
      */
     protected static final char SPACE = ' ';
+
+    // Pattern 캐싱: split()은 내부적으로 Pattern.compile()을 호출하므로 미리 컴파일
+    private static final PatternCache PATTERN_CACHE = PatternCache.getInstance();
+    private static final Pattern WHITESPACE_PATTERN = PATTERN_CACHE.compile("\\s+");
 
     public RFC3164SyslogParser() {
         // Nothing
@@ -89,7 +95,7 @@ public class RFC3164SyslogParser implements IParser {
 
     /** iptables 메시지에서 key=value 형태 필드 추출 */
     private void parseKeyValueFields(String message, Map<String, Object> map) {
-        String[] parts = message.split("\\s+");
+        String[] parts = WHITESPACE_PATTERN.split(message);
         for (String part : parts) {
             if (part.contains("=")) {
                 String[] kv = part.split("=", 2);

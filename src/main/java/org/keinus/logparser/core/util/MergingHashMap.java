@@ -1,11 +1,14 @@
 package org.keinus.logparser.core.util;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 특정 키의 값과 'null' 키(전역 값)의 값을 병합하여 반환하는 특수한 HashMap 유사 자료구조입니다.
@@ -21,24 +24,56 @@ import java.util.Set;
  *     <li><b>Null 키 지원:</b> {@code null}을 키로 사용하여 전역 또는 기본 값 목록을 관리합니다.</li>
  *     <li><b>다중 값 저장:</b> 각 키는 값의 리스트({@code ArrayList<T>})를 가집니다.
  *         {@code put(key, value)}은 해당 키의 리스트에 값을 추가합니다.</li>
+ *     <li><b>크기 제한:</b> 최대 크기를 초과하면 LRU(Least Recently Used) 전략으로 가장 오래된 키를 제거합니다.</li>
  * </ul>
  *
  * @param <T> 리스트에 저장될 요소의 타입
  */
 public class MergingHashMap<T> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MergingHashMap.class);
+    private static final int DEFAULT_MAX_SIZE = 10000;
 
-    // 일반 키(null이 아닌 키)와 값(ArrayList)을 저장하는 내부 맵
+    // 일반 키(null이 아닌 키)와 값(ArrayList)을 저장하는 내부 맵 (LRU 지원)
     private final Map<String, ArrayList<T>> internalMap;
 
     // null 키에 해당하는 값(ArrayList)을 저장하는 리스트
     private final ArrayList<T> nullKeyValueList;
 
+    // 최대 크기 제한
+    private final int maxSize;
+
+    // 제거된 엔트리 수 추적
+    private long evictedEntries = 0;
+
     /**
-     * MergingHashMap의 새 인스턴스를 생성합니다.
+     * MergingHashMap의 새 인스턴스를 생성합니다 (기본 최대 크기: 10000).
      */
     public MergingHashMap() {
-        this.internalMap = new HashMap<>();
+        this(DEFAULT_MAX_SIZE);
+    }
+
+    /**
+     * 지정된 최대 크기로 MergingHashMap의 새 인스턴스를 생성합니다.
+     *
+     * @param maxSize 맵이 보유할 수 있는 최대 키 개수 (0 이하면 무제한)
+     */
+    public MergingHashMap(int maxSize) {
+        this.maxSize = maxSize > 0 ? maxSize : Integer.MAX_VALUE;
+        // LinkedHashMap을 LRU 모드로 사용 (accessOrder = true)
+        this.internalMap = new LinkedHashMap<String, ArrayList<T>>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, ArrayList<T>> eldest) {
+                boolean shouldRemove = size() > MergingHashMap.this.maxSize;
+                if (shouldRemove) {
+                    evictedEntries++;
+                    LOGGER.debug("Evicting eldest entry: {} (total evictions: {})",
+                                eldest.getKey(), evictedEntries);
+                }
+                return shouldRemove;
+            }
+        };
         this.nullKeyValueList = new ArrayList<>();
+        LOGGER.info("MergingHashMap initialized with max size: {}", this.maxSize);
     }
 
     /**
@@ -169,7 +204,7 @@ public class MergingHashMap<T> {
         return size;
     }
 
-        /**
+    /**
      * 맵의 모든 키를 반환합니다 (null 키 포함).
      *
      * @return 모든 키를 포함한 Set
@@ -180,5 +215,45 @@ public class MergingHashMap<T> {
             keys.add(null);
         }
         return keys;
+    }
+
+    /**
+     * 최대 크기 제한을 반환합니다.
+     *
+     * @return 맵의 최대 크기
+     */
+    public int getMaxSize() {
+        return this.maxSize;
+    }
+
+    /**
+     * LRU eviction으로 제거된 총 엔트리 수를 반환합니다.
+     *
+     * @return 제거된 엔트리 수
+     */
+    public long getEvictedEntries() {
+        return this.evictedEntries;
+    }
+
+    /**
+     * 현재 사용률을 백분율로 반환합니다.
+     *
+     * @return 사용률 (0.0 ~ 100.0)
+     */
+    public double getUtilization() {
+        if (maxSize == Integer.MAX_VALUE) {
+            return 0.0;
+        }
+        return (double) size() / maxSize * 100.0;
+    }
+
+    /**
+     * 맵의 상태 정보를 문자열로 반환합니다.
+     *
+     * @return 상태 정보 문자열
+     */
+    public String getStats() {
+        return String.format("MergingHashMap{size=%d, maxSize=%d, utilization=%.1f%%, evicted=%d}",
+                size(), maxSize, getUtilization(), evictedEntries);
     }
 }

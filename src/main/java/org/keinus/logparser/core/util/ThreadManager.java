@@ -127,6 +127,7 @@ public class ThreadManager extends ThreadPoolExecutor {
         } else {
             LOGGER.info("Task completed by thread: {}", current.getName());
         }
+        cleanupDeadThreads();
     }
 
     @Override

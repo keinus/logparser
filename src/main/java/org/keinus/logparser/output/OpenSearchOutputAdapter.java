@@ -35,6 +35,7 @@ import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.keinus.logparser.core.interfaces.OutputAdapter;
+import org.keinus.logparser.core.util.PatternCache;
 import org.keinus.logparser.core.util.ThreadUtil;
 
 /**
@@ -63,6 +64,10 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     private static final int MAX_RETRIES = 3;
     private static final int MAX_TOTAL_ITEMS = 50000;
     private static final int MAX_ITEM_AGE_MS = 300000; // 5분
+
+    // Pattern 캐싱을 위한 인스턴스
+    private static final PatternCache PATTERN_CACHE = PatternCache.getInstance();
+    private static final Pattern BRACED_STRING_PATTERN = PATTERN_CACHE.compile("%\\{(.*?)}");
 
     /**
      * 재시도 가능한 항목을 추적하는 내부 클래스
@@ -164,8 +169,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
     private List<String> extractBracedStrings(String input) {
         List<String> extractedStrings = new ArrayList<>();
-        Pattern pattern = Pattern.compile("%\\{(.*?)}");
-        Matcher matcher = pattern.matcher(input);
+        Matcher matcher = BRACED_STRING_PATTERN.matcher(input);
 
         while (matcher.find()) {
             extractedStrings.add(matcher.group(1));
