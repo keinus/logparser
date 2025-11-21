@@ -3,6 +3,8 @@ package org.keinus.logparser.core.util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,35 +48,167 @@ public class ThreadManager extends ThreadPoolExecutor {
                 new CustomThreadFactory(threadName));
     }
 
+    /**
+     * 지정된 이름으로 스레드를 실행합니다.
+     *
+     * @param threadName 실행할 스레드의 이름
+     * @param task 실행할 작업
+     * @throws IllegalStateException 동일한 이름의 스레드가 이미 실행 중인 경우
+     */
     public void executeWithName(String threadName, Runnable task) {
+        if (threadName == null || threadName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Thread name cannot be null or empty");
+        }
+
+        // 동일한 이름의 스레드가 실행 중인지 확인
+        Thread existingThread = threads.get(threadName);
+        if (existingThread != null && existingThread.isAlive()) {
+            throw new IllegalStateException(
+                String.format("Thread with name '%s' is already running", threadName)
+            );
+        }
+
         Runnable namedTask = () -> {
-            Thread.currentThread().setName(threadName);
+            Thread current = Thread.currentThread();
+            current.setName(threadName);
             task.run();
         };
+
         this.execute(namedTask);
-        LOGGER.info("Task submitted with thread name: {}", threadName);
+        LOGGER.debug("Task submitted with thread name: {}", threadName);
     }
 
+    /**
+     * 지정된 이름의 스레드를 중지합니다.
+     *
+     * @param threadName 중지할 스레드의 이름
+     * @throws IllegalArgumentException 해당 이름의 스레드를 찾을 수 없는 경우
+     */
     public void stopThread(String threadName) {
         Thread thread = threads.get(threadName);
-        if (thread != null) {
+        if (thread != null && thread.isAlive()) {
+            LOGGER.info("Interrupting thread: {}", threadName);
             thread.interrupt();
         } else {
-            LOGGER.error("No thread found with the name {}", threadName);
+            String message = String.format("No active thread found with the name: %s", threadName);
+            LOGGER.error(message);
+            throw new IllegalArgumentException(message);
         }
     }
 
+    /**
+     * 모든 스레드가 종료될 때까지 대기합니다.
+     *
+     * @throws InterruptedException 대기 중 인터럽트가 발생한 경우
+     */
     public void waitForAllThreadsToFinish() throws InterruptedException {
-        for (Thread thread : threads.values()) {
-            thread.join();
+        List<Thread> threadList = new ArrayList<>(threads.values());
+        for (Thread thread : threadList) {
+            if (thread.isAlive()) {
+                LOGGER.debug("Waiting for thread to finish: {}", thread.getName());
+                thread.join();
+            }
         }
     }
 
+    /**
+     * 현재 실행 중인 스레드의 이름 목록을 반환합니다.
+     *
+     * @return 실행 중인 스레드 이름 목록
+     */
     public List<String> getActiveThreads() {
-        return threads.entrySet().stream()
-                .filter(entry -> entry.getValue().isAlive())
-                .map(Map.Entry::getKey)
-                .toList();
+        List<String> activeThreads = new ArrayList<>();
+        for (Map.Entry<String, Thread> entry : threads.entrySet()) {
+            if (entry.getValue().isAlive()) {
+                activeThreads.add(entry.getKey());
+            }
+        }
+        return Collections.unmodifiableList(activeThreads);
+    }
+
+    /**
+     * 현재 관리 중인 모든 스레드의 정보를 반환합니다.
+     *
+     * @return 스레드 정보 목록 (이름, 상태, ID 등)
+     */
+    public List<ThreadInfo> getAllThreadInfo() {
+        List<ThreadInfo> infoList = new ArrayList<>();
+        for (Map.Entry<String, Thread> entry : threads.entrySet()) {
+            Thread thread = entry.getValue();
+            infoList.add(new ThreadInfo(
+                entry.getKey(),
+                thread.threadId(),
+                thread.getState(),
+                thread.isAlive(),
+                thread.isInterrupted()
+            ));
+        }
+        return Collections.unmodifiableList(infoList);
+    }
+
+    /**
+     * 특정 이름의 스레드 정보를 반환합니다.
+     *
+     * @param threadName 조회할 스레드 이름
+     * @return 스레드 정보, 없으면 null
+     */
+    public ThreadInfo getThreadInfo(String threadName) {
+        Thread thread = threads.get(threadName);
+        if (thread == null) {
+            return null;
+        }
+        return new ThreadInfo(
+            threadName,
+            thread.threadId(),
+            thread.getState(),
+            thread.isAlive(),
+            thread.isInterrupted()
+        );
+    }
+
+    /**
+     * 스레드 정보를 담는 불변 클래스
+     */
+    public static class ThreadInfo {
+        private final String name;
+        private final long id;
+        private final Thread.State state;
+        private final boolean alive;
+        private final boolean interrupted;
+
+        public ThreadInfo(String name, long id, Thread.State state, boolean alive, boolean interrupted) {
+            this.name = name;
+            this.id = id;
+            this.state = state;
+            this.alive = alive;
+            this.interrupted = interrupted;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public long getId() {
+            return id;
+        }
+
+        public Thread.State getState() {
+            return state;
+        }
+
+        public boolean isAlive() {
+            return alive;
+        }
+
+        public boolean isInterrupted() {
+            return interrupted;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("ThreadInfo{name='%s', id=%d, state=%s, alive=%s, interrupted=%s}",
+                name, id, state, alive, interrupted);
+        }
     }
 
     public void shutdownAllThreads() {
@@ -113,30 +247,29 @@ public class ThreadManager extends ThreadPoolExecutor {
     @Override
     protected void beforeExecute(Thread t, Runnable r) {
         super.beforeExecute(t, r);
-        threads.put(t.getName(), t);
-        LOGGER.info("Thread {} is starting task: {}", t.getName(), r);
+        String threadName = t.getName();
+        threads.put(threadName, t);
+        LOGGER.debug("Thread '{}' is starting task", threadName);
     }
 
     @Override
     protected void afterExecute(Runnable r, Throwable t) {
         super.afterExecute(r, t);
         Thread current = Thread.currentThread();
-        threads.remove(current.getName());
+        String threadName = current.getName();
+        threads.remove(threadName);
+
         if (t != null) {
-            LOGGER.error("Task completed by thread: {}, with error: {}", current.getName(), t.getMessage());
+            LOGGER.error("Task failed in thread '{}': {}", threadName, t.getMessage(), t);
         } else {
-            LOGGER.info("Task completed by thread: {}", current.getName());
+            LOGGER.debug("Task completed by thread '{}'", threadName);
         }
-        cleanupDeadThreads();
     }
 
     @Override
     public void terminated() {
         super.terminated();
+        threads.clear();
         LOGGER.info("ThreadPool has been terminated");
-    }
-
-    private void cleanupDeadThreads() {
-        threads.values().removeIf(value -> !value.isAlive());
     }
 }
