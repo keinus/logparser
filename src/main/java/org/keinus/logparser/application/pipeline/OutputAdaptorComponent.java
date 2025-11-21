@@ -1,17 +1,17 @@
-package org.keinus.logparser.components;
+package org.keinus.logparser.application.pipeline;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.keinus.logparser.config.ApplicationProperties;
-import org.keinus.logparser.config.OutputAdapterConfig;
-import org.keinus.logparser.core.dispatch.OutputFactory;
-import org.keinus.logparser.core.interfaces.OutputAdapter;
-import org.keinus.logparser.core.util.MergingHashMap;
-import org.keinus.logparser.core.util.ThreadManager;
-import org.keinus.logparser.core.util.ThreadUtil;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.infrastructure.config.ApplicationProperties;
+import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
+import org.keinus.logparser.domain.delivery.service.OutputFactory;
+import org.keinus.logparser.domain.delivery.model.OutputAdapter;
+import org.keinus.logparser.infrastructure.util.MergingHashMap;
+import org.keinus.logparser.infrastructure.util.ThreadManager;
+import org.keinus.logparser.infrastructure.util.ThreadUtil;
+import org.keinus.logparser.domain.model.LogEvent;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;

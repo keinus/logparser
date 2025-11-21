@@ -1,10 +1,10 @@
-package org.keinus.logparser.service;
+package org.keinus.logparser.application.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.keinus.logparser.config.ConfigValidator;
-import org.keinus.logparser.config.InputAdapterConfig;
-import org.keinus.logparser.config.OutputAdapterConfig;
-import org.keinus.logparser.config.ParserAdapterConfig;
+import org.keinus.logparser.domain.configuration.service.ConfigValidator;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
+import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
+import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
 import org.springframework.stereotype.Service;
 import org.yaml.snakeyaml.Yaml;
 

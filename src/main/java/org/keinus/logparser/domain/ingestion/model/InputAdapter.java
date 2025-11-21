@@ -1,10 +1,10 @@
-package org.keinus.logparser.core.interfaces;
+package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.model.LogEvent;
 
 import lombok.Getter;
 

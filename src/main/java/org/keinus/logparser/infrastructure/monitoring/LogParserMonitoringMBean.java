@@ -1,4 +1,4 @@
-package org.keinus.logparser.monitoring;
+package org.keinus.logparser.infrastructure.monitoring;
 
 /**
  * LogParser 애플리케이션의 모니터링 메트릭을 JMX를 통해 노출하는 MBean 인터페이스입니다.

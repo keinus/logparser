@@ -1,6 +1,6 @@
-package org.keinus.logparser.config;
+package org.keinus.logparser.infrastructure.config;
 
-import org.keinus.logparser.core.util.ThreadManager;
+import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

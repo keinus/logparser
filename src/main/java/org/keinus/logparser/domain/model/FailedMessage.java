@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.schema;
+package org.keinus.logparser.domain.model;
 
 import java.time.Instant;
 import java.time.ZoneId;

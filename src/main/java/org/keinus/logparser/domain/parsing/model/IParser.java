@@ -1,6 +1,6 @@
-package org.keinus.logparser.core.interfaces;
+package org.keinus.logparser.domain.parsing.model;
 
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 로그 이벤트를 구조화된 데이터로 변환하는 파서의 공통 인터페이스입니다.

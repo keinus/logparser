@@ -1,4 +1,4 @@
-package org.keinus.logparser.input;
+package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -12,8 +12,8 @@ import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.keinus.logparser.core.interfaces.InputAdapter;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * HTTP 요청을 수신하여 전체 요청 내용을 단일 메시지로 처리하는 입력 어댑터입니다.

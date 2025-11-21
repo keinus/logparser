@@ -1,12 +1,12 @@
-package org.keinus.logparser.parser;
+package org.keinus.logparser.domain.parsing.model;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.keinus.logparser.core.interfaces.IParser;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.parsing.model.IParser;
+import org.keinus.logparser.domain.model.LogEvent;
 
 
 public class RegexParser implements IParser {

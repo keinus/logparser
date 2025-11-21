@@ -1,4 +1,4 @@
-package org.keinus.logparser.config;
+package org.keinus.logparser.domain.configuration.model;
 
 import java.util.List;
 import java.util.Map;

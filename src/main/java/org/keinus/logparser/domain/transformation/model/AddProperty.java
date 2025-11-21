@@ -1,13 +1,13 @@
-package org.keinus.logparser.transform;
+package org.keinus.logparser.domain.transformation.model;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.keinus.logparser.config.TransformParamConfig;
-import org.keinus.logparser.core.interfaces.ITransform;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
+import org.keinus.logparser.domain.transformation.model.ITransform;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 기존 속성들을 그룹화하여 새로운 복합 속성(nested object)을 메시지에 추가하는 변환(Transform) 클래스입니다.

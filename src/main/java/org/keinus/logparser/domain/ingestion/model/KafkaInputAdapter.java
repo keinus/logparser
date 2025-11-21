@@ -1,4 +1,4 @@
-package org.keinus.logparser.input;
+package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -13,8 +13,8 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.deser.std.StringDeserializer;
 
-import org.keinus.logparser.core.interfaces.InputAdapter;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.model.LogEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;

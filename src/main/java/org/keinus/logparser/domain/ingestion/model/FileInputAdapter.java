@@ -1,4 +1,4 @@
-package org.keinus.logparser.input;
+package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -10,9 +10,9 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.core.interfaces.InputAdapter;
-import org.keinus.logparser.core.util.ThreadUtil;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.infrastructure.util.ThreadUtil;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 지정된 파일로부터 로그 메시지를 라인 단위로 읽어오는 입력 어댑터입니다.

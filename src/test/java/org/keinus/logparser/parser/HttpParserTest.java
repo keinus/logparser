@@ -3,7 +3,7 @@ package org.keinus.logparser.parser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.model.LogEvent;
 
 import java.util.Map;
 

@@ -1,4 +1,4 @@
-package org.keinus.logparser.transform;
+package org.keinus.logparser.domain.transformation.model;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.keinus.logparser.config.TransformParamConfig;
-import org.keinus.logparser.core.interfaces.ITransform;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
+import org.keinus.logparser.domain.transformation.model.ITransform;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 메시지의 특정 필드 값을 기준으로 메시지를 필터링하는 변환(Transform) 클래스입니다.

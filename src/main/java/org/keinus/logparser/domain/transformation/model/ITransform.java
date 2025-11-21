@@ -1,7 +1,7 @@
-package org.keinus.logparser.core.interfaces;
+package org.keinus.logparser.domain.transformation.model;
 
-import org.keinus.logparser.config.TransformParamConfig;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 로그 이벤트에 대해 데이터 변환을 수행하는 로직의 공통 인터페이스입니다.

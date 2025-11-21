@@ -1,16 +1,16 @@
-package org.keinus.logparser.core.dispatch;
+package org.keinus.logparser.domain.parsing.service;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.config.ParserAdapterConfig;
-import org.keinus.logparser.core.interfaces.IParser;
-import org.keinus.logparser.core.util.MergingHashMap;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
+import org.keinus.logparser.domain.parsing.model.IParser;
+import org.keinus.logparser.infrastructure.util.MergingHashMap;
+import org.keinus.logparser.domain.model.LogEvent;
 import org.springframework.stereotype.Service;
-import org.keinus.logparser.config.ApplicationProperties;
+import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 
 /**
  * 원본 로그 텍스트를 구조화된 데이터(Map)로 파싱하는 서비스 클래스입니다.

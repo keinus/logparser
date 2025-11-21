@@ -1,4 +1,4 @@
-package org.keinus.logparser.output;
+package org.keinus.logparser.domain.delivery.model;
 
 import java.io.IOException;
 import java.util.Map;
@@ -12,7 +12,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.keinus.logparser.core.interfaces.OutputAdapter;
+import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 
 
 /**

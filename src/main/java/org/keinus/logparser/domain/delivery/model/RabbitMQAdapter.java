@@ -1,11 +1,11 @@
-package org.keinus.logparser.output;
+package org.keinus.logparser.domain.delivery.model;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
-import org.keinus.logparser.core.interfaces.OutputAdapter;
+import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 
 import com.rabbitmq.client.ConnectionFactory;
 

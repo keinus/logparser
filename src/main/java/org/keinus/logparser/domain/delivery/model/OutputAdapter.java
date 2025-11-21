@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.interfaces;
+package org.keinus.logparser.domain.delivery.model;
 
 import java.io.Closeable;
 import java.io.IOException;

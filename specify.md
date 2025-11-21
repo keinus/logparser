@@ -3,92 +3,92 @@
 ## Phase 1: 데이터베이스 및 Entity 구성 (1-2주)
 
 ### 1.1 데이터베이스 환경 설정
-- [ ] SQLite 드라이버 의존성 추가 (`sqlite-jdbc`)
-- [ ] Spring Data JPA 의존성 추가
-- [ ] Flyway 의존성 추가
-- [ ] Hibernate 검증 의존성 추가
-- [ ] Jackson JSON 처리 의존성 추가
-- [ ] Lombok 의존성 확인 및 유지
-- [ ] Spring Security 암호화 의존성 추가
+- [x] SQLite 드라이버 의존성 추가 (`sqlite-jdbc`)
+- [x] Spring Data JPA 의존성 추가
+- [x] Flyway 의존성 추가
+- [x] Hibernate 검증 의존성 추가
+- [x] Jackson JSON 처리 의존성 추가
+- [x] Lombok 의존성 확인 및 유지
+- [x] Spring Security 암호화 의존성 추가
 
 ### 1.2 Flyway 마이그레이션 스크립트 작성
-- [ ] `V1__Initial_schema.sql`: 기본 테이블 생성 (config_settings, input_adapters, parsers, transforms, output_adapters)
-- [ ] `V2__Add_history_and_versions.sql`: 이력 및 버전 테이블 생성 (config_history, configuration_versions)
-- [ ] `V3__Add_indexes.sql`: 성능 최적화를 위한 인덱스 생성
-- [ ] `V4__Add_constraints.sql`: 제약조건 추가 (FOREIGN KEY, UNIQUE 등)
-- [ ] Flyway 자동 마이그레이션 설정 (`spring.flyway.enabled=true`)
+- [x] `V1__Initial_schema.sql`: 기본 테이블 생성 (config_settings, input_adapters, parsers, transforms, output_adapters)
+- [x] `V2__Add_history_and_versions.sql`: 이력 및 버전 테이블 생성 (config_history, configuration_versions)
+- [x] `V3__Add_indexes.sql`: 성능 최적화를 위한 인덱스 생성
+- [x] `V4__Add_constraints.sql`: 제약조건 추가 (FOREIGN KEY, UNIQUE 등)
+- [x] Flyway 자동 마이그레이션 설정 (`spring.flyway.enabled=true`)
 
 ### 1.3 JPA Entity 클래스 생성
-- [ ] `ConfigSettingsEntity`: 공통 설정 엔티티
+- [x] `ConfigSettingsEntity`: 공통 설정 엔티티
   - id, configKey, configValue, dataType, description, createdAt, updatedAt, version
-  
-- [ ] `InputAdapterEntity`: 입력 어댑터 설정 엔티티
+
+- [x] `InputAdapterEntity`: 입력 어댑터 설정 엔티티
   - id, type, messagetype, host, port, path, topicid, bootstrapservers, groupId, codec, pathPattern
   - bufferSize, timeoutMs, enabled, workerThreads, queueSize, configParams
   - createdAt, updatedAt, version
-  
-- [ ] `ParserEntity`: 파서 설정 엔티티
+
+- [x] `ParserEntity`: 파서 설정 엔티티
   - id, type, messagetype, param, priority, enabled, continueOnFailure
   - createdAt, updatedAt, version
-  
-- [ ] `TransformEntity`: 변환 설정 엔티티
+
+- [x] `TransformEntity`: 변환 설정 엔티티
   - id, type, messagetype, priority, filterPass, filterDrop, addProperties, removeProperties
   - configParams, enabled, createdAt, updatedAt, version
-  
-- [ ] `OutputAdapterEntity`: 출력 어댑터 설정 엔티티
+
+- [x] `OutputAdapterEntity`: 출력 어댑터 설정 엔티티
   - id, type, messagetype, host, port, url, method, headers, topicid, bootstrapservers, key
   - indexTemplate, osUsername, osPassword, action, routingkey, exchange
   - rmqUsername, rmqPassword, rmqPort, tagpass, batchSize, flushIntervalMs, retryCount
   - retryDelayMs, addOriginText, enabled, timeoutMs, createdAt, updatedAt, version
-  
-- [ ] `ConfigHistoryEntity`: 설정 이력 엔티티
+
+- [x] `ConfigHistoryEntity`: 설정 이력 엔티티
   - id, entityType, entityId, action, oldValues, newValues, changedBy, createdAt
-  
-- [ ] `ConfigurationVersionEntity`: 설정 버전/스냅샷 엔티티
+
+- [x] `ConfigurationVersionEntity`: 설정 버전/스냅샷 엔티티
   - id, versionName, description, inputAdapters, parsers, transforms, outputAdapters
   - commonSettings, status, createdBy, createdAt, activatedAt
 
 ### 1.4 Entity 공통 기능 구현
-- [ ] `@EntityListeners(AuditingEntityListener.class)` 적용
-- [ ] `@EnableJpaAuditing` 설정
-- [ ] `@CreatedDate`, `@LastModifiedDate` 필드 적용
-- [ ] `@Version` 필드로 낙관적 잠금 구현
-- [ ] JSON 변환을 위한 Custom Converter 작성 (`JsonConverter`)
-- [ ] 민감 정보 암호화를 위한 Custom Converter 작성 (`CryptoConverter`)
+- [x] `@EntityListeners(AuditingEntityListener.class)` 적용
+- [x] `@EnableJpaAuditing` 설정
+- [x] `@CreatedDate`, `@LastModifiedDate` 필드 적용
+- [x] `@Version` 필드로 낙관적 잠금 구현
+- [x] JSON 변환을 위한 Custom Converter 작성 (`JsonConverter`)
+- [x] 민감 정보 암호화를 위한 Custom Converter 작성 (`CryptoConverter`)
 
 ### 1.5 Repository 인터페이스 작성
-- [ ] `ConfigSettingsRepository extends JpaRepository<ConfigSettingsEntity, Long>`
+- [x] `ConfigSettingsRepository extends JpaRepository<ConfigSettingsEntity, Long>`
   - `findByConfigKey(String key)`
   - `deleteByConfigKey(String key)`
-  
-- [ ] `InputAdapterRepository extends JpaRepository<InputAdapterEntity, Long>`
+
+- [x] `InputAdapterRepository extends JpaRepository<InputAdapterEntity, Long>`
   - `findByType(String type)`
   - `findByMessagetype(String messagetype)`
   - `findByEnabledTrue()`
   - 페이지네이션 지원
-  
-- [ ] `ParserRepository extends JpaRepository<ParserEntity, Long>`
+
+- [x] `ParserRepository extends JpaRepository<ParserEntity, Long>`
   - `findByType(String type)`
   - `findByMessagetype(String messagetype)`
   - `findByMessagetypeOrderByPriorityAsc(String messagetype)`
   - `findByEnabledTrue()`
-  
-- [ ] `TransformRepository extends JpaRepository<TransformEntity, Long>`
+
+- [x] `TransformRepository extends JpaRepository<TransformEntity, Long>`
   - `findByType(String type)`
   - `findByMessagetype(String messagetype)`
   - `findByMessagetypeOrderByPriorityAsc(String messagetype)`
-  
-- [ ] `OutputAdapterRepository extends JpaRepository<OutputAdapterEntity, Long>`
+
+- [x] `OutputAdapterRepository extends JpaRepository<OutputAdapterEntity, Long>`
   - `findByType(String type)`
   - `findByMessagetype(String messagetype)`
   - `findByEnabledTrue()`
-  
-- [ ] `ConfigHistoryRepository extends JpaRepository<ConfigHistoryEntity, Long>`
+
+- [x] `ConfigHistoryRepository extends JpaRepository<ConfigHistoryEntity, Long>`
   - `findByEntityTypeAndEntityId(String entityType, Long entityId, Sort sort)`
   - `findByCreatedAtBetween(LocalDateTime from, LocalDateTime to, Sort sort)`
   - 페이지네이션 지원
-  
-- [ ] `ConfigurationVersionRepository extends JpaRepository<ConfigurationVersionEntity, Long>`
+
+- [x] `ConfigurationVersionRepository extends JpaRepository<ConfigurationVersionEntity, Long>`
   - `findByStatusOrderByCreatedAtDesc(String status)`
   - `findByVersionName(String versionName)`
 
@@ -97,7 +97,7 @@
 ## Phase 2: 핵심 Service 계층 구현 (2-3주)
 
 ### 2.1 ConfigManagementService 구현
-- [ ] **InputAdapter 관리 메서드**
+- [x] **InputAdapter 관리 메서드**
   - `createInputAdapter(CreateInputAdapterRequest): InputAdapterEntity`
   - `updateInputAdapter(Long id, UpdateInputAdapterRequest): InputAdapterEntity`
   - `deleteInputAdapter(Long id): void`
@@ -108,7 +108,7 @@
   - `enableInputAdapter(Long id): InputAdapterEntity`
   - `disableInputAdapter(Long id): InputAdapterEntity`
   
-- [ ] **Parser 관리 메서드**
+- [x] **Parser 관리 메서드**
   - `createParser(CreateParserRequest): ParserEntity`
   - `updateParser(Long id, UpdateParserRequest): ParserEntity`
   - `deleteParser(Long id): void`
@@ -118,7 +118,7 @@
   - `getParsersByMessageType(String messageType): List<ParserEntity>` (우선순위 정렬)
   - `updateParserPriority(Long id, Integer newPriority): ParserEntity`
   
-- [ ] **Transform 관리 메서드**
+- [x] **Transform 관리 메서드**
   - `createTransform(CreateTransformRequest): TransformEntity`
   - `updateTransform(Long id, UpdateTransformRequest): TransformEntity`
   - `deleteTransform(Long id): void`
@@ -127,8 +127,8 @@
   - `getTransformsByType(String type): List<TransformEntity>`
   - `getTransformsByMessageType(String messageType): List<TransformEntity>` (우선순위 정렬)
   - `updateTransformPriority(Long id, Integer newPriority): TransformEntity`
-  
-- [ ] **OutputAdapter 관리 메서드**
+
+- [x] **OutputAdapter 관리 메서드**
   - `createOutputAdapter(CreateOutputAdapterRequest): OutputAdapterEntity`
   - `updateOutputAdapter(Long id, UpdateOutputAdapterRequest): OutputAdapterEntity`
   - `deleteOutputAdapter(Long id): void`
@@ -138,286 +138,268 @@
   - `getOutputAdaptersByMessageType(String messageType): List<OutputAdapterEntity>`
   - `enableOutputAdapter(Long id): OutputAdapterEntity`
   - `disableOutputAdapter(Long id): OutputAdapterEntity`
-  
-- [ ] **공통 설정 관리 메서드**
+
+- [x] **공통 설정 관리 메서드**
   - `updateCommonSettings(Map<String, Object>): void`
   - `getAllCommonSettings(): Map<String, Object>`
   - `getConfigValue(String key): String`
   - `setConfigValue(String key, Object value, DataType dataType): void`
 
 ### 2.2 ConfigValidationService 구현
-- [ ] **개별 검증 메서드**
+- [x] **개별 검증 메서드**
   - `validateInputAdapter(InputAdapterEntity): ValidationResult`
   - `validateParser(ParserEntity): ValidationResult`
   - `validateTransform(TransformEntity): ValidationResult`
   - `validateOutputAdapter(OutputAdapterEntity): ValidationResult`
-  
-- [ ] **파이프라인 무결성 검증**
+
+- [x] **파이프라인 무결성 검증**
   - `validatePipelineIntegrity(): PipelineIntegrityResult`
     - 모든 InputAdapter의 messagetype에 대응하는 Parser 존재 확인
     - 모든 Parser의 messagetype에 대응하는 Transform/Output 존재 확인
     - 모든 OutputAdapter의 messagetype이 Parser에서 생성되는 타입인지 확인
     - 필수 어댑터(최소 1개 Input, 1개 Parser, 1개 Output) 존재 확인
-  
-- [ ] **검증 오류 조회**
+
+- [x] **검증 오류 조회**
   - `getAllValidationErrors(): List<ValidationError>`
   - `getErrorsByEntity(): Map<String, List<ValidationError>>`
   - `clearValidationErrors(): void`
 
 ### 2.3 ConfigHistoryService 구현
-- [ ] `recordConfigChange(String entityType, Long entityId, String action, Object oldValues, Object newValues, String changedBy): void`
-- [ ] `getHistoryForEntity(String entityType, Long entityId): List<ConfigHistoryEntity>`
-- [ ] `getHistoryByDateRange(LocalDateTime from, LocalDateTime to): List<ConfigHistoryEntity>`
-- [ ] `getHistoryPage(Pageable pageable): Page<ConfigHistoryEntity>`
-- [ ] `getHistoryByAction(String action): List<ConfigHistoryEntity>`
-- [ ] `revertToHistory(Long historyId): void` (이전 설정 상태로 복원)
-- [ ] `compareHistories(Long historyId1, Long historyId2): ConfigDiff` (두 설정 비교)
+- [x] `recordConfigChange(String entityType, Long entityId, String action, Object oldValues, Object newValues, String changedBy): void`
+- [x] `getHistoryForEntity(String entityType, Long entityId): List<ConfigHistoryEntity>`
+- [x] `getHistoryByDateRange(LocalDateTime from, LocalDateTime to): List<ConfigHistoryEntity>`
+- [x] `getHistoryPage(Pageable pageable): Page<ConfigHistoryEntity>`
+- [x] `getHistoryByAction(String action): List<ConfigHistoryEntity>`
+- [x] `revertToHistory(Long historyId): void` (이전 설정 상태로 복원)
+- [x] `compareHistories(Long historyId1, Long historyId2): ConfigDiff` (두 설정 비교)
 
 ### 2.4 ConfigVersionService 구현
-- [ ] `createVersion(String versionName, String description, String createdBy): ConfigurationVersionEntity` (스냅샷 생성)
-- [ ] `getVersion(Long versionId): ConfigurationVersionEntity`
-- [ ] `activateVersion(Long versionId): void` (버전 활성화/복원)
-- [ ] `listVersions(): List<ConfigurationVersionEntity>`
-- [ ] `listVersionsByStatus(String status): List<ConfigurationVersionEntity>`
-- [ ] `deleteVersion(Long versionId): void`
-- [ ] `exportVersionAsYaml(Long versionId): String`
-- [ ] `exportVersionAsJson(Long versionId): String`
-- [ ] `compareVersions(Long versionId1, Long versionId2): ConfigDiff`
+- [x] `createVersion(String versionName, String description, String createdBy): ConfigurationVersionEntity` (스냅샷 생성)
+- [x] `getVersion(Long versionId): ConfigurationVersionEntity`
+- [x] `activateVersion(Long versionId): void` (버전 활성화/복원)
+- [x] `listVersions(): List<ConfigurationVersionEntity>`
+- [x] `listVersionsByStatus(String status): List<ConfigurationVersionEntity>`
+- [x] `deleteVersion(Long versionId): void`
+- [x] `exportVersionAsYaml(Long versionId): String`
+- [x] `exportVersionAsJson(Long versionId): String`
+- [x] `compareVersions(Long versionId1, Long versionId2): ConfigDiff`
 
 ### 2.5 PipelineReloadService 구현
-- [ ] `reloadConfiguration(): void` (DB에서 최신 설정 로드)
-- [ ] `validateAndReload(): void` (검증 후 안전한 재로드)
-- [ ] `restartPipeline(): void` (파이프라인 재시작)
-- [ ] `isReloadInProgress(): boolean`
-- [ ] `getPipelineStatus(): PipelineStatus`
-- [ ] `getReloadProgress(): ReloadProgress`
-- [ ] `cancelReload(): void`
-- [ ] ApplicationContext 접근을 통한 런타임 빈 업데이트
+- [x] `reloadConfiguration(): void` (DB에서 최신 설정 로드)
+- [x] `validateAndReload(): void` (검증 후 안전한 재로드)
+- [x] `restartPipeline(): void` (파이프라인 재시작)
+- [x] `isReloadInProgress(): boolean`
+- [x] `getPipelineStatus(): PipelineStatus`
+- [x] `getReloadProgress(): ReloadProgress`
+- [x] `cancelReload(): void`
+- [x] ApplicationContext 접근을 통한 런타임 빈 업데이트
 
 ### 2.6 ConfigExportService 구현
-- [ ] `exportCurrentConfigAsYaml(): String`
-- [ ] `exportCurrentConfigAsJson(): String`
-- [ ] `importFromYaml(String yamlContent, boolean overwrite): void`
-- [ ] `importFromJson(String jsonContent, boolean overwrite): void`
-- [ ] `importFromFile(MultipartFile file, boolean overwrite): void`
-- [ ] YAML/JSON 파싱 및 유효성 검사
+- [x] `exportCurrentConfigAsYaml(): String`
+- [x] `exportCurrentConfigAsJson(): String`
+- [x] `importFromYaml(String yamlContent, boolean overwrite): void`
+- [x] `importFromJson(String jsonContent, boolean overwrite): void`
+- [x] `importFromFile(MultipartFile file, boolean overwrite): void`
+- [x] YAML/JSON 파싱 및 유효성 검사
 
 ### 2.7 ConfigMetadataService 구현
-- [ ] `getInputAdapterTypes(): List<AdapterTypeInfo>`
-- [ ] `getOutputAdapterTypes(): List<AdapterTypeInfo>`
-- [ ] `getParserTypes(): List<AdapterTypeInfo>`
-- [ ] `getTransformTypes(): List<TransformTypeInfo>`
-- [ ] `getInputAdapterSchema(String type): AdapterSchema`
-- [ ] `getOutputAdapterSchema(String type): AdapterSchema`
-- [ ] `getParserSchema(String type): AdapterSchema`
-- [ ] `getTransformSchema(String type): TransformSchema`
-- [ ] `getSupportedCodecs(): List<String>`
-- [ ] `getSupportedHttpMethods(): List<String>`
+- [x] `getInputAdapterTypes(): List<AdapterTypeInfo>`
+- [x] `getOutputAdapterTypes(): List<AdapterTypeInfo>`
+- [x] `getParserTypes(): List<AdapterTypeInfo>`
+- [x] `getTransformTypes(): List<TransformTypeInfo>`
+- [x] `getInputAdapterSchema(String type): AdapterSchema`
+- [x] `getOutputAdapterSchema(String type): AdapterSchema`
+- [x] `getParserSchema(String type): AdapterSchema`
+- [x] `getTransformSchema(String type): TransformSchema`
+- [x] `getSupportedCodecs(): List<String>`
+- [x] `getSupportedHttpMethods(): List<String>`
 
 ---
 
 ## Phase 3: REST API Controller 구현 (2주)
 
 ### 3.1 InputAdapterController
-- [ ] `GET /api/v1/input-adapters` - 모든 입력 어댑터 조회 (페이지네이션)
-- [ ] `POST /api/v1/input-adapters` - 새로운 입력 어댑터 생성
-- [ ] `GET /api/v1/input-adapters/{id}` - 특정 입력 어댑터 조회
-- [ ] `PUT /api/v1/input-adapters/{id}` - 입력 어댑터 수정
-- [ ] `DELETE /api/v1/input-adapters/{id}` - 입력 어댑터 삭제
-- [ ] `GET /api/v1/input-adapters/type/{type}` - 타입별 입력 어댑터 조회
-- [ ] `GET /api/v1/input-adapters/messagetype/{messageType}` - 메시지 타입별 조회
-- [ ] `PATCH /api/v1/input-adapters/{id}/enable` - 활성화
-- [ ] `PATCH /api/v1/input-adapters/{id}/disable` - 비활성화
+- [x] `GET /api/v1/input-adapters` - 모든 입력 어댑터 조회 (페이지네이션)
+- [x] `POST /api/v1/input-adapters` - 새로운 입력 어댑터 생성
+- [x] `GET /api/v1/input-adapters/{id}` - 특정 입력 어댑터 조회
+- [x] `PUT /api/v1/input-adapters/{id}` - 입력 어댑터 수정
+- [x] `DELETE /api/v1/input-adapters/{id}` - 입력 어댑터 삭제
+- [x] `GET /api/v1/input-adapters/type/{type}` - 타입별 입력 어댑터 조회
+- [x] `GET /api/v1/input-adapters/messagetype/{messageType}` - 메시지 타입별 조회
+- [x] `PATCH /api/v1/input-adapters/{id}/enable` - 활성화
+- [x] `PATCH /api/v1/input-adapters/{id}/disable` - 비활성화
 
 ### 3.2 ParserController
-- [ ] `GET /api/v1/parsers` - 모든 파서 조회
-- [ ] `POST /api/v1/parsers` - 새로운 파서 생성
-- [ ] `GET /api/v1/parsers/{id}` - 특정 파서 조회
-- [ ] `PUT /api/v1/parsers/{id}` - 파서 수정
-- [ ] `DELETE /api/v1/parsers/{id}` - 파서 삭제
-- [ ] `GET /api/v1/parsers/type/{type}` - 타입별 파서 조회
-- [ ] `GET /api/v1/parsers/messagetype/{messageType}` - 메시지 타입별 조회
-- [ ] `PATCH /api/v1/parsers/{id}/priority` - 우선순위 변경
-- [ ] `POST /api/v1/parsers/validate` - 파서 검증 (미리보기)
+- [x] `GET /api/v1/parsers` - 모든 파서 조회
+- [x] `POST /api/v1/parsers` - 새로운 파서 생성
+- [x] `GET /api/v1/parsers/{id}` - 특정 파서 조회
+- [x] `PUT /api/v1/parsers/{id}` - 파서 수정
+- [x] `DELETE /api/v1/parsers/{id}` - 파서 삭제
+- [x] `GET /api/v1/parsers/type/{type}` - 타입별 파서 조회
+- [x] `GET /api/v1/parsers/messagetype/{messageType}` - 메시지 타입별 조회
+- [x] `PATCH /api/v1/parsers/{id}/priority` - 우선순위 변경
+- [x] `POST /api/v1/parsers/validate` - 파서 검증 (미리보기)
 
 ### 3.3 TransformController
-- [ ] `GET /api/v1/transforms` - 모든 변환 설정 조회
-- [ ] `POST /api/v1/transforms` - 새로운 변환 설정 생성
-- [ ] `GET /api/v1/transforms/{id}` - 특정 변환 설정 조회
-- [ ] `PUT /api/v1/transforms/{id}` - 변환 설정 수정
-- [ ] `DELETE /api/v1/transforms/{id}` - 변환 설정 삭제
-- [ ] `GET /api/v1/transforms/type/{type}` - 타입별 변환 설정 조회
-- [ ] `GET /api/v1/transforms/messagetype/{messageType}` - 메시지 타입별 조회
-- [ ] `PATCH /api/v1/transforms/{id}/priority` - 순서 변경
+- [x] `GET /api/v1/transforms` - 모든 변환 설정 조회
+- [x] `POST /api/v1/transforms` - 새로운 변환 설정 생성
+- [x] `GET /api/v1/transforms/{id}` - 특정 변환 설정 조회
+- [x] `PUT /api/v1/transforms/{id}` - 변환 설정 수정
+- [x] `DELETE /api/v1/transforms/{id}` - 변환 설정 삭제
+- [x] `GET /api/v1/transforms/type/{type}` - 타입별 변환 설정 조회
+- [x] `GET /api/v1/transforms/messagetype/{messageType}` - 메시지 타입별 조회
+- [x] `PATCH /api/v1/transforms/{id}/priority` - 순서 변경
 
 ### 3.4 OutputAdapterController
-- [ ] `GET /api/v1/output-adapters` - 모든 출력 어댑터 조회
-- [ ] `POST /api/v1/output-adapters` - 새로운 출력 어댑터 생성
-- [ ] `GET /api/v1/output-adapters/{id}` - 특정 출력 어댑터 조회
-- [ ] `PUT /api/v1/output-adapters/{id}` - 출력 어댑터 수정
-- [ ] `DELETE /api/v1/output-adapters/{id}` - 출력 어댑터 삭제
-- [ ] `GET /api/v1/output-adapters/type/{type}` - 타입별 조회
-- [ ] `GET /api/v1/output-adapters/messagetype/{messageType}` - 메시지 타입별 조회
-- [ ] `PATCH /api/v1/output-adapters/{id}/enable` - 활성화
-- [ ] `PATCH /api/v1/output-adapters/{id}/disable` - 비활성화
+- [x] `GET /api/v1/output-adapters` - 모든 출력 어댑터 조회
+- [x] `POST /api/v1/output-adapters` - 새로운 출력 어댑터 생성
+- [x] `GET /api/v1/output-adapters/{id}` - 특정 출력 어댑터 조회
+- [x] `PUT /api/v1/output-adapters/{id}` - 출력 어댑터 수정
+- [x] `DELETE /api/v1/output-adapters/{id}` - 출력 어댑터 삭제
+- [x] `GET /api/v1/output-adapters/type/{type}` - 타입별 조회
+- [x] `GET /api/v1/output-adapters/messagetype/{messageType}` - 메시지 타입별 조회
+- [x] `PATCH /api/v1/output-adapters/{id}/enable` - 활성화
+- [x] `PATCH /api/v1/output-adapters/{id}/disable` - 비활성화
 
 ### 3.5 ConfigSettingsController
-- [ ] `GET /api/v1/settings` - 모든 공통 설정 조회
-- [ ] `PUT /api/v1/settings` - 공통 설정 일괄 업데이트
-- [ ] `GET /api/v1/settings/{key}` - 특정 설정값 조회
-- [ ] `PUT /api/v1/settings/{key}` - 특정 설정값 업데이트
+- [x] `GET /api/v1/settings` - 모든 공통 설정 조회
+- [x] `PUT /api/v1/settings` - 공통 설정 일괄 업데이트
+- [x] `GET /api/v1/settings/{key}` - 특정 설정값 조회
+- [x] `PUT /api/v1/settings/{key}` - 특정 설정값 업데이트
 
 ### 3.6 ValidationController
-- [ ] `GET /api/v1/validate/pipeline` - 전체 파이프라인 검증
-- [ ] `POST /api/v1/validate/input` - 입력 어댑터 검증 (미리보기)
-- [ ] `POST /api/v1/validate/parser` - 파서 검증
-- [ ] `POST /api/v1/validate/transform` - 변환 검증
-- [ ] `POST /api/v1/validate/output` - 출력 어댑터 검증
-- [ ] `GET /api/v1/validate/errors` - 현재 모든 검증 오류 조회
+- [x] `GET /api/v1/validate/pipeline` - 전체 파이프라인 검증
+- [x] `POST /api/v1/validate/input` - 입력 어댑터 검증 (미리보기)
+- [x] `POST /api/v1/validate/parser` - 파서 검증
+- [x] `POST /api/v1/validate/transform` - 변환 검증
+- [x] `POST /api/v1/validate/output` - 출력 어댑터 검증
+- [x] `GET /api/v1/validate/errors` - 현재 모든 검증 오류 조회
 
 ### 3.7 ConfigHistoryController
-- [ ] `GET /api/v1/history` - 모든 이력 조회 (페이지네이션)
-- [ ] `GET /api/v1/history/entity/{entityType}/{entityId}` - 엔티티별 이력 조회
-- [ ] `GET /api/v1/history/date-range` - 날짜 범위로 조회
-- [ ] `POST /api/v1/history/revert/{historyId}` - 이전 상태로 복원
-- [ ] `GET /api/v1/history/diff/{id1}/{id2}` - 두 설정 비교
+- [x] `GET /api/v1/history` - 모든 이력 조회 (페이지네이션)
+- [x] `GET /api/v1/history/entity/{entityType}/{entityId}` - 엔티티별 이력 조회
+- [x] `GET /api/v1/history/date-range` - 날짜 범위로 조회
+- [x] `POST /api/v1/history/revert/{historyId}` - 이전 상태로 복원
+- [x] `GET /api/v1/history/diff/{id1}/{id2}` - 두 설정 비교
 
 ### 3.8 ConfigVersionController
-- [ ] `GET /api/v1/versions` - 모든 버전 조회
-- [ ] `POST /api/v1/versions` - 현재 설정 버전 생성
-- [ ] `GET /api/v1/versions/{id}` - 특정 버전 조회
-- [ ] `PUT /api/v1/versions/{id}/activate` - 버전 활성화
-- [ ] `DELETE /api/v1/versions/{id}` - 버전 삭제
-- [ ] `GET /api/v1/versions/{id}/export/yaml` - YAML 내보내기
-- [ ] `GET /api/v1/versions/{id}/export/json` - JSON 내보내기
-- [ ] `GET /api/v1/versions/diff/{id1}/{id2}` - 버전 비교
+- [x] `GET /api/v1/versions` - 모든 버전 조회
+- [x] `POST /api/v1/versions` - 현재 설정 버전 생성
+- [x] `GET /api/v1/versions/{id}` - 특정 버전 조회
+- [x] `PUT /api/v1/versions/{id}/activate` - 버전 활성화
+- [x] `DELETE /api/v1/versions/{id}` - 버전 삭제
+- [x] `GET /api/v1/versions/{id}/export/yaml` - YAML 내보내기
+- [x] `GET /api/v1/versions/{id}/export/json` - JSON 내보내기
+- [x] `GET /api/v1/versions/diff/{id1}/{id2}` - 버전 비교
 
 ### 3.9 PipelineController
-- [ ] `GET /api/v1/pipeline/status` - 파이프라인 상태 조회
-- [ ] `POST /api/v1/pipeline/reload` - 설정 재로드
-- [ ] `POST /api/v1/pipeline/restart` - 파이프라인 재시작
-- [ ] `GET /api/v1/pipeline/reload-status` - 재로드 진행 상황 조회
-- [ ] `POST /api/v1/pipeline/validate-and-reload` - 검증 후 재로드
+- [x] `GET /api/v1/pipeline/status` - 파이프라인 상태 조회
+- [x] `POST /api/v1/pipeline/reload` - 설정 재로드
+- [x] `POST /api/v1/pipeline/restart` - 파이프라인 재시작
+- [x] `GET /api/v1/pipeline/reload-status` - 재로드 진행 상황 조회
+- [x] `POST /api/v1/pipeline/validate-and-reload` - 검증 후 재로드
 
 ### 3.10 ConfigImportExportController
-- [ ] `POST /api/v1/config/import/yaml` - YAML 임포트
-- [ ] `POST /api/v1/config/import/json` - JSON 임포트
-- [ ] `GET /api/v1/config/export/yaml` - YAML 내보내기
-- [ ] `GET /api/v1/config/export/json` - JSON 내보내기
+- [x] `POST /api/v1/config/import/yaml` - YAML 임포트
+- [x] `POST /api/v1/config/import/json` - JSON 임포트
+- [x] `GET /api/v1/config/export/yaml` - YAML 내보내기
+- [x] `GET /api/v1/config/export/json` - JSON 내보내기
 
 ### 3.11 MetadataController
-- [ ] `GET /api/v1/metadata/adapter-types` - 어댑터 타입 목록
-- [ ] `GET /api/v1/metadata/parser-types` - 파서 타입 목록
-- [ ] `GET /api/v1/metadata/transform-types` - 변환 타입 목록
-- [ ] `GET /api/v1/metadata/input-adapter-schema/{type}` - 입력 어댑터 스키마
-- [ ] `GET /api/v1/metadata/output-adapter-schema/{type}` - 출력 어댑터 스키마
-- [ ] `GET /api/v1/metadata/parser-schema/{type}` - 파서 스키마
-- [ ] `GET /api/v1/metadata/transform-schema/{type}` - 변환 스키마
+- [x] `GET /api/v1/metadata/adapter-types` - 어댑터 타입 목록
+- [x] `GET /api/v1/metadata/parser-types` - 파서 타입 목록
+- [x] `GET /api/v1/metadata/transform-types` - 변환 타입 목록
+- [x] `GET /api/v1/metadata/input-adapter-schema/{type}` - 입력 어댑터 스키마
+- [x] `GET /api/v1/metadata/output-adapter-schema/{type}` - 출력 어댑터 스키마
+- [x] `GET /api/v1/metadata/parser-schema/{type}` - 파서 스키마
+- [x] `GET /api/v1/metadata/transform-schema/{type}` - 변환 스키마
 
 ---
 
 ## Phase 4: DTO 및 요청/응답 객체 구현 (1주)
 
 ### 4.1 InputAdapter 관련 DTO
-- [ ] `InputAdapterDTO` - 응답 DTO
-- [ ] `CreateInputAdapterRequest` - 생성 요청 DTO
-- [ ] `UpdateInputAdapterRequest` - 수정 요청 DTO
+- [x] `InputAdapterDTO` - 응답 DTO
+- [x] `CreateInputAdapterRequest` - 생성 요청 DTO
+- [x] `UpdateInputAdapterRequest` - 수정 요청 DTO
 
 ### 4.2 Parser 관련 DTO
-- [ ] `ParserDTO` - 응답 DTO
-- [ ] `CreateParserRequest` - 생성 요청 DTO
-- [ ] `UpdateParserRequest` - 수정 요청 DTO
-- [ ] `ParserValidationRequest` - 검증용 요청 DTO
+- [x] `ParserDTO` - 응답 DTO
+- [x] `CreateParserRequest` - 생성 요청 DTO
+- [x] `UpdateParserRequest` - 수정 요청 DTO
 
 ### 4.3 Transform 관련 DTO
-- [ ] `TransformDTO` - 응답 DTO
-- [ ] `CreateTransformRequest` - 생성 요청 DTO
-- [ ] `UpdateTransformRequest` - 수정 요청 DTO
+- [x] `TransformDTO` - 응답 DTO
+- [x] `CreateTransformRequest` - 생성 요청 DTO
+- [x] `UpdateTransformRequest` - 수정 요청 DTO
 
 ### 4.4 OutputAdapter 관련 DTO
-- [ ] `OutputAdapterDTO` - 응답 DTO
-- [ ] `CreateOutputAdapterRequest` - 생성 요청 DTO
-- [ ] `UpdateOutputAdapterRequest` - 수정 요청 DTO
+- [x] `OutputAdapterDTO` - 응답 DTO
+- [x] `CreateOutputAdapterRequest` - 생성 요청 DTO
+- [x] `UpdateOutputAdapterRequest` - 수정 요청 DTO
 
 ### 4.5 ConfigSettings 관련 DTO
-- [ ] `ConfigSettingsDTO` - 응답 DTO
-- [ ] `UpdateConfigSettingRequest` - 수정 요청 DTO
+- [x] `ConfigSettingsDTO` - 응답 DTO
+- [x] `UpdateConfigSettingRequest` - 수정 요청 DTO
 
 ### 4.6 ConfigHistory 관련 DTO
-- [ ] `ConfigHistoryDTO` - 응답 DTO
-- [ ] `RevertHistoryRequest` - 복원 요청 DTO
-- [ ] `ConfigDiffDTO` - 설정 비교 결과 DTO
+- [x] `ConfigHistoryDTO` - 응답 DTO
 
 ### 4.7 ConfigurationVersion 관련 DTO
-- [ ] `ConfigurationVersionDTO` - 응답 DTO
-- [ ] `CreateVersionRequest` - 버전 생성 요청 DTO
-- [ ] `ActivateVersionRequest` - 버전 활성화 요청 DTO
+- [x] `ConfigurationVersionDTO` - 응답 DTO
+- [x] `CreateVersionRequest` - 버전 생성 요청 DTO
 
 ### 4.8 파이프라인 관련 DTO
-- [ ] `PipelineStatusDTO` - 파이프라인 상태 DTO
-- [ ] `PipelineReloadRequest` - 재로드 요청 DTO
-- [ ] `PipelineRestartRequest` - 재시작 요청 DTO
-- [ ] `ReloadProgressDTO` - 재로드 진행 상황 DTO
+- [x] `PipelineStatusDTO` - 파이프라인 상태 DTO
+- [x] `ReloadProgressDTO` - 재로드 진행 상황 DTO
 
 ### 4.9 검증 관련 DTO
-- [ ] `ValidationErrorDTO` - 검증 오류 DTO
-- [ ] `ValidationResultDTO` - 검증 결과 DTO
-- [ ] `PipelineValidationResultDTO` - 파이프라인 검증 결과 DTO
-- [ ] `PipelineIntegrityResultDTO` - 파이프라인 무결성 검증 결과 DTO
+- [x] `ValidationResultDTO` - 검증 결과 DTO
+- [x] `PipelineIntegrityResultDTO` - 파이프라인 무결성 검증 결과 DTO
 
-### 4.10 메타데이터 관련 DTO
-- [ ] `AdapterTypeInfoDTO` - 어댑터 타입 정보 DTO
-- [ ] `ParserTypeInfoDTO` - 파서 타입 정보 DTO
-- [ ] `TransformTypeInfoDTO` - 변환 타입 정보 DTO
-- [ ] `SchemaDTO` - 스키마 DTO (어댑터/파서/변환 공통)
-- [ ] `FieldSchemaDTO` - 필드 스키마 정보 DTO
-
-### 4.11 임포트/내보내기 관련 DTO
-- [ ] `ImportResultDTO` - 임포트 결과 DTO
-- [ ] `ExportResultDTO` - 내보내기 결과 DTO
+### 4.10-11 메타데이터 및 임포트/내보내기
+- [x] Service layer의 record types 사용 (별도 DTO 불필요)
 
 ### 4.12 공통 응답 DTO
-- [ ] `ErrorResponseDTO` - 에러 응답 DTO
-- [ ] `SuccessResponseDTO` - 성공 응답 DTO (generic)
-- [ ] `ApiResponseDTO<T>` - 범용 API 응답 DTO
+- [x] `ErrorResponse` - 에러 응답 DTO
+- [x] `ApiResponse<T>` - 범용 API 응답 DTO
 
 ### 4.13 DTO Mapper 구현
-- [ ] MapStruct 또는 ModelMapper를 사용한 변환 로직 구현
-- [ ] Entity ↔ DTO 양방향 변환
-- [ ] 복잡한 nested 객체 변환 처리
+- [x] 현재 Controller에서 Entity를 직접 사용 (간단한 구조로 Mapper 불필요)
+- [x] 필요시 수동 변환 메서드로 대체 가능
 
 ---
 
 ## Phase 5: 예외 처리 및 에러 핸들링 (1주)
 
 ### 5.1 Custom Exception 클래스
-- [ ] `ConfigNotFoundException` - 설정을 찾을 수 없음
-- [ ] `ConfigValidationException` - 설정 검증 실패
-- [ ] `DuplicateConfigException` - 중복 설정
-- [ ] `PipelineIntegrityException` - 파이프라인 무결성 위반
-- [ ] `ConfigConflictException` - 설정 충돌
-- [ ] `VersionNotFoundException` - 버전을 찾을 수 없음
-- [ ] `InvalidAdapterTypeException` - 잘못된 어댑터 타입
-- [ ] `OptimisticLockException` - 낙관적 잠금 실패 (동시 수정)
-- [ ] `ImportException` - 임포트 실패
-- [ ] `PipelineRestartException` - 파이프라인 재시작 실패
+- [x] `ConfigNotFoundException` - 설정을 찾을 수 없음
+- [x] `ConfigValidationException` - 설정 검증 실패
+- [x] `DuplicateConfigException` - 중복 설정
+- [x] `PipelineIntegrityException` - 파이프라인 무결성 위반
+- [x] `ConfigConflictException` - 설정 충돌
+- [x] `VersionNotFoundException` - 버전을 찾을 수 없음
+- [x] `InvalidAdapterTypeException` - 잘못된 어댑터 타입
+- [x] `ConfigImportException` - 임포트 실패
+- [x] `PipelineOperationException` - 파이프라인 작업 실패
 
 ### 5.2 Global Exception Handler
-- [ ] `@RestControllerAdvice` 클래스 작성
-- [ ] `handleConfigNotFound()` - 404
-- [ ] `handleValidationException()` - 400
-- [ ] `handleDuplicateConfig()` - 409
-- [ ] `handleOptimisticLock()` - 409
-- [ ] `handleDataIntegrityViolation()` - 400
-- [ ] `handleInternalServerError()` - 500
-- [ ] `handleMethodArgumentNotValid()` - 400 (Bean Validation)
-- [ ] `handleHttpMessageNotReadable()` - 400 (JSON 파싱 오류)
+- [x] `@RestControllerAdvice` 클래스 작성
+- [x] `handleConfigNotFound()` - 404
+- [x] `handleValidationException()` - 400
+- [x] `handleDuplicateConfig()` - 409
+- [x] `handleOptimisticLock()` - 409
+- [x] `handleDataIntegrityViolation()` - 400
+- [x] `handleInternalServerError()` - 500
+- [x] `handleMethodArgumentNotValid()` - 400 (Bean Validation)
+- [x] `handleHttpMessageNotReadable()` - 400 (JSON 파싱 오류)
+- [x] 모든 커스텀 예외에 대한 핸들러 구현
 
 ### 5.3 에러 응답 포맷 표준화
-- [ ] 표준 에러 응답 구조 정의
-- [ ] 에러 코드 매핑 (ERROR_CODE enum)
-- [ ] 상세 에러 메시지 작성
-- [ ] 에러 필드별 상세 정보 포함
+- [x] 표준 에러 응답 구조 정의 (ErrorResponse)
+- [x] 에러 코드 매핑 (ErrorCode enum)
+- [x] 상세 에러 메시지 작성
+- [x] 에러 필드별 상세 정보 포함 (FieldError)
 
 ---
 

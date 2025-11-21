@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.util;
+package org.keinus.logparser.infrastructure.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

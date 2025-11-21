@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.dispatch;
+package org.keinus.logparser.domain.transformation.service;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -8,10 +8,10 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.config.TransformConfig;
-import org.keinus.logparser.core.interfaces.ITransform;
-import org.keinus.logparser.core.schema.LogEvent;
-import org.keinus.logparser.config.ApplicationProperties;
+import org.keinus.logparser.domain.configuration.model.TransformConfig;
+import org.keinus.logparser.domain.transformation.model.ITransform;
+import org.keinus.logparser.domain.model.LogEvent;
+import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.springframework.stereotype.Service;
 
 /**

@@ -1,10 +1,10 @@
-package org.keinus.logparser.parser;
+package org.keinus.logparser.domain.parsing.model;
 
 import java.lang.reflect.Type;
 import java.util.Map;
 
-import org.keinus.logparser.core.interfaces.IParser;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.parsing.model.IParser;
+import org.keinus.logparser.domain.model.LogEvent;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;

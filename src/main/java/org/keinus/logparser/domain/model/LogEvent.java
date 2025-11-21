@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.schema;
+package org.keinus.logparser.domain.model;
 
 import java.io.Serializable;
 import java.time.Instant;

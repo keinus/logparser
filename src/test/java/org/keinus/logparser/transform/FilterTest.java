@@ -3,8 +3,8 @@ package org.keinus.logparser.transform;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.keinus.logparser.config.TransformParamConfig;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
+import org.keinus.logparser.domain.model.LogEvent;
 
 import java.util.HashMap;
 import java.util.Map;

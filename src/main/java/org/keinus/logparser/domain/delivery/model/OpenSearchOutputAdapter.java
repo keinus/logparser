@@ -1,4 +1,4 @@
-package org.keinus.logparser.output;
+package org.keinus.logparser.domain.delivery.model;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,9 +34,9 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.keinus.logparser.core.interfaces.OutputAdapter;
-import org.keinus.logparser.core.util.PatternCache;
-import org.keinus.logparser.core.util.ThreadUtil;
+import org.keinus.logparser.domain.delivery.model.OutputAdapter;
+import org.keinus.logparser.infrastructure.util.PatternCache;
+import org.keinus.logparser.infrastructure.util.ThreadUtil;
 
 /**
  * 처리된 메시지를 OpenSearch 또는 Elasticsearch 클러스터로 전송하는 출력 어댑터입니다.

@@ -1,4 +1,4 @@
-package org.keinus.logparser.config.schema;
+package org.keinus.logparser.domain.configuration.model;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

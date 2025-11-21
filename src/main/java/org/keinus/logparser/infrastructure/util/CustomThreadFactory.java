@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.util;
+package org.keinus.logparser.infrastructure.util;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;

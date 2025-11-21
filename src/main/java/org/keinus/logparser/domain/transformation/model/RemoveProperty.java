@@ -1,11 +1,11 @@
-package org.keinus.logparser.transform;
+package org.keinus.logparser.domain.transformation.model;
 
 import java.util.List;
 import java.util.Map;
 
-import org.keinus.logparser.config.TransformParamConfig;
-import org.keinus.logparser.core.interfaces.ITransform;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
+import org.keinus.logparser.domain.transformation.model.ITransform;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 메시지에서 지정된 속성(필드)들을 제거하는 변환(Transform) 클래스입니다.

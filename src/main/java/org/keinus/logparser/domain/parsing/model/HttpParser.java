@@ -1,4 +1,4 @@
-package org.keinus.logparser.parser;
+package org.keinus.logparser.domain.parsing.model;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -8,8 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.keinus.logparser.core.interfaces.IParser;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.parsing.model.IParser;
+import org.keinus.logparser.domain.model.LogEvent;
 
 import lombok.extern.slf4j.Slf4j;
 

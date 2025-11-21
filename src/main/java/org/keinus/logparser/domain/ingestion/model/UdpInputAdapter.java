@@ -1,4 +1,4 @@
-package org.keinus.logparser.input;
+package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -8,8 +8,8 @@ import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.keinus.logparser.core.interfaces.InputAdapter;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * UDP 데이터그램 패킷을 통해 메시지를 수신하는 입력 어댑터입니다.

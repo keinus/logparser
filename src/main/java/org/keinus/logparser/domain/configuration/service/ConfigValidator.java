@@ -1,6 +1,9 @@
-package org.keinus.logparser.config;
+package org.keinus.logparser.domain.configuration.service;
 
-import org.keinus.logparser.config.schema.ConfigSchema.*;
+import org.keinus.logparser.domain.configuration.model.ConfigSchema.*;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
+import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
+import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

@@ -1,6 +1,6 @@
-package org.keinus.logparser.controller;
+package org.keinus.logparser.interfaces.rest.controller;
 
-import org.keinus.logparser.service.ConfigService;
+import org.keinus.logparser.application.config.ConfigService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;

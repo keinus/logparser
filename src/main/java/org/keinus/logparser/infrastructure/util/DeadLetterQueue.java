@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.util;
+package org.keinus.logparser.infrastructure.util;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -14,8 +14,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.keinus.logparser.core.schema.FailedMessage;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.model.FailedMessage;
+import org.keinus.logparser.domain.model.LogEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

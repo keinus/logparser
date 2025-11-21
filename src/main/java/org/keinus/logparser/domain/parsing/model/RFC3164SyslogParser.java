@@ -1,12 +1,12 @@
-package org.keinus.logparser.parser;
+package org.keinus.logparser.domain.parsing.model;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import org.keinus.logparser.core.interfaces.IParser;
-import org.keinus.logparser.core.schema.LogEvent;
-import org.keinus.logparser.core.util.PatternCache;
+import org.keinus.logparser.domain.parsing.model.IParser;
+import org.keinus.logparser.domain.model.LogEvent;
+import org.keinus.logparser.infrastructure.util.PatternCache;
 
 public class RFC3164SyslogParser implements IParser {
     /**

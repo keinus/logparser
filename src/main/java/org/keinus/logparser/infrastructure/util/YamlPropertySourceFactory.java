@@ -1,4 +1,4 @@
-package org.keinus.logparser.core.util;
+package org.keinus.logparser.infrastructure.util;
 
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.PropertiesPropertySource;

@@ -1,10 +1,10 @@
-package org.keinus.logparser.output;
+package org.keinus.logparser.domain.delivery.model;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.keinus.logparser.core.interfaces.OutputAdapter;
+import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

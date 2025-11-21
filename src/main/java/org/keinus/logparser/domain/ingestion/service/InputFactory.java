@@ -1,10 +1,10 @@
-package org.keinus.logparser.core.dispatch;
+package org.keinus.logparser.domain.ingestion.service;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
 import java.util.HashMap;
-import org.keinus.logparser.config.InputAdapterConfig;
-import org.keinus.logparser.core.interfaces.InputAdapter;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
+import org.keinus.logparser.domain.ingestion.model.InputAdapter;
 
 import lombok.extern.slf4j.Slf4j;
 

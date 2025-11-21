@@ -1,4 +1,4 @@
-package org.keinus.logparser.monitoring;
+package org.keinus.logparser.infrastructure.monitoring;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -7,8 +7,8 @@ import java.lang.management.ThreadMXBean;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
-import org.keinus.logparser.components.MessageDispatcher;
-import org.keinus.logparser.core.util.PatternCache;
+import org.keinus.logparser.application.pipeline.MessageDispatcher;
+import org.keinus.logparser.infrastructure.util.PatternCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -1,6 +1,6 @@
-package org.keinus.logparser.config;
+package org.keinus.logparser.domain.configuration.model;
 
-import org.keinus.logparser.config.schema.ConfigSchema.*;
+import org.keinus.logparser.domain.configuration.model.ConfigSchema.*;
 import lombok.Data;
 
 /**

@@ -1,4 +1,4 @@
-package org.keinus.logparser.output;
+package org.keinus.logparser.domain.delivery.model;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -8,8 +8,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import org.keinus.logparser.core.interfaces.OutputAdapter;
-import org.keinus.logparser.core.util.ThreadUtil;
+import org.keinus.logparser.domain.delivery.model.OutputAdapter;
+import org.keinus.logparser.infrastructure.util.ThreadUtil;
 
 import lombok.extern.slf4j.Slf4j;
 

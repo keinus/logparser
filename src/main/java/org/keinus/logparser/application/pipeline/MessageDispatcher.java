@@ -1,4 +1,4 @@
-package org.keinus.logparser.components;
+package org.keinus.logparser.application.pipeline;
 
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
@@ -14,14 +14,14 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
-import org.keinus.logparser.config.ApplicationProperties;
-import org.keinus.logparser.core.dispatch.ParseService;
-import org.keinus.logparser.core.dispatch.TransformService;
-import org.keinus.logparser.core.util.DeadLetterQueue;
-import org.keinus.logparser.core.util.ThreadManager;
-import org.keinus.logparser.core.util.ThreadUtil;
-import org.keinus.logparser.core.schema.LogEvent;
-import org.keinus.logparser.monitoring.LogParserMonitoring;
+import org.keinus.logparser.infrastructure.config.ApplicationProperties;
+import org.keinus.logparser.domain.parsing.service.ParseService;
+import org.keinus.logparser.domain.transformation.service.TransformService;
+import org.keinus.logparser.infrastructure.util.DeadLetterQueue;
+import org.keinus.logparser.infrastructure.util.ThreadManager;
+import org.keinus.logparser.infrastructure.util.ThreadUtil;
+import org.keinus.logparser.domain.model.LogEvent;
+import org.keinus.logparser.infrastructure.monitoring.LogParserMonitoring;
 
 /**
  * MessageDispatcher 클래스는 로그 메시지를 입력 어댑터로부터 받아와서 파싱하고,

@@ -1,4 +1,4 @@
-package org.keinus.logparser.input;
+package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.core.interfaces.InputAdapter;
-import org.keinus.logparser.core.schema.LogEvent;
+import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 테스트용 가짜 로그 데이터를 생성하는 입력 어댑터입니다.
