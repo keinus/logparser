@@ -45,7 +45,7 @@ class KafkaInputAdapterTest {
 
     @Test
     @DisplayName("생성자 테스트 - 유효한 설정으로 생성")
-    void testConstructorWithValidConfig() throws IOException {
+    void testConstructorWithValidConfig() {
         // Given
         try (MockedConstruction<KafkaConsumer> mockedConstruction = mockConstruction(KafkaConsumer.class)) {
             // When & Then
@@ -134,7 +134,7 @@ class KafkaInputAdapterTest {
 
             // Then
             KafkaConsumer mockConsumer = mockedConstruction.constructed().get(0);
-            verify(mockConsumer, times(1)).close();
+            verify(mockConsumer, times(1)).close(any(Duration.class));
         }
     }
 

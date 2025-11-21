@@ -147,6 +147,18 @@ public class PatternCache {
     }
 
     /**
+     * 캐시 통계를 초기화합니다.
+     * 캐시 히트, 미스, 제거 카운터를 0으로 리셋합니다.
+     * 캐시된 패턴은 그대로 유지됩니다.
+     */
+    public void resetStatistics() {
+        cacheHits = 0;
+        cacheMisses = 0;
+        evictions = 0;
+        LOGGER.info("Pattern cache statistics reset");
+    }
+
+    /**
      * 캐시된 패턴 개수를 반환합니다.
      *
      * @return 캐시 크기

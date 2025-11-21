@@ -148,7 +148,6 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             LOGGER.info("HTTP client initialized with connection pool (max: 100, per-route: 50)");
 
         } catch (NoSuchAlgorithmException | KeyManagementException | KeyStoreException e) {
-            LOGGER.error("Failed to initialize HTTP client for OpenSearch: {}", e.getMessage(), e);
             throw new IOException("Failed to initialize HTTP client for OpenSearch", e);
         }
 
@@ -188,7 +187,6 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                 item.retryCount,
                 System.currentTimeMillis() - item.firstAttemptTime,
                 item.data.length() > 200 ? item.data.substring(0, 200) + "..." : item.data);
-        // TODO: 필요시 파일이나 별도 데이터베이스에 저장
     }
 
     /**

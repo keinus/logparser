@@ -382,6 +382,18 @@ public class MessageDispatcher {
     }
 
     /**
+     * 메시지 처리 통계를 초기화합니다.
+     * 총 수신, 처리, 드롭, 실패 카운터를 0으로 리셋합니다.
+     */
+    public void resetStatistics() {
+        totalMessagesReceived.set(0);
+        totalMessagesProcessed.set(0);
+        totalMessagesDropped.set(0);
+        totalMessagesFailed.set(0);
+        log.info("MessageDispatcher statistics reset");
+    }
+
+    /**
      * 큐 메트릭 데이터 클래스
      */
     public static class QueueMetrics {

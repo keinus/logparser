@@ -191,8 +191,20 @@ public class LogParserMonitoring implements LogParserMonitoringMBean {
 
     @Override
     public void resetStatistics() {
-        LOGGER.warn("Statistics reset is not implemented yet");
-        // TODO: MessageDispatcher에 통계 리셋 메서드 추가 필요
+        LOGGER.info("Resetting statistics...");
+
+        // MessageDispatcher 통계 리셋
+        messageDispatcher.resetStatistics();
+
+        // PatternCache 통계 리셋
+        try {
+            PatternCache cache = PatternCache.getInstance();
+            cache.resetStatistics();
+        } catch (Exception e) {
+            LOGGER.warn("Failed to reset pattern cache statistics: {}", e.getMessage());
+        }
+
+        LOGGER.info("Statistics reset completed");
     }
 
     @Override
