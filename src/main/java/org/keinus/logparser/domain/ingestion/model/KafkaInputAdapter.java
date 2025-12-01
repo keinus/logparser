@@ -65,10 +65,11 @@ public class KafkaInputAdapter extends InputAdapter {
 		consumer = new KafkaConsumer<>(consumerProperties);
 
 		String topic = obj.get("topicid");
+		consumer.subscribe(java.util.Collections.singletonList(topic));
 
 		this.host = server;
 
-		LOGGER.info("Kafka Input Adapter connected at {} by {}", server, topic);
+		LOGGER.info("Kafka Input Adapter connected at {} and subscribed to topic {}", server, topic);
 	}
 
 	@Override

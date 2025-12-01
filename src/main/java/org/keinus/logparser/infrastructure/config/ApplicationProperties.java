@@ -3,27 +3,25 @@ package org.keinus.logparser.infrastructure.config;
 import java.util.List;
 import jakarta.annotation.PostConstruct;
 
+import org.keinus.logparser.application.service.DatabaseConfigLoader;
 import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
 import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
 import org.keinus.logparser.domain.configuration.model.TransformConfig;
 import org.keinus.logparser.domain.configuration.service.ConfigValidator;
-import org.keinus.logparser.infrastructure.util.YamlPropertySourceFactory;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.util.CollectionUtils;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * ETL 파이프라인의 모든 설정을 관리하는 중앙 설정 클래스입니다.
- * 타입 안전한 설정 클래스를 사용합니다.
+ * 데이터베이스에서 설정을 로드합니다.
  */
 @Configuration
-@ConfigurationProperties(prefix = "logparser")
-@PropertySource(value = "file:./config/config.yaml", factory = YamlPropertySourceFactory.class)
 @Data
+@Slf4j
 public class ApplicationProperties {
 
     // === 타입 안전한 설정 ===
@@ -37,7 +35,98 @@ public class ApplicationProperties {
     // === 설정 검증기 ===
     private final ConfigValidator configValidator;
 
+    // === DB 설정 로더 ===
+    private final DatabaseConfigLoader databaseConfigLoader;
+
     @PostConstruct
+    public void loadConfigurationFromDatabase() {
+        log.info("=".repeat(80));
+        log.info("Loading pipeline configuration from database...");
+        log.info("=".repeat(80));
+
+        // DB가 비어있는지 확인
+        if (databaseConfigLoader.isDatabaseEmpty()) {
+            log.warn("═".repeat(80));
+            log.warn("DATABASE IS EMPTY!");
+            log.warn("No pipeline configuration found in database.");
+            log.warn("Pipeline will NOT start until configuration is created.");
+            log.warn("");
+            log.warn("To configure pipeline:");
+            log.warn("  1. Open Web UI: http://localhost:8765/");
+            log.warn("  2. Use REST API to create adapters, parsers, and transforms");
+            log.warn("  3. API Documentation: http://localhost:8765/swagger-ui.html");
+            log.warn("");
+            log.warn("Pipeline will auto-reload after configuration changes.");
+            log.warn("═".repeat(80));
+
+            // 빈 설정으로 초기화 (애플리케이션은 시작됨)
+            this.input = new java.util.ArrayList<>();
+            this.output = new java.util.ArrayList<>();
+            this.parser = new java.util.ArrayList<>();
+            this.transform = new java.util.ArrayList<>();
+            this.parserThreads = 4;
+            this.flushInterval = 5000;
+
+            log.info("Application started with EMPTY configuration (pipeline disabled)");
+            log.info("=".repeat(80));
+            return;
+        }
+
+        // DB에서 설정 로드 (검증 실패 시 빈 설정으로 초기화)
+        try {
+            DatabaseConfigLoader.PipelineConfiguration config = databaseConfigLoader.loadConfiguration();
+
+            this.input = config.getInput();
+            this.output = config.getOutput();
+            this.parser = config.getParser();
+            this.transform = config.getTransform();
+            this.parserThreads = config.getParserThreads();
+            this.flushInterval = config.getFlushInterval();
+
+            log.info("Configuration loaded from database:");
+            log.info("  - Input adapters: {}", input.size());
+            log.info("  - Output adapters: {}", output.size());
+            log.info("  - Parsers: {}", parser.size());
+            log.info("  - Transforms: {}", transform.size());
+            log.info("  - Parser threads: {}", parserThreads);
+            log.info("  - Flush interval: {}ms", flushInterval);
+
+            // 설정 검증
+            validateProperties();
+
+            log.info("=".repeat(80));
+            log.info("Pipeline configuration loaded and validated successfully");
+            log.info("=".repeat(80));
+
+        } catch (Exception e) {
+            log.error("═".repeat(80));
+            log.error("FAILED TO LOAD CONFIGURATION FROM DATABASE!");
+            log.error("Error: {}", e.getMessage(), e);
+            log.error("");
+            log.error("Pipeline will NOT start due to invalid configuration.");
+            log.error("Application will start with EMPTY configuration to allow fixing via API.");
+            log.error("");
+            log.error("To fix the configuration:");
+            log.error("  1. Open Web UI: http://localhost:8765/");
+            log.error("  2. Review and fix invalid adapters/parsers/transforms");
+            log.error("  3. Use REST API to update or delete invalid entries");
+            log.error("");
+            log.error("Pipeline will auto-reload after configuration is fixed.");
+            log.error("═".repeat(80));
+
+            // 빈 설정으로 초기화 (앱은 시작되지만 파이프라인은 비활성화)
+            this.input = new java.util.ArrayList<>();
+            this.output = new java.util.ArrayList<>();
+            this.parser = new java.util.ArrayList<>();
+            this.transform = new java.util.ArrayList<>();
+            this.parserThreads = 4;
+            this.flushInterval = 5000;
+
+            log.info("Application started with EMPTY configuration (pipeline disabled)");
+            log.info("=".repeat(80));
+        }
+    }
+
     public void validateProperties() {
         validateBasicProperties();
         validateRequiredConfigs();
@@ -54,6 +143,13 @@ public class ApplicationProperties {
     }
 
     private void validateRequiredConfigs() {
+        // DB가 비어있으면 검증 스킵 (애플리케이션은 시작되지만 pipeline은 비활성화)
+        if (CollectionUtils.isEmpty(input) && CollectionUtils.isEmpty(output) && CollectionUtils.isEmpty(parser)) {
+            log.debug("Empty configuration detected - pipeline will not start");
+            return;
+        }
+
+        // 설정이 있으면 모두 있어야 함
         if (CollectionUtils.isEmpty(input)) {
             throw new IllegalArgumentException("Input configuration cannot be empty.");
         }
@@ -69,20 +165,36 @@ public class ApplicationProperties {
         if (configValidator == null) {
             return;
         }
-        validateAdapterList(input, "Input adapter configuration validation failed", configValidator::validateInputAdapter);
-        validateAdapterList(output, "Output adapter configuration validation failed", configValidator::validateOutputAdapter);
-        validateAdapterList(parser, "Parser configuration validation failed", configValidator::validateParserAdapter);
+
+        // Skip validation if lists are empty (allows runtime configuration)
+        if (CollectionUtils.isEmpty(input) && CollectionUtils.isEmpty(output) && CollectionUtils.isEmpty(parser)) {
+            log.debug("Skipping adapter validation - configuration is empty");
+            return;
+        }
+
+        // Validate individual adapter configurations
+        if (!CollectionUtils.isEmpty(input)) {
+            validateAdapterList(input, "Input adapter configuration validation failed", configValidator::validateInputAdapter);
+        }
+        if (!CollectionUtils.isEmpty(output)) {
+            validateAdapterList(output, "Output adapter configuration validation failed", configValidator::validateOutputAdapter);
+        }
+        if (!CollectionUtils.isEmpty(parser)) {
+            validateAdapterList(parser, "Parser configuration validation failed", configValidator::validateParserAdapter);
+        }
     }
 
     private <T> void validateAdapterList(List<T> configs, String errorMessage, java.util.function.Function<T, ConfigValidator.ValidationResult> validator) {
+        int index = 0;
         for (T config : configs) {
             ConfigValidator.ValidationResult result = validator.apply(config);
             if (result.hasErrors()) {
-                result.logResults();
-                throw new IllegalArgumentException(errorMessage);
+                log.error("Validation failed for config at index {}: {}", index, config);
+                log.error("Validation errors: {}", result.getErrors());
+                throw new IllegalArgumentException(errorMessage + " at index " + index + ": " + result.getErrors());
             }
+            index++;
         }
     }
 
 }
-

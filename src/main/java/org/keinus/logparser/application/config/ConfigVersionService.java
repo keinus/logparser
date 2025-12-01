@@ -1,6 +1,7 @@
 package org.keinus.logparser.application.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.infrastructure.persistence.entity.*;
@@ -25,8 +26,10 @@ public class ConfigVersionService {
     private final TransformRepository transformRepository;
     private final OutputAdapterRepository outputAdapterRepository;
     private final ConfigSettingsRepository configSettingsRepository;
+    private final PipelineReloadService pipelineReloadService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final YAMLMapper yamlMapper = new YAMLMapper();
 
     // ==================== Version Management ====================
 
@@ -84,8 +87,10 @@ public class ConfigVersionService {
             version.setActivatedAt(LocalDateTime.now());
             versionRepository.save(version);
 
-            // TODO: Apply the configuration from this version
-            log.warn("Version activation requires configuration reload implementation");
+            // Apply the configuration from this version
+            log.info("Reloading pipeline configuration for activated version: {}", version.getVersionName());
+            pipelineReloadService.reloadConfiguration();
+            log.info("Pipeline configuration reloaded successfully");
 
         } catch (Exception e) {
             log.error("Failed to activate version", e);
@@ -121,9 +126,26 @@ public class ConfigVersionService {
         log.info("Exporting version as YAML: versionId={}", versionId);
         ConfigurationVersionEntity version = getVersion(versionId);
 
-        // TODO: Implement YAML conversion
-        log.warn("YAML export not yet implemented");
-        return "# YAML export not yet implemented";
+        try {
+            Map<String, Object> export = new HashMap<>();
+            export.put("versionName", version.getVersionName());
+            export.put("description", version.getDescription());
+            export.put("status", version.getStatus());
+            export.put("createdBy", version.getCreatedBy());
+            export.put("createdAt", version.getCreatedAt());
+            export.put("activatedAt", version.getActivatedAt());
+
+            export.put("inputAdapters", objectMapper.readValue(version.getInputAdapters(), List.class));
+            export.put("parsers", objectMapper.readValue(version.getParsers(), List.class));
+            export.put("transforms", objectMapper.readValue(version.getTransforms(), List.class));
+            export.put("outputAdapters", objectMapper.readValue(version.getOutputAdapters(), List.class));
+            export.put("commonSettings", objectMapper.readValue(version.getCommonSettings(), List.class));
+
+            return yamlMapper.writerWithDefaultPrettyPrinter().writeValueAsString(export);
+        } catch (Exception e) {
+            log.error("Failed to export version as YAML", e);
+            throw new RuntimeException("Failed to export version as YAML", e);
+        }
     }
 
     @Transactional(readOnly = true)

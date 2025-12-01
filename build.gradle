@@ -21,10 +21,9 @@ configurations {
 }
 
 repositories {
-	maven {
-        url "http://192.168.50.22:8081/repository/maven-central/"
-		allowInsecureProtocol = true
-    }
+	mavenCentral()
+	// Internal repository (if needed):
+	// maven { url "https://192.168.50.22:8081/repository/maven-central/" }
 }
 
 dependencies {
@@ -34,7 +33,7 @@ dependencies {
 	implementation 'org.springframework.kafka:spring-kafka'
 	implementation 'com.google.code.gson:gson:2.10.1'
 	implementation "io.krakens:java-grok:0.1.9"
-	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-data-elasticsearch', version: '3.3.5'
+	implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'  // Uses BOM version from Spring Boot
 	implementation 'org.apache.httpcomponents:httpclient'
 	implementation 'org.yaml:snakeyaml:2.2'
 
@@ -47,6 +46,12 @@ dependencies {
 	implementation 'org.springframework.security:spring-security-crypto'
 	implementation 'com.fasterxml.jackson.core:jackson-databind'
 	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
+
+	// AOP for auto-reload on configuration changes
+	implementation 'org.springframework.boot:spring-boot-starter-aop'
+
+	// Swagger/OpenAPI documentation
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
 
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'

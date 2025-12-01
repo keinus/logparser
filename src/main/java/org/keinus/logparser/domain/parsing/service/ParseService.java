@@ -3,6 +3,8 @@ package org.keinus.logparser.domain.parsing.service;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 
+import lombok.extern.slf4j.Slf4j;
+import org.keinus.logparser.application.service.DatabaseConfigLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
@@ -20,8 +22,11 @@ public class ParseService {
     private static final Logger LOGGER = LoggerFactory.getLogger( ParseService.class );
 
     private MergingHashMap<IParser> parsers = new MergingHashMap<>();
+    private final DatabaseConfigLoader databaseConfigLoader;
 
-    public ParseService(ApplicationProperties applicationProperties) {
+    public ParseService(ApplicationProperties applicationProperties, DatabaseConfigLoader databaseConfigLoader) {
+        this.databaseConfigLoader = databaseConfigLoader;
+
         List<ParserAdapterConfig> parserList = applicationProperties.getParser();
         for(ParserAdapterConfig parser : parserList) {
             String parserType = parser.getType();
@@ -36,8 +41,43 @@ public class ParseService {
         }
     }
 
+    /**
+     * 데이터베이스에서 파서 설정을 다시 로드합니다.
+     */
+    public synchronized void reload() {
+        LOGGER.info("Reloading parsers from database");
+
+        // 기존 파서 초기화
+        MergingHashMap<IParser> newParsers = new MergingHashMap<>();
+
+        try {
+            DatabaseConfigLoader.PipelineConfiguration config = databaseConfigLoader.loadConfiguration();
+            List<ParserAdapterConfig> parserList = config.getParser();
+
+            for(ParserAdapterConfig parser : parserList) {
+                String parserType = parser.getType();
+                IParser parserInterface = loadLibrary(parserType);
+                if(parserInterface == null) {
+                    continue;
+                }
+                parserInterface.init(parser.getParam());
+                var msgType = parser.getMessagetype();
+                newParsers.put(msgType, parserInterface);
+                LOGGER.info("Message Parser reloaded: {}", parserType);
+            }
+
+            // 새 파서로 교체
+            this.parsers = newParsers;
+            LOGGER.info("Parser reload completed: {} parsers loaded", parserList.size());
+
+        } catch (Exception e) {
+            LOGGER.error("Failed to reload parsers", e);
+            throw new RuntimeException("Failed to reload parsers", e);
+        }
+    }
+
     private IParser loadLibrary(String parserClassName) {
-        String className = "org.keinus.logparser.parser." + parserClassName;
+        String className = "org.keinus.logparser.domain.parsing.model." + parserClassName;
         Class<?> testClass;
         try {
             testClass = Class.forName(className);

@@ -3,6 +3,7 @@ package org.keinus.logparser.application.pipeline;
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -75,8 +76,31 @@ public class MessageDispatcher {
     private static final double QUEUE_WARNING_THRESHOLD = 0.8; // 80% 이상 시 경고
     private static final double QUEUE_CRITICAL_THRESHOLD = 0.95; // 95% 이상 시 위험
 
+    // 타임아웃 및 대기 시간 상수
+    private static final long NO_DATA_SLEEP_MS = 100;  // 데이터가 없을 때 대기 시간
+    private static final long QUEUE_OFFER_TIMEOUT_MS = 5_000;  // 큐 삽입 시 최대 대기 시간 (5초)
+    private static final long QUEUE_MONITORING_INTERVAL_MS = 30_000;  // 30초
+    private static final long DLQ_FLUSH_INTERVAL_MS = 300_000;  // 5분
+
+    // Parser 백프레셔 임계값 및 대기 시간
+    private static final double PARSER_BACKPRESSURE_THRESHOLD_MEDIUM = 0.7;  // 70% - 중간 백프레셔
+    private static final double PARSER_BACKPRESSURE_THRESHOLD_HIGH = 0.85;   // 85% - 높은 백프레셔
+    private static final double PARSER_BACKPRESSURE_THRESHOLD_CRITICAL = 0.95; // 95% - 임계 백프레셔
+
+    private static final long PARSER_BACKPRESSURE_SLEEP_MEDIUM_MS = 100;  // 70% 점유율 시 대기
+    private static final long PARSER_BACKPRESSURE_SLEEP_HIGH_MS = 500;    // 85% 점유율 시 대기
+    private static final long PARSER_BACKPRESSURE_SLEEP_CRITICAL_MS = 2000; // 95% 점유율 시 대기
+
     // Dead Letter Queue
     private DeadLetterQueue deadLetterQueue;
+
+    // Circuit Breaker 관련
+    private final AtomicLong consecutiveFailures = new AtomicLong(0);
+    private static final long CIRCUIT_BREAKER_FAILURE_THRESHOLD = 10; // 연속 10번 실패 시 circuit open
+    private static final long CIRCUIT_BREAKER_RESET_TIMEOUT_MS = 30_000; // 30초 후 재시도
+    private volatile long circuitOpenedAt = 0;
+    private enum CircuitState { CLOSED, OPEN, HALF_OPEN }
+    private volatile CircuitState circuitState = CircuitState.CLOSED;
 
     /**
      * MessageDispatcher 생성자.
@@ -125,13 +149,14 @@ public class MessageDispatcher {
         try {
             running.set(true);
             for (int i = 0; i < threads; i++) {
-                threadManager.execute(this::parseAndTransform);
+                String threadName = "LogParser-" + (i + 1);
+                threadManager.executeWithName(threadName, this::parseAndTransform);
             }
             // 큐 모니터링 스레드 시작
-            threadManager.execute(this::monitorQueues);
+            threadManager.executeWithName("QueueMonitor", this::monitorQueues);
 
             // DLQ flush 스레드 시작 (5분마다 flush)
-            threadManager.execute(this::flushDeadLetterQueue);
+            threadManager.executeWithName("DeadLetterQueueFlusher", this::flushDeadLetterQueue);
 
             log.info("MessageDispatcher started with {} parser threads and queue monitoring", threads);
         } catch (Exception e) {
@@ -161,29 +186,143 @@ public class MessageDispatcher {
      * @throws IOException I/O 오류가 발생할 경우 던지는 예외
      */
     public void close() throws IOException {
+        // 먼저 running 플래그를 false로 설정하여 루프들이 종료되도록 함
+        running.set(false);
+
         globalMessageQueue.clear();
         this.threadManager.shutdownAllThreads();
         log.info("Message Dispatcher closed");
     }
 
     public void parseAndTransform() {
+        log.info("Parser thread started: {}", Thread.currentThread().getName());
         while (running.get()) {
             try {
+                // Circuit breaker 상태 확인
+                if (!checkCircuitBreaker()) {
+                    ThreadUtil.sleep(1000); // Circuit이 open 상태면 대기
+                    continue;
+                }
+
+                // Output queue 점유율 확인하여 백프레셔 적용 (메시지를 처리하기 전에)
+                double outputUtilization = getOutputQueueUtilization();
+                applyParserBackpressure(outputUtilization);
+
                 LogEvent logEvent = globalMessageQueue.take();
                 if (logEvent != null) {
                     processLogEvent(logEvent);
-                } else
-                    ThreadUtil.sleep(100);
+                    // 성공 시 실패 카운터 리셋
+                    recordSuccess();
+                } else {
+                    ThreadUtil.sleep(NO_DATA_SLEEP_MS);
+                }
             } catch (InterruptedException e) {
-                log.error("Interrupted while waiting for message in class {} method {}", this.getClass().getName(),
-                        Thread.currentThread().getStackTrace()[2].getMethodName());
-                Thread.currentThread().interrupt();
-                return;
+                // Interrupt는 정상적인 shutdown 시그널일 수 있으므로
+                // running 플래그를 확인하여 처리
+                if (!running.get()) {
+                    log.info("Parser thread shutting down: {}", Thread.currentThread().getName());
+                    return;
+                }
+                // running이 true면 계속 실행 (일시적인 interrupt)
+                log.debug("Parser thread interrupted but continuing: {}", Thread.currentThread().getName());
             } catch (Exception e) {
-                log.error("Error processing log event", e);
+                // 다른 예외 발생 시 circuit breaker에 기록
+                recordFailure();
+                log.error("Error processing log event (consecutive failures: {}), continuing...",
+                        consecutiveFailures.get(), e);
+                ThreadUtil.sleep(100); // 짧은 대기 후 재시도
             }
-
         }
+        log.info("Parser thread finished: {}", Thread.currentThread().getName());
+    }
+
+    /**
+     * Circuit breaker 상태를 확인하고 요청 처리 가능 여부를 반환합니다.
+     * @return true면 처리 가능, false면 circuit이 open 상태
+     */
+    private boolean checkCircuitBreaker() {
+        long currentTime = System.currentTimeMillis();
+
+        switch (circuitState) {
+            case CLOSED:
+                // 정상 상태 - 요청 처리 가능
+                return true;
+
+            case OPEN:
+                // Circuit이 open 상태 - timeout 확인
+                if (currentTime - circuitOpenedAt >= CIRCUIT_BREAKER_RESET_TIMEOUT_MS) {
+                    log.info("Circuit breaker transitioning to HALF_OPEN state after timeout");
+                    circuitState = CircuitState.HALF_OPEN;
+                    return true;
+                }
+                // 아직 timeout 전이면 요청 거부
+                return false;
+
+            case HALF_OPEN:
+                // Half-open 상태 - 시험적으로 요청 처리
+                return true;
+
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * 요청 처리 성공을 기록합니다.
+     */
+    private void recordSuccess() {
+        long failures = consecutiveFailures.getAndSet(0);
+
+        if (circuitState == CircuitState.HALF_OPEN) {
+            log.info("Circuit breaker transitioning to CLOSED state after successful request");
+            circuitState = CircuitState.CLOSED;
+        } else if (failures > 0) {
+            log.debug("Consecutive failures reset to 0 (was: {})", failures);
+        }
+    }
+
+    /**
+     * 요청 처리 실패를 기록합니다.
+     */
+    private void recordFailure() {
+        long failures = consecutiveFailures.incrementAndGet();
+        totalMessagesFailed.incrementAndGet();
+
+        if (circuitState == CircuitState.HALF_OPEN) {
+            log.warn("Circuit breaker transitioning back to OPEN state after failed request in HALF_OPEN");
+            circuitState = CircuitState.OPEN;
+            circuitOpenedAt = System.currentTimeMillis();
+        } else if (failures >= CIRCUIT_BREAKER_FAILURE_THRESHOLD && circuitState == CircuitState.CLOSED) {
+            log.error("Circuit breaker OPENING after {} consecutive failures", failures);
+            circuitState = CircuitState.OPEN;
+            circuitOpenedAt = System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Output queue 점유율에 따라 parser 백프레셔를 적용합니다.
+     * 점유율이 높을수록 더 오래 대기하여 processing 속도를 조절합니다.
+     *
+     * @param outputUtilization 현재 output queue 점유율 (0.0 ~ 1.0)
+     */
+    private void applyParserBackpressure(double outputUtilization) {
+        if (outputUtilization >= PARSER_BACKPRESSURE_THRESHOLD_CRITICAL) {
+            // 95% 이상: 임계 상태 - 매우 긴 대기
+            log.debug("Output queue critical ({}%), applying strong backpressure to parser",
+                    String.format("%.1f", outputUtilization * 100));
+            ThreadUtil.sleep(PARSER_BACKPRESSURE_SLEEP_CRITICAL_MS);
+        } else if (outputUtilization >= PARSER_BACKPRESSURE_THRESHOLD_HIGH) {
+            // 85% 이상: 높은 점유율 - 긴 대기
+            log.debug("Output queue high ({}%), applying high backpressure to parser",
+                    String.format("%.1f", outputUtilization * 100));
+            ThreadUtil.sleep(PARSER_BACKPRESSURE_SLEEP_HIGH_MS);
+        } else if (outputUtilization >= PARSER_BACKPRESSURE_THRESHOLD_MEDIUM) {
+            // 70% 이상: 중간 점유율 - 중간 대기
+            log.debug("Output queue medium ({}%), applying medium backpressure to parser",
+                    String.format("%.1f", outputUtilization * 100));
+            ThreadUtil.sleep(PARSER_BACKPRESSURE_SLEEP_MEDIUM_MS);
+        }
+        // 70% 미만: 정상 상태 - 대기 없음
     }
 
     private void processLogEvent(LogEvent logEvent) {
@@ -221,73 +360,92 @@ public class MessageDispatcher {
     }
 
     public boolean putGlobalMsg(LogEvent logEvent) {
-        totalMessagesReceived.incrementAndGet();
-
-        // 백프레셔 메커니즘: 큐가 임계값을 초과하면 대기
+        // 백프레셔 메커니즘: 큐가 임계값을 초과하면 즉시 거부
         int currentSize = globalMessageQueue.size();
         double utilizationRate = (double) currentSize / queueSize;
 
+        boolean success = false;
+
         if (utilizationRate >= QUEUE_CRITICAL_THRESHOLD) {
-            log.warn("Queue critical! Size: {}/{} ({}%), applying backpressure",
+            log.warn("Queue critical! Size: {}/{} ({}%), rejecting message",
                     currentSize, queueSize, String.format("%.1f", utilizationRate * 100));
 
-            // 오버플로우 전략: offer를 사용하여 큐가 가득 차면 가장 오래된 메시지를 드롭
-            boolean offered = globalMessageQueue.offer(logEvent);
-            if (!offered) {
-                // 큐가 가득 차서 메시지를 드롭
-                totalMessagesDropped.incrementAndGet();
-                log.error("Message dropped due to queue overflow. Total dropped: {}", totalMessagesDropped.get());
+            // 임계치 초과 시 즉시 거부 (input adapter가 백프레셔를 적용하도록)
+            totalMessagesDropped.incrementAndGet();
+            return false;
+        } else {
+            try {
+                // offer(timeout)를 사용하여 무한 블로킹 방지
+                boolean offered = globalMessageQueue.offer(logEvent, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                if (!offered) {
+                    // 타임아웃 발생 시 메시지 드롭
+                    totalMessagesDropped.incrementAndGet();
+                    log.warn("Message dropped due to queue insertion timeout. Queue size: {}/{}", currentSize,
+                            queueSize);
+                    return false;
+                }
+                success = true;
+            } catch (InterruptedException e) {
+                log.debug("Interrupted while offering message to queue - this is expected during shutdown");
+                Thread.currentThread().interrupt();
                 return false;
             }
-            return true;
         }
 
-        try {
-            globalMessageQueue.put(logEvent);
-            return true;
-        } catch (InterruptedException e) {
-            log.error("Interrupted while putting message to queue", e);
-            Thread.currentThread().interrupt();
-            return false;
+        // 성공 시에만 카운터 증가
+        if (success) {
+            totalMessagesReceived.incrementAndGet();
         }
+
+        return success;
     }
 
     public boolean putOutputMsg(LogEvent logEvent) {
-        totalMessagesProcessed.incrementAndGet();
-
         // 출력 큐에도 백프레셔 적용
         int currentSize = outputMessageQueue.size();
         double utilizationRate = (double) currentSize / queueSize;
 
+        boolean success = false;
+
         if (utilizationRate >= QUEUE_CRITICAL_THRESHOLD) {
-            log.warn("Output queue critical! Size: {}/{} ({}%)",
+            log.warn("Output queue critical! Size: {}/{} ({}%), rejecting message",
                     currentSize, queueSize, String.format("%.1f", utilizationRate * 100));
 
-            boolean offered = outputMessageQueue.offer(logEvent);
-            if (!offered) {
-                totalMessagesDropped.incrementAndGet();
-                log.error("Output message dropped due to queue overflow. Total dropped: {}",
-                        totalMessagesDropped.get());
+            // 임계치 초과 시 즉시 거부
+            totalMessagesDropped.incrementAndGet();
+            return false;
+        } else {
+            try {
+                // offer(timeout)를 사용하여 무한 블로킹 방지
+                boolean offered = outputMessageQueue.offer(logEvent, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                if (!offered) {
+                    totalMessagesDropped.incrementAndGet();
+                    log.warn("Output message dropped due to queue insertion timeout. Queue size: {}/{}",
+                            currentSize, queueSize);
+                    return false;
+                }
+                success = true;
+            } catch (InterruptedException e) {
+                log.debug("Interrupted while offering message to output queue - this is expected during shutdown");
+                Thread.currentThread().interrupt();
                 return false;
             }
-            return true;
         }
 
-        try {
-            outputMessageQueue.put(logEvent);
-            return true;
-        } catch (InterruptedException e) {
-            log.error("Interrupted while putting message to output queue", e);
-            Thread.currentThread().interrupt();
-            return false;
+        // 성공 시에만 카운터 증가
+        if (success) {
+            totalMessagesProcessed.incrementAndGet();
         }
+
+        return success;
     }
 
     public LogEvent getOutputMsg() {
         try {
             return outputMessageQueue.take();
         } catch (InterruptedException e) {
-            log.error("Interrupted while getting message from output queue", e);
+            // 종료 시 예상되는 동작이므로 DEBUG 레벨로 로깅
+            log.debug("Interrupted while getting message from output queue - this is expected during shutdown");
             Thread.currentThread().interrupt();
             return null;
         }
@@ -298,11 +456,9 @@ public class MessageDispatcher {
      * 주기적으로 큐 상태를 체크하고 로깅합니다.
      */
     private void monitorQueues() {
-        final long monitoringIntervalMs = 30000; // 30초마다 모니터링
-
         while (running.get()) {
             try {
-                ThreadUtil.sleep(monitoringIntervalMs);
+                ThreadUtil.sleep(QUEUE_MONITORING_INTERVAL_MS);
 
                 int globalQueueSize = globalMessageQueue.size();
                 int outputQueueSize = outputMessageQueue.size();
@@ -339,11 +495,9 @@ public class MessageDispatcher {
      * 주기적으로 DLQ를 파일에 저장합니다.
      */
     private void flushDeadLetterQueue() {
-        final long flushIntervalMs = 300000; // 5분마다 flush
-
         while (running.get()) {
             try {
-                ThreadUtil.sleep(flushIntervalMs);
+                ThreadUtil.sleep(DLQ_FLUSH_INTERVAL_MS);
 
                 if (!deadLetterQueue.isEmpty()) {
                     int flushed = deadLetterQueue.flush();
@@ -370,6 +524,26 @@ public class MessageDispatcher {
                 totalMessagesProcessed.get(),
                 totalMessagesDropped.get(),
                 totalMessagesFailed.get());
+    }
+
+    /**
+     * Global queue의 현재 점유율을 반환합니다 (0.0 ~ 1.0)
+     * Input adapter가 백프레셔를 적용하기 위해 사용합니다.
+     *
+     * @return queue 점유율 (0.0 = 비어있음, 1.0 = 가득 참)
+     */
+    public double getGlobalQueueUtilization() {
+        return (double) globalMessageQueue.size() / queueSize;
+    }
+
+    /**
+     * Output queue의 현재 점유율을 반환합니다 (0.0 ~ 1.0)
+     * Parser 스레드가 백프레셔를 적용하기 위해 사용합니다.
+     *
+     * @return queue 점유율 (0.0 = 비어있음, 1.0 = 가득 참)
+     */
+    public double getOutputQueueUtilization() {
+        return (double) outputMessageQueue.size() / queueSize;
     }
 
     /**
@@ -432,12 +606,5 @@ public class MessageDispatcher {
                     outputQueueSize, maxQueueSize, getOutputUtilization() * 100,
                     totalReceived, totalProcessed, totalDropped, totalFailed);
         }
-    }
-
-    static {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("Shutting down MessageDispatcher...");
-            running.set(false);
-        }));
     }
 }

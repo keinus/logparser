@@ -13,9 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,6 +33,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.keinus.logparser.application.service.BatchingOutputService;
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 import org.keinus.logparser.infrastructure.util.PatternCache;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
@@ -58,7 +58,7 @@ import org.keinus.logparser.infrastructure.util.ThreadUtil;
  * @see org.keinus.logparser.core.interfaces.OutputAdapter
  * @see org.apache.http.impl.client.CloseableHttpClient
  */
-public class OpenSearchOutputAdapter extends OutputAdapter {
+public class OpenSearchOutputAdapter extends OutputAdapter implements BatchingOutputService.BatchableOutputAdapter {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenSearchOutputAdapter.class);
     private static final int MAX_BATCH_SIZE = 10000;
     private static final int MAX_RETRIES = 3;
@@ -104,21 +104,27 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     private final ConcurrentHashMap<String, List<RetryableItem>> dataMap = new ConcurrentHashMap<>();
     private final AtomicInteger totalDocumentCount = new AtomicInteger(0);
     private final AtomicInteger deadLetterCount = new AtomicInteger(0);
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     private CloseableHttpClient httpClient;
     private PoolingHttpClientConnectionManager connectionManager;
-    private ScheduledExecutorService scheduler;
 
     // 처리량 측정을 위한 변수들
     private long lastFlushTime = System.currentTimeMillis();
+
+    // 어댑터 고유 식별자
+    private String adapterId;
 
     public OpenSearchOutputAdapter(Map<String, String> obj) throws IOException {
         super(obj);
 
         baseUrl = Objects.requireNonNull(obj.get("url"), "OpenSearch 'url' must not be null");
-        indexTemplate = Objects.requireNonNull(obj.get("index"), "OpenSearch 'index' must not be null"); // Use
-                                                                                                         // indexTemplate
+        indexTemplate = Objects.requireNonNull(obj.get("index"), "OpenSearch 'index' must not be null");
         indexVars = extractBracedStrings(indexTemplate);
+
+        // 어댑터 고유 식별자 생성 (URL + 인덱스 템플릿 기반)
+        this.adapterId = "OpenSearch-" + baseUrl.hashCode() + "-" + indexTemplate.hashCode();
+
         String username = obj.get("username");
         String password = obj.get("password");
         if (username == null || username.isEmpty()) {
@@ -127,7 +133,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             credentials = username + ":" + password;
         }
 
-        LOGGER.info("OpenSearch Output Adapter Init. {}", baseUrl);
+        LOGGER.info("OpenSearch Output Adapter Init. {} (adapterId: {})", baseUrl, adapterId);
 
         try {
             SSLConnectionSocketFactory scsf = new SSLConnectionSocketFactory(
@@ -151,19 +157,12 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             throw new IOException("Failed to initialize HTTP client for OpenSearch", e);
         }
 
-        this.scheduler = Executors.newSingleThreadScheduledExecutor();
-        this.scheduler.scheduleAtFixedRate(this::flush, 10, 10, TimeUnit.SECONDS);
-        LOGGER.info("OpenSearch Output Adapter scheduled to flush every 10 seconds.");
+        LOGGER.info("OpenSearch Output Adapter initialized. Flush will be managed by BatchingOutputService.");
+    }
 
-        // Shutdown hook 추가하여 프로그램 종료 시 자동으로 리소스 정리
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            LOGGER.info("Shutdown hook triggered for OpenSearch Output Adapter");
-            try {
-                close();
-            } catch (IOException e) {
-                LOGGER.error("Error during shutdown hook execution", e);
-            }
-        }));
+    @Override
+    public String getAdapterId() {
+        return adapterId;
     }
 
     private List<String> extractBracedStrings(String input) {
@@ -253,22 +252,15 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
 
     @Override
     public void close() throws IOException {
-        LOGGER.info("Closing OpenSearch Output Adapter and flushing remaining data.");
-
-        if (scheduler != null) {
-            scheduler.shutdown();
-            try {
-                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                    LOGGER.warn("Scheduler did not terminate in 5 seconds, forcing shutdown.");
-                    scheduler.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                LOGGER.error("Scheduler shutdown interrupted: {}", e.getMessage(), e);
-                scheduler.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
+        // 멱등성 보장: 이미 닫혔으면 즉시 리턴
+        if (!closed.compareAndSet(false, true)) {
+            LOGGER.debug("OpenSearch Output Adapter already closed, skipping");
+            return;
         }
 
+        LOGGER.info("Closing OpenSearch Output Adapter (adapterId: {}) and flushing remaining data.", adapterId);
+
+        // 마지막 flush 수행
         flush();
         dataMap.clear();
         totalDocumentCount.set(0);
@@ -290,22 +282,49 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             }
         }
 
-        LOGGER.info("OpenSearch Output Adapter closed. DLQ count: {}", deadLetterCount.get());
+        LOGGER.info("OpenSearch Output Adapter closed (adapterId: {}). DLQ count: {}", adapterId, deadLetterCount.get());
     }
 
+    // 반복적으로 생성되는 인덱스 헤더 문자열 캐싱
+    private static final ConcurrentHashMap<String, String> indexHeaderCache = new ConcurrentHashMap<>();
+    private static final int AVG_DOCUMENT_SIZE = 1024;  // 평균 문서 크기 (바이트)
+    private static final int HEADER_SIZE = 100;  // 헤더 라인 크기 추정
+
     private static StringBuilder formatBulkRequestForIndex(String index, List<RetryableItem> list) {
-        StringBuilder sb = new StringBuilder();
+        // StringBuilder 초기 크기를 미리 할당하여 재할당 방지
+        int estimatedSize = list.size() * (AVG_DOCUMENT_SIZE + HEADER_SIZE);
+        StringBuilder sb = new StringBuilder(estimatedSize);
+
+        // 인덱스 헤더 문자열 캐싱
+        String indexHeader = indexHeaderCache.computeIfAbsent(index,
+            idx -> "{ \"index\": { \"_index\": \"" + idx + "\" } }\n");
+
         for (RetryableItem item : list) {
-            sb.append("{ \"index\": { \"_index\": \"").append(index).append("\" } }").append("\n");
+            sb.append(indexHeader);
             sb.append(item.data).append("\n");
         }
         return sb;
     }
 
     public void flush() {
-        // Interrupt 체크
+        // Interrupt 체크 - 인터럽트 시 큐의 데이터를 DLQ로 이동
         if (Thread.currentThread().isInterrupted()) {
-            LOGGER.info("Flush interrupted, returning");
+            LOGGER.warn("Flush interrupted, moving {} pending items to DLQ", totalDocumentCount.get());
+
+            synchronized (dataMap) {
+                for (Map.Entry<String, List<RetryableItem>> entry : dataMap.entrySet()) {
+                    String indexTarget = entry.getKey();
+                    for (RetryableItem item : entry.getValue()) {
+                        sendToDeadLetterQueue(indexTarget, item);
+                        LOGGER.debug("Item moved to DLQ due to interrupt [index: {}]", indexTarget);
+                    }
+                }
+                int movedCount = totalDocumentCount.get();
+                dataMap.clear();
+                totalDocumentCount.set(0);
+                LOGGER.info("Moved {} items to DLQ due to interrupt", movedCount);
+            }
+            Thread.currentThread().interrupt();  // 인터럽트 상태 복원
             return;
         }
 

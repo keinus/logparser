@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.io.TempDir;
+import org.keinus.logparser.domain.configuration.service.ConfigValidator;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
+import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
+import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
 
 import java.io.IOException;
 import java.nio.file.Files;

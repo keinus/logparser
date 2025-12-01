@@ -11,6 +11,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.keinus.logparser.domain.model.LogEvent;
+import org.keinus.logparser.domain.ingestion.model.KafkaInputAdapter;
 
 import java.io.IOException;
 import java.time.Duration;

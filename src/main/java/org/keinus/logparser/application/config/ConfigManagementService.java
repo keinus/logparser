@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.infrastructure.persistence.entity.*;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
+import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -47,7 +48,7 @@ public class ConfigManagementService {
     @Transactional(readOnly = true)
     public InputAdapterEntity getInputAdapter(Long id) {
         return inputAdapterRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("InputAdapter not found: " + id));
+                .orElseThrow(() -> new ConfigNotFoundException("InputAdapter", id));
     }
 
     @Transactional(readOnly = true)
@@ -63,7 +64,8 @@ public class ConfigManagementService {
     @Transactional(readOnly = true)
     public InputAdapterEntity getInputAdapterByMessageType(String messageType) {
         return inputAdapterRepository.findByMessagetype(messageType)
-                .orElseThrow(() -> new RuntimeException("InputAdapter not found for messageType: " + messageType));
+                .orElseThrow(() -> new ConfigNotFoundException(
+                    "InputAdapter with messageType '" + messageType + "' not found"));
     }
 
     public InputAdapterEntity enableInputAdapter(Long id) {
@@ -108,7 +110,7 @@ public class ConfigManagementService {
     @Transactional(readOnly = true)
     public ParserEntity getParser(Long id) {
         return parserRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Parser not found: " + id));
+                .orElseThrow(() -> new ConfigNotFoundException("Parser", id));
     }
 
     @Transactional(readOnly = true)
@@ -161,7 +163,7 @@ public class ConfigManagementService {
     @Transactional(readOnly = true)
     public TransformEntity getTransform(Long id) {
         return transformRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Transform not found: " + id));
+                .orElseThrow(() -> new ConfigNotFoundException("Transform", id));
     }
 
     @Transactional(readOnly = true)
@@ -214,7 +216,7 @@ public class ConfigManagementService {
     @Transactional(readOnly = true)
     public OutputAdapterEntity getOutputAdapter(Long id) {
         return outputAdapterRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("OutputAdapter not found: " + id));
+                .orElseThrow(() -> new ConfigNotFoundException("OutputAdapter", id));
     }
 
     @Transactional(readOnly = true)
@@ -300,18 +302,36 @@ public class ConfigManagementService {
     }
 
     private Object parseValue(String value, String dataType) {
-        if (value == null) return null;
+        // Null value check
+        if (value == null) {
+            log.warn("Attempting to parse null value for dataType: {}", dataType);
+            return null;
+        }
+
+        // Empty/blank value check
+        if (value.trim().isEmpty()) {
+            log.warn("Attempting to parse empty value for dataType: {}", dataType);
+            return null;
+        }
+
+        // DataType null check
+        if (dataType == null) {
+            log.warn("DataType is null for value: {}, returning as STRING", value);
+            return value;
+        }
+
         try {
-            return switch (dataType) {
-                case "INTEGER" -> Integer.parseInt(value);
-                case "LONG" -> Long.parseLong(value);
-                case "BOOLEAN" -> Boolean.parseBoolean(value);
-                case "DOUBLE" -> Double.parseDouble(value);
+            return switch (dataType.toUpperCase()) {
+                case "INTEGER" -> Integer.parseInt(value.trim());
+                case "LONG" -> Long.parseLong(value.trim());
+                case "BOOLEAN" -> Boolean.parseBoolean(value.trim());
+                case "DOUBLE" -> Double.parseDouble(value.trim());
                 default -> value;
             };
-        } catch (Exception e) {
-            log.warn("Failed to parse value: value={}, dataType={}", value, dataType, e);
-            return value;
+        } catch (NumberFormatException e) {
+            log.error("Invalid configuration value: cannot parse '{}' as {}", value, dataType, e);
+            throw new IllegalArgumentException(
+                String.format("Invalid configuration: '%s' is not a valid %s", value, dataType), e);
         }
     }
 }

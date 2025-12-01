@@ -37,45 +37,60 @@ public class ThreadManager extends ThreadPoolExecutor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ThreadManager.class);
     private final Map<String, Thread> threads = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Boolean> pendingThreads = new ConcurrentHashMap<>();
 
     public ThreadManager(String threadName) {
-        super(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
-                new CustomThreadFactory(threadName));
+        super(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new CustomThreadFactory(threadName));
     }
 
     public ThreadManager(String threadName, int nThreads) {
-        super(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
-                new CustomThreadFactory(threadName));
+        super(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(), new CustomThreadFactory(threadName));
     }
 
     /**
      * 지정된 이름으로 스레드를 실행합니다.
+     * <p>
+     * 동시성 안전성: putIfAbsent를 사용한 원자적 체크-앤-실행으로 race condition 방지
      *
      * @param threadName 실행할 스레드의 이름
      * @param task 실행할 작업
-     * @throws IllegalStateException 동일한 이름의 스레드가 이미 실행 중인 경우
+     * @throws IllegalArgumentException threadName이 null이거나 비어있는 경우
+     * @throws IllegalStateException 동일한 이름의 스레드가 이미 실행 중이거나 pending 상태인 경우
      */
     public void executeWithName(String threadName, Runnable task) {
         if (threadName == null || threadName.trim().isEmpty()) {
             throw new IllegalArgumentException("Thread name cannot be null or empty");
         }
 
-        // 동일한 이름의 스레드가 실행 중인지 확인
-        Thread existingThread = threads.get(threadName);
-        if (existingThread != null && existingThread.isAlive()) {
+        // putIfAbsent를 사용한 원자적 체크-앤-실행
+        Boolean previous = pendingThreads.putIfAbsent(threadName, Boolean.TRUE);
+        if (previous != null) {
             throw new IllegalStateException(
-                String.format("Thread with name '%s' is already running", threadName)
+                String.format("Thread with name '%s' is already running or pending", threadName)
             );
         }
 
         Runnable namedTask = () -> {
             Thread current = Thread.currentThread();
             current.setName(threadName);
-            task.run();
+
+            try {
+                task.run();
+            } finally {
+                // 완료 시 pending 상태 제거
+                pendingThreads.remove(threadName);
+            }
         };
 
-        this.execute(namedTask);
-        LOGGER.debug("Task submitted with thread name: {}", threadName);
+        try {
+            this.execute(namedTask);
+            LOGGER.debug("Task submitted with thread name: {}", threadName);
+        } catch (Exception e) {
+            // 제출 실패 시 정리
+            pendingThreads.remove(threadName);
+            LOGGER.error("Failed to submit task with thread name '{}': {}", threadName, e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**
@@ -258,6 +273,7 @@ public class ThreadManager extends ThreadPoolExecutor {
         Thread current = Thread.currentThread();
         String threadName = current.getName();
         threads.remove(threadName);
+        pendingThreads.remove(threadName);  // pending 스레드도 제거
 
         if (t != null) {
             LOGGER.error("Task failed in thread '{}': {}", threadName, t.getMessage(), t);

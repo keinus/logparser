@@ -57,7 +57,9 @@ public class Filter implements ITransform {
 		// Drop 조건 검사
 		for(Entry<String, List<String>> entry : drop.entrySet()) {
 			String prop = entry.getKey();
-			String targetProp = (String) fields.get(prop);
+			Object targetPropObj = fields.get(prop);
+			if (targetPropObj == null) continue;
+			String targetProp = targetPropObj.toString();
 			if(entry.getValue().contains(targetProp))
 				return false; // 필터링됨
 		}
@@ -65,7 +67,9 @@ public class Filter implements ITransform {
 		// Pass 조건 검사
 		for(Entry<String, List<String>> entry : pass.entrySet()) {
 			String prop = entry.getKey();
-			String targetProp = (String) fields.get(prop);
+			Object targetPropObj = fields.get(prop);
+			if (targetPropObj == null) return false; // null이면 pass 실패
+			String targetProp = targetPropObj.toString();
 			if(!entry.getValue().contains(targetProp))
 				return false; // 필터링됨
 		}

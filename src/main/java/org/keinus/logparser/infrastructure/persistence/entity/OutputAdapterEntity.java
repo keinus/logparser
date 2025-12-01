@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.keinus.logparser.infrastructure.persistence.converter.CryptoConverter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -61,6 +62,7 @@ public class OutputAdapterEntity {
     private String osUsername;
 
     @Column(name = "os_password", length = 500)
+    @Convert(converter = CryptoConverter.class)
     private String osPassword;
 
     @Column(name = "action", length = 50)
@@ -76,6 +78,7 @@ public class OutputAdapterEntity {
     private String rmqUsername;
 
     @Column(name = "rmq_password", length = 500)
+    @Convert(converter = CryptoConverter.class)
     private String rmqPassword;
 
     @Column(name = "rmq_port")

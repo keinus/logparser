@@ -33,7 +33,7 @@ public class InputFactory {
 			// InputAdapterConfig를 Map으로 변환
 			Map<String, String> param = convertConfigToMap(config);
 
-			Class<?> cls = Class.forName("org.keinus.logparser.input." + type);
+			Class<?> cls = Class.forName("org.keinus.logparser.domain.ingestion.model." + type);
 			return (InputAdapter) cls.getDeclaredConstructor(Map.class).newInstance(param);
 		}
 		catch (InstantiationException | IllegalAccessException | IllegalArgumentException

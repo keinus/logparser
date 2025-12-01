@@ -117,7 +117,7 @@ public class HttpInputAdapter extends InputAdapter {
 			var content = read(socket);
 			msg = (String) content[1];
 		} catch (IOException e) {
-			log.error("Failed to read HTTP request: {}", e.getMessage());
+			log.error("Failed to read HTTP request: {}", e.getMessage(), e);
 			return null;
 		}
 
@@ -125,6 +125,7 @@ public class HttpInputAdapter extends InputAdapter {
 		try {
 			host = InetAddress.getLocalHost().getHostAddress();
 		} catch (UnknownHostException e) {
+			log.warn("Failed to get local host address: {}", e.getMessage());
 			host = "Unknown";
 		}
 

@@ -28,6 +28,9 @@ public class AddProperty implements ITransform {
     @Override
 	public void init(TransformParamConfig param) {
         this.props = param.getAdd();
+        if (this.props == null) {
+            this.props = new HashMap<>();
+        }
 	}
 
 	@Override
@@ -42,6 +45,7 @@ public class AddProperty implements ITransform {
 
             for(String attr_name : values) {
                 target.put(attr_name, fields.get(attr_name));
+                fields.remove(attr_name);  // 원본 필드 제거
             }
 		}
 		return true; // 항상 성공

@@ -2,6 +2,7 @@ package org.keinus.logparser.domain.delivery.model;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 import org.slf4j.Logger;
@@ -20,7 +21,8 @@ import org.slf4j.LoggerFactory;
  */
 public class ConsoleOutputAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( ConsoleOutputAdapter.class );
-		
+	private final AtomicBoolean closed = new AtomicBoolean(false);
+
 	public ConsoleOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
 		LOGGER.info("Console Output Adapter created");
@@ -28,9 +30,8 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 
 	public void send(Map<String, Object> json, String jsonString) {
 		try {
-			synchronized( this ) {
-				LOGGER.info(jsonString);
-			}
+			// SLF4J Logger는 이미 스레드 안전하므로 synchronized 불필요
+			LOGGER.info(jsonString);
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage());
 		}
@@ -38,6 +39,12 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 
 	@Override
 	public void close() throws IOException {
-		// 불필요
+		// 멱등성 보장: 이미 닫혔으면 즉시 리턴
+		if (!closed.compareAndSet(false, true)) {
+			LOGGER.debug("Console Output Adapter already closed, skipping");
+			return;
+		}
+
+		LOGGER.info("Console Output Adapter closed");
 	}
 }

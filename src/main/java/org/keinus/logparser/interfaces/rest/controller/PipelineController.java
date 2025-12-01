@@ -3,9 +3,12 @@ package org.keinus.logparser.interfaces.rest.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.application.config.PipelineReloadService;
+import org.keinus.logparser.application.service.ThreadMonitoringService;
+import org.keinus.logparser.interfaces.rest.dto.response.ThreadDetailDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -15,6 +18,7 @@ import java.util.Map;
 public class PipelineController {
 
     private final PipelineReloadService pipelineReloadService;
+    private final ThreadMonitoringService threadMonitoringService;
 
     @GetMapping("/status")
     public ResponseEntity<PipelineReloadService.PipelineStatusInfo> getPipelineStatus() {
@@ -100,5 +104,12 @@ public class PipelineController {
                     "message", e.getMessage()
             ));
         }
+    }
+
+    @GetMapping("/threads")
+    public ResponseEntity<List<ThreadDetailDto>> getAllThreads() {
+        log.info("GET /api/v1/pipeline/threads");
+        List<ThreadDetailDto> threads = threadMonitoringService.getAllThreadDetails();
+        return ResponseEntity.ok(threads);
     }
 }

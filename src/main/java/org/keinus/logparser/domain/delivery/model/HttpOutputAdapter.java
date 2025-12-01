@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 
@@ -32,6 +33,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HttpOutputAdapter extends OutputAdapter {
 	private Socket socket;
+	private DataOutputStream outputStream;
+	private BufferedReader inputReader;
     private final String path;
     private final String host;
     private final int port;
@@ -42,6 +45,7 @@ public class HttpOutputAdapter extends OutputAdapter {
 	private long connectionCreatedAt = 0;
 	private static final long CONNECTION_TIMEOUT = 30000; // 30초 유휴 타임아웃
 	private static final long MAX_CONNECTION_AGE = 300000; // 5분 최대 연결 수명
+	private final AtomicBoolean closed = new AtomicBoolean(false);
 
 	public HttpOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -62,16 +66,6 @@ public class HttpOutputAdapter extends OutputAdapter {
 		}
 
 		log.info("HTTP Output Adapter configured for {}:{}{}", host, port, path);
-
-		// Shutdown hook 추가
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			log.info("Shutdown hook triggered for HTTP Output Adapter");
-			try {
-				close();
-			} catch (IOException e) {
-				log.error("Error during shutdown hook execution", e);
-			}
-		}));
 	}
 
 	private static class UrlParts {
@@ -171,6 +165,10 @@ public class HttpOutputAdapter extends OutputAdapter {
 				// 연결 타임아웃 설정
 				socket.connect(new java.net.InetSocketAddress(host, port), 10000);
 
+				// Stream 초기화 (socket 재사용을 위해 필드로 보관)
+				outputStream = new DataOutputStream(socket.getOutputStream());
+				inputReader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+
 				connectionCreatedAt = System.currentTimeMillis();
 				log.debug("New connection established to {}:{}", host, port);
 				break;
@@ -192,11 +190,31 @@ public class HttpOutputAdapter extends OutputAdapter {
 	}
 
 	private void closeConnection() {
+		// Stream들을 먼저 닫기
+		if (inputReader != null) {
+			try {
+				inputReader.close();
+			} catch (IOException e) {
+				log.debug("Error closing input reader: {}", e.getMessage());
+			}
+			inputReader = null;
+		}
+
+		if (outputStream != null) {
+			try {
+				outputStream.close();
+			} catch (IOException e) {
+				log.debug("Error closing output stream: {}", e.getMessage());
+			}
+			outputStream = null;
+		}
+
+		// Socket 닫기
 		if (socket != null && !socket.isClosed()) {
 			try {
 				socket.close();
 			} catch (IOException e) {
-				log.error("Error closing connection: {}", e.getMessage());
+				log.error("Error closing socket: {}", e.getMessage());
 			}
 		}
 		socket = null;
@@ -226,11 +244,10 @@ public class HttpOutputAdapter extends OutputAdapter {
 				}
 				sb.append("\r\n");
 
-				// 헤더와 바디를 별도로 전송
-				DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-				dos.write(sb.toString().getBytes(StandardCharsets.UTF_8));
-				dos.write(jsonBytes);
-				dos.flush();
+				// 헤더와 바디를 전송 (재사용 가능한 outputStream 사용)
+				outputStream.write(sb.toString().getBytes(StandardCharsets.UTF_8));
+				outputStream.write(jsonBytes);
+				outputStream.flush();
 
 				// HTTP 응답 읽기
 				readHttpResponse();
@@ -251,29 +268,37 @@ public class HttpOutputAdapter extends OutputAdapter {
 	}
 
 	private void readHttpResponse() throws IOException {
-		// Note: InputStream을 닫지 않음 - socket을 재사용하기 위해
-		// try-with-resources를 사용하지 않고 직접 관리
-		BufferedReader reader = null;
+		// 재사용 가능한 inputReader 사용 (socket 재사용을 위해 닫지 않음)
 		try {
-			reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-
-			String statusLine = reader.readLine();
+			String statusLine = inputReader.readLine();
 			if (statusLine == null) {
 				throw new IOException("No HTTP response received");
 			}
 
 			log.debug("HTTP response: {}", statusLine);
 
-			// 상태 코드 확인
-			if (!statusLine.contains(" 2")) {
-				log.warn("HTTP request may have failed: {}", statusLine);
+			// 상태 코드 정확히 파싱
+			try {
+				String[] parts = statusLine.split(" ", 3);
+				if (parts.length >= 2) {
+					int statusCode = Integer.parseInt(parts[1]);
+					if (statusCode < 200 || statusCode >= 300) {
+						log.error("HTTP request failed with status code {}: {}", statusCode, statusLine);
+					} else {
+						log.debug("HTTP request succeeded with status code {}", statusCode);
+					}
+				} else {
+					log.warn("Invalid HTTP status line format: {}", statusLine);
+				}
+			} catch (NumberFormatException e) {
+				log.warn("Failed to parse HTTP status code from: {}", statusLine);
 			}
 
 			// 헤더 읽기 (Content-Length 확인용)
 			String line;
 			int contentLength = 0;
 			boolean isChunked = false;
-			while ((line = reader.readLine()) != null && !line.isEmpty()) {
+			while ((line = inputReader.readLine()) != null && !line.isEmpty()) {
 				String lowerLine = line.toLowerCase();
 				if (lowerLine.startsWith("content-length:")) {
 					try {
@@ -292,17 +317,16 @@ public class HttpOutputAdapter extends OutputAdapter {
 				int remaining = contentLength;
 				while (remaining > 0) {
 					int toRead = Math.min(remaining, buffer.length);
-					int read = reader.read(buffer, 0, toRead);
+					int read = inputReader.read(buffer, 0, toRead);
 					if (read == -1) break;
 					remaining -= read;
 				}
 			} else if (isChunked) {
 				// Chunked encoding인 경우 간단히 처리
-				while ((line = reader.readLine()) != null) {
+				while ((line = inputReader.readLine()) != null) {
 					if (line.equals("0")) break; // 마지막 청크
 				}
 			}
-			// Note: reader를 닫지 않음 - 소켓을 재사용하기 위해
 		} catch (IOException e) {
 			// 읽기 오류 발생 시 연결 종료 필요
 			throw e;
@@ -311,6 +335,12 @@ public class HttpOutputAdapter extends OutputAdapter {
 
 	@Override
 	public void close() throws IOException {
+		// 멱등성 보장: 이미 닫혔으면 즉시 리턴
+		if (!closed.compareAndSet(false, true)) {
+			log.debug("HTTP Output Adapter already closed, skipping");
+			return;
+		}
+
 		closeConnection();
 		log.info("HTTP Output Adapter closed");
 	}

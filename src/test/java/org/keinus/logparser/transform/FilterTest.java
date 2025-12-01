@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
 import org.keinus.logparser.domain.model.LogEvent;
+import org.keinus.logparser.domain.transformation.model.Filter;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -128,31 +128,40 @@ public class ConfigValidationService {
             errors.add("Message type is required");
         }
 
-        // Type-specific validation
-        switch (entity.getType() != null ? entity.getType().toLowerCase() : "") {
-            case "tcp" -> {
+        // Type-specific validation (전체 클래스명 사용)
+        switch (entity.getType() != null ? entity.getType() : "") {
+            case "TcpOutputAdapter" -> {
                 if (entity.getHost() == null || entity.getPort() == null) {
-                    errors.add("Host and port are required for TCP");
+                    errors.add("Host and port are required for TcpOutputAdapter");
                 }
             }
-            case "http" -> {
-                if (entity.getUrl() == null) {
-                    errors.add("URL is required for HTTP");
+            case "HttpOutputAdapter" -> {
+                if (entity.getUrl() == null || entity.getUrl().trim().isEmpty()) {
+                    errors.add("URL is required for HttpOutputAdapter");
                 }
             }
-            case "kafka" -> {
+            case "KafkaOutputAdapter" -> {
                 if (entity.getBootstrapservers() == null || entity.getTopicid() == null) {
-                    errors.add("Bootstrap servers and topic are required for Kafka");
+                    errors.add("Bootstrap servers and topic are required for KafkaOutputAdapter");
                 }
             }
-            case "opensearch" -> {
-                if (entity.getHost() == null || entity.getPort() == null) {
-                    errors.add("Host and port are required for OpenSearch");
+            case "OpenSearchOutputAdapter" -> {
+                if (entity.getUrl() == null || entity.getUrl().trim().isEmpty()) {
+                    errors.add("URL is required for OpenSearchOutputAdapter");
+                }
+                if (entity.getIndexTemplate() == null || entity.getIndexTemplate().trim().isEmpty()) {
+                    errors.add("Index is required for OpenSearchOutputAdapter");
                 }
             }
-            case "rabbitmq" -> {
-                if (entity.getHost() == null || entity.getExchange() == null) {
-                    errors.add("Host and exchange are required for RabbitMQ");
+            case "RabbitMQAdapter" -> {
+                if (entity.getHost() == null || entity.getHost().trim().isEmpty()) {
+                    errors.add("Host is required for RabbitMQAdapter");
+                }
+                if (entity.getExchange() == null || entity.getExchange().trim().isEmpty()) {
+                    errors.add("Exchange is required for RabbitMQAdapter");
+                }
+                if (entity.getRoutingkey() == null || entity.getRoutingkey().trim().isEmpty()) {
+                    errors.add("Routing key is required for RabbitMQAdapter");
                 }
             }
         }
@@ -173,7 +182,15 @@ public class ConfigValidationService {
         List<TransformEntity> transforms = transformRepository.findAll();
         List<OutputAdapterEntity> outputAdapters = outputAdapterRepository.findAll();
 
-        // Check minimum requirements
+        // If DB is completely empty, return valid with warnings (allow runtime configuration)
+        if (inputAdapters.isEmpty() && parsers.isEmpty() && outputAdapters.isEmpty()) {
+            log.info("Database is empty - pipeline will not start until configuration is created");
+            warnings.add("Database is empty - pipeline will not start");
+            warnings.add("Please configure input adapters, parsers, and output adapters");
+            return new PipelineIntegrityResult(true, errors, warnings);
+        }
+
+        // Check minimum requirements (if any configuration exists)
         if (inputAdapters.isEmpty()) {
             errors.add("At least one input adapter is required");
         }

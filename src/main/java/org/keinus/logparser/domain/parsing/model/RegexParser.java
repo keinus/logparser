@@ -29,7 +29,12 @@ public class RegexParser implements IParser {
             Matcher m = regex.matcher(message);
             Map<String, Object> map = new HashMap<>();
             while(m.find()){
-                map.put(m.group(1), m.group(2));
+                if (m.groupCount() >= 2) {
+                    map.put(m.group(1), m.group(2));
+                } else {
+                    logEvent.markAsError("Regex pattern must have at least 2 capturing groups, found: " + m.groupCount());
+                    return false;
+                }
             }
 
             if (!map.isEmpty()) {

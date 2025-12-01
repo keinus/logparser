@@ -7,6 +7,7 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
@@ -34,6 +35,7 @@ public class TcpOutputAdapter extends OutputAdapter {
 	private int port = 0;
 	private int retry = 3;
 	private static final int SOCKET_TIMEOUT_MS = 5000;
+	private final AtomicBoolean closed = new AtomicBoolean(false);
 
 	public TcpOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -91,17 +93,19 @@ public class TcpOutputAdapter extends OutputAdapter {
 			try {
 				ensureConnection();
 
-				try (DataOutputStream dos = new DataOutputStream(socket.getOutputStream())) {
-					dos.write(byteBuffer.array());
-					dos.flush();
-				}
+				// DataOutputStream을 try-with-resources로 닫지 않고 직접 사용
+				DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+				// ByteBuffer의 실제 데이터 크기만큼만 전송
+				dos.write(byteBuffer.array(), 0, byteBuffer.limit());
+				dos.flush();
+				// DataOutputStream을 닫지 않고 소켓만 닫기
 
 				// 전송 후 소켓 닫기 (각 메시지마다 새로운 연결 사용)
 				socket.close();
 				socket = null;
 
 			} catch (IOException e) {
-				log.error("Failed to send message: {}", e.getMessage());
+				log.error("Failed to send message: {}", e.getMessage(), e);
 				// 연결 실패 시 소켓 정리
 				if (socket != null) {
 					try {
@@ -117,12 +121,22 @@ public class TcpOutputAdapter extends OutputAdapter {
 
 	@Override
 	public void close() throws IOException {
+		// 멱등성 보장: 이미 닫혔으면 즉시 리턴
+		if (!closed.compareAndSet(false, true)) {
+			log.debug("TCP Output Adapter already closed, skipping");
+			return;
+		}
+
 		synchronized (this) {
 			if (socket != null) {
 				try {
 					if (!socket.isClosed()) {
 						socket.close();
+						log.info("TCP Output Adapter socket closed");
 					}
+				} catch (IOException e) {
+					log.error("Error closing TCP socket: {}", e.getMessage(), e);
+					throw e;
 				} finally {
 					socket = null;
 				}

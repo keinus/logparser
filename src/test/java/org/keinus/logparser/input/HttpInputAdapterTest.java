@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.AfterEach;
 import org.keinus.logparser.domain.model.LogEvent;
+import org.keinus.logparser.domain.ingestion.model.HttpInputAdapter;
 
 import java.io.IOException;
 import java.util.HashMap;

@@ -32,16 +32,15 @@ public class UdpInputAdapter extends InputAdapter {
 
 	public UdpInputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
-		
+
 		int port = Integer.parseInt(obj.get("port"));
 		try {
 			serverSocket = new DatagramSocket(port);
+			log.info("UDP Input Adapter started at port {}", port);
 		} catch (SocketException e) {
-			log.error("Socket Initialize Error: {}", e.getMessage());
-			return;
+			log.error("Failed to initialize UDP socket on port {}: {}", port, e.getMessage(), e);
+			throw new IOException("Failed to initialize UDP socket on port " + port, e);
 		}
-
-		log.info("UDP Input Adapter start at port {}", port);
 	}
 
 	@Override

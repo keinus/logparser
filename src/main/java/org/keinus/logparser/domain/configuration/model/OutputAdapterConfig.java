@@ -157,6 +157,11 @@ public class OutputAdapterConfig {
      * 어댑터 타입별 필수 필드 검증
      */
     public void validate() {
+        // type 필드 필수 검증
+        if (type == null || type.trim().isEmpty()) {
+            throw new IllegalArgumentException("type is required");
+        }
+
         switch (type) {
             case "HttpOutputAdapter":
                 if (url == null || url.trim().isEmpty()) {
@@ -174,8 +179,11 @@ public class OutputAdapterConfig {
                 }
                 break;
             case "OpenSearchOutputAdapter":
-                if (url == null) {
-                    throw new IllegalArgumentException("OpenSearchOutputAdapter requires 'host' and 'index' fields");
+                if (url == null || url.trim().isEmpty()) {
+                    throw new IllegalArgumentException("OpenSearchOutputAdapter requires 'url' field");
+                }
+                if (index == null || index.trim().isEmpty()) {
+                    throw new IllegalArgumentException("OpenSearchOutputAdapter requires 'index' field");
                 }
                 break;
             case "RabbitMQAdapter":

@@ -8,6 +8,7 @@ import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
 import org.keinus.logparser.domain.delivery.service.OutputFactory;
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
+import org.keinus.logparser.application.service.BatchingOutputService;
 import org.keinus.logparser.infrastructure.util.MergingHashMap;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
@@ -43,13 +44,14 @@ import com.google.gson.JsonPrimitive;
  */
 @Slf4j
 @Component
-public class OutputAdaptorComponent {
+public class OutputAdapterComponent {
 
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
     private final Gson gson;
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
+    private final BatchingOutputService batchingOutputService;
 
     // 출력 어댑터를 메시지 타입별로 그룹화
     private final MergingHashMap<OutputAdapter> outputAdapterMap = new MergingHashMap<>();
@@ -68,9 +70,11 @@ public class OutputAdaptorComponent {
         return Instant.parse(json.getAsString());
     };
 
-    public OutputAdaptorComponent(ApplicationProperties appProp, ThreadManager threadManager, MessageDispatcher dispatcher) {
+    public OutputAdapterComponent(ApplicationProperties appProp, ThreadManager threadManager,
+                                  MessageDispatcher dispatcher, BatchingOutputService batchingOutputService) {
         this.threadManager = threadManager;
         this.dispatcher = dispatcher;
+        this.batchingOutputService = batchingOutputService;
 
         // Gson 초기화 with Instant serializer/deserializer
         this.gson = new GsonBuilder()
@@ -89,6 +93,12 @@ public class OutputAdaptorComponent {
                 outputAdapterMap.put(msgType, adapter);
                 log.info("OutputAdapter {} registered for message type: {}",
                     adapter.getClass().getSimpleName(), msgType != null ? msgType : "all");
+
+                // OpenSearchOutputAdapter인 경우 BatchingOutputService에 등록
+                if (adapter instanceof BatchingOutputService.BatchableOutputAdapter) {
+                    batchingOutputService.registerAdapter((BatchingOutputService.BatchableOutputAdapter) adapter);
+                    log.info("Registered {} with BatchingOutputService", adapter.getClass().getSimpleName());
+                }
             } catch (Exception e) {
                 log.error("OutputAdapter {} initialize error. {}", config.getType(), e.getMessage());
             }
@@ -129,6 +139,11 @@ public class OutputAdaptorComponent {
         while (running.get()) {
             LogEvent logEvent = dispatcher.getOutputMsg();
             if (logEvent == null) {
+                // 인터럽트로 인한 null이면 종료
+                if (Thread.currentThread().isInterrupted() || !running.get()) {
+                    log.debug("Output message processing interrupted, stopping loop");
+                    break;
+                }
                 ThreadUtil.sleep(100);
                 continue;
             }
@@ -137,7 +152,7 @@ public class OutputAdaptorComponent {
             var adapters = outputAdapterMap.get(messageType);
 
             if (adapters.isEmpty()) {
-                log.error("No output adapters found for message type: {}", messageType);
+                log.warn("No output adapters found for message type: {}", messageType);
                 continue;
             }
 
@@ -205,12 +220,5 @@ public class OutputAdaptorComponent {
         } catch (Exception e) {
             log.error("Error shutting down thread manager: {}", e.getMessage());
         }
-    }
-
-    static {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("Shutting down OutputAdaptorComponent...");
-            running.set(false);
-        }));
     }
 }

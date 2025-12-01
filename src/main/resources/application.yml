@@ -13,7 +13,7 @@ spring:
   jpa:
     database-platform: org.hibernate.community.dialect.SQLiteDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
@@ -27,7 +27,19 @@ spring:
     validate-on-migrate: true
 
 server:
-  port: 443
+  port: ${SERVER_PORT:8765}  # Default 8765, configurable via environment variable
+
+# Swagger/OpenAPI documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
 
 logparser:
   config-source: DATABASE
@@ -35,3 +47,16 @@ logparser:
     enabled: true
     auto-import-yaml: false
     yaml-file-path: ./config/config.yaml
+  # Auto-reload pipeline on configuration changes
+  auto-reload: true
+  auto-reload-delay-ms: 2000  # Wait 2 seconds before reloading (allows transaction to complete)
+
+  # Cryptography settings for sensitive data encryption
+  # REQUIRED: Set these environment variables before starting the application in PRODUCTION
+  # Use strong random values, at least 32 characters for secret-key
+  # Example: export LOGPARSER_CRYPTO_KEY="$(openssl rand -base64 32)"
+  # Example: export LOGPARSER_CRYPTO_SALT="$(openssl rand -hex 16)"
+  # DEV DEFAULTS: For development/debugging only - change in production!
+  crypto:
+    secret-key: ${LOGPARSER_CRYPTO_KEY:your-secret-key-change-this-in-production}
+    salt: ${LOGPARSER_CRYPTO_SALT:deadbeef}

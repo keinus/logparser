@@ -37,7 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
-public class InputAdaptorComponent {
+public class InputAdapterComponent {
     /**
      * input adapter
      */
@@ -46,7 +46,21 @@ public class InputAdaptorComponent {
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
 
-    public InputAdaptorComponent(ApplicationProperties appProp, ThreadManager threadManager,
+    // 타임아웃 및 대기 시간 상수
+    private static final long NO_DATA_SLEEP_MS = 100;  // 데이터가 없을 때 대기 시간
+
+    // 백프레셔 임계값 및 대기 시간 (queue 점유율에 따라 동적 조절)
+    private static final double BACKPRESSURE_THRESHOLD_LOW = 0.5;    // 50% - 경량 백프레셔
+    private static final double BACKPRESSURE_THRESHOLD_MEDIUM = 0.7;  // 70% - 중간 백프레셔
+    private static final double BACKPRESSURE_THRESHOLD_HIGH = 0.85;   // 85% - 높은 백프레셔
+    private static final double BACKPRESSURE_THRESHOLD_CRITICAL = 0.95; // 95% - 임계 백프레셔
+
+    private static final long BACKPRESSURE_SLEEP_LOW_MS = 50;      // 50% 점유율 시 대기
+    private static final long BACKPRESSURE_SLEEP_MEDIUM_MS = 200;  // 70% 점유율 시 대기
+    private static final long BACKPRESSURE_SLEEP_HIGH_MS = 500;    // 85% 점유율 시 대기
+    private static final long BACKPRESSURE_SLEEP_CRITICAL_MS = 2000; // 95% 점유율 시 대기
+
+    public InputAdapterComponent(ApplicationProperties appProp, ThreadManager threadManager,
             MessageDispatcher dispatcher) {
         this.threadManager = threadManager;
         this.dispatcher = dispatcher;
@@ -58,7 +72,7 @@ public class InputAdaptorComponent {
                 log.info("InputAdapter {} registered", adapter.getClass().getSimpleName());
 
             } catch (Exception e) {
-                log.error("InputAdapter {} initialize error. {}, {}", param.getMessagetype(), e.getMessage());
+                log.error("InputAdapter {} initialize error: {}", param.getMessagetype(), e.getMessage(), e);
             }
         }
     }
@@ -96,26 +110,71 @@ public class InputAdaptorComponent {
     private void processInputAdapter(InputAdapter mInputAdapter) {
         log.info("processInputAdapter started for adapter: {}", mInputAdapter.getClass().getSimpleName());
         while (running.get()) {
-            if (Thread.currentThread().isInterrupted()) {
-                log.info("Thread interrupted, closing adapter: {}", mInputAdapter.getClass().getSimpleName());
-                try {
-                    mInputAdapter.close();
-                } catch (IOException e) {
-                    log.error("Failed to close InputAdapter", e);
+            try {
+                // Queue 점유율 확인하여 백프레셔 적용 (메시지를 읽기 전에)
+                double queueUtilization = dispatcher.getGlobalQueueUtilization();
+                applyBackpressureBeforeRead(queueUtilization, mInputAdapter);
+
+                LogEvent logEvent = mInputAdapter.run();
+                if (logEvent != null) {
+                    // 메시지 전송 시도
+                    boolean sent = dispatcher.putGlobalMsg(logEvent);
+                    if (!sent) {
+                        // 전송 실패 시 추가 백프레셔 적용
+                        log.debug("Failed to send message, applying backpressure for adapter: {}",
+                                mInputAdapter.getClass().getSimpleName());
+                        ThreadUtil.sleep(BACKPRESSURE_SLEEP_CRITICAL_MS);
+                    }
+                } else {
+                    ThreadUtil.sleep(NO_DATA_SLEEP_MS); // 데이터가 없을 때 대기
                 }
-                break;
-            }
-            LogEvent logEvent = mInputAdapter.run();
-            if (logEvent != null) {
-                if (!dispatcher.putGlobalMsg(logEvent)) {
-                    log.error("MessageQueue Full. Message discarded. {}", logEvent.getMessageType());
-                    ThreadUtil.sleep(1000);
-                }
-            } else {
-                ThreadUtil.sleep(100); // 데이터가 없을 때 대기
+            } catch (Exception e) {
+                // 예외 발생 시에도 스레드를 종료하지 않고 계속 실행
+                log.error("Error in input adapter loop for {}, continuing...",
+                        mInputAdapter.getClass().getSimpleName(), e);
+                ThreadUtil.sleep(1000); // 짧은 대기 후 재시도
             }
         }
-        log.info("processInputAdapter finished for adapter: {}", mInputAdapter.getClass().getSimpleName());
+
+        // running이 false가 되어 정상적으로 종료되는 경우에만 여기 도달
+        log.info("processInputAdapter shutting down for adapter: {}", mInputAdapter.getClass().getSimpleName());
+        try {
+            mInputAdapter.close();
+        } catch (IOException e) {
+            log.error("Failed to close InputAdapter", e);
+        }
+    }
+
+    /**
+     * Queue 점유율에 따라 백프레셔를 적용합니다.
+     * 점유율이 높을수록 더 오래 대기하여 input 속도를 조절합니다.
+     *
+     * @param queueUtilization 현재 queue 점유율 (0.0 ~ 1.0)
+     * @param adapter 현재 처리 중인 input adapter
+     */
+    private void applyBackpressureBeforeRead(double queueUtilization, InputAdapter adapter) {
+        if (queueUtilization >= BACKPRESSURE_THRESHOLD_CRITICAL) {
+            // 95% 이상: 임계 상태 - 매우 긴 대기
+            log.warn("Queue critical ({}%), applying strong backpressure for adapter: {}",
+                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
+            ThreadUtil.sleep(BACKPRESSURE_SLEEP_CRITICAL_MS);
+        } else if (queueUtilization >= BACKPRESSURE_THRESHOLD_HIGH) {
+            // 85% 이상: 높은 점유율 - 긴 대기
+            log.debug("Queue high ({}%), applying high backpressure for adapter: {}",
+                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
+            ThreadUtil.sleep(BACKPRESSURE_SLEEP_HIGH_MS);
+        } else if (queueUtilization >= BACKPRESSURE_THRESHOLD_MEDIUM) {
+            // 70% 이상: 중간 점유율 - 중간 대기
+            log.debug("Queue medium ({}%), applying medium backpressure for adapter: {}",
+                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
+            ThreadUtil.sleep(BACKPRESSURE_SLEEP_MEDIUM_MS);
+        } else if (queueUtilization >= BACKPRESSURE_THRESHOLD_LOW) {
+            // 50% 이상: 낮은 점유율 - 짧은 대기
+            log.debug("Queue moderate ({}%), applying low backpressure for adapter: {}",
+                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
+            ThreadUtil.sleep(BACKPRESSURE_SLEEP_LOW_MS);
+        }
+        // 50% 미만: 정상 상태 - 대기 없음
     }
 
     public void close() {
@@ -128,12 +187,5 @@ public class InputAdaptorComponent {
                 log.error("Failed to close InputAdapter", e);
             }
         }
-    }
-
-    static {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("Shutting down InputAdaptorComponent...");
-            running.set(false);
-        }));
     }
 }

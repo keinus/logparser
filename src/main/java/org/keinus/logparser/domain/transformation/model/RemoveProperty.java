@@ -1,5 +1,6 @@
 package org.keinus.logparser.domain.transformation.model;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +24,9 @@ public class RemoveProperty implements ITransform {
     @Override
 	public void init(TransformParamConfig param) {
         this.props = param.getRemove();
+        if (this.props == null) {
+            this.props = new ArrayList<>();
+        }
 	}
 
 	@Override

@@ -2,6 +2,7 @@ package org.keinus.logparser.domain.delivery.model;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
@@ -24,6 +25,7 @@ public class BenchmarkAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger( BenchmarkAdapter.class );
 	AtomicInteger ai = new AtomicInteger();
 	long startElapse = 0L;
+	private final AtomicBoolean closed = new AtomicBoolean(false);
 	
 	public BenchmarkAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -41,7 +43,7 @@ public class BenchmarkAdapter extends OutputAdapter {
 				long endElapse = System.currentTimeMillis();
 				double elapsedSeconds = (endElapse - startElapse) / 1000.0;
 				int processedPerSecond = (int) (count / elapsedSeconds); // Calculate count per second
-				LOGGER.info("{} processed per second: {}", processedPerSecond, count);
+				LOGGER.info("Processed {} messages per second (total: {})", processedPerSecond, count);
 				startElapse = endElapse; // Reset start time for next measurement
 				ai.set(0);
 			}
@@ -52,6 +54,12 @@ public class BenchmarkAdapter extends OutputAdapter {
 
 	@Override
 	public void close() throws IOException {
-		LOGGER.info("Console Output Adapter closed"); 
+		// 멱등성 보장: 이미 닫혔으면 즉시 리턴
+		if (!closed.compareAndSet(false, true)) {
+			LOGGER.debug("Benchmark Adapter already closed, skipping");
+			return;
+		}
+
+		LOGGER.info("Benchmark Adapter closed");
 	}
 }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 
@@ -39,6 +40,7 @@ public class RabbitMQAdapter extends OutputAdapter {
 	private final Object lock = new Object();
 	private Channel channel = null;
 	private Connection connection = null;
+	private final AtomicBoolean closed = new AtomicBoolean(false);
 
 	public RabbitMQAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -63,16 +65,6 @@ public class RabbitMQAdapter extends OutputAdapter {
 			closeResources();
 			throw new IOException("Failed to initialize RabbitMQ adapter", e);
 		}
-
-		// Shutdown hook 추가
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			log.info("Shutdown hook triggered for RabbitMQ Adapter");
-			try {
-				close();
-			} catch (IOException e) {
-				log.error("Error during shutdown hook execution", e);
-			}
-		}));
 	}
 
 	private void closeResources() {
@@ -117,6 +109,12 @@ public class RabbitMQAdapter extends OutputAdapter {
 
 	@Override
 	public void close() throws IOException {
+		// 멱등성 보장: 이미 닫혔으면 즉시 리턴
+		if (!closed.compareAndSet(false, true)) {
+			log.debug("RabbitMQ Adapter already closed, skipping");
+			return;
+		}
+
 		closeResources();
 	}
 
