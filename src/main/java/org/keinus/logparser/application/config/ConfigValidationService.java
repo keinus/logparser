@@ -195,7 +195,7 @@ public class ConfigValidationService {
             errors.add("At least one input adapter is required");
         }
         if (parsers.isEmpty()) {
-            errors.add("At least one parser is required");
+            warnings.add("No parsers configured - messages will pass through without parsing");
         }
         if (outputAdapters.isEmpty()) {
             errors.add("At least one output adapter is required");
@@ -210,10 +210,10 @@ public class ConfigValidationService {
         parsers.forEach(p -> parserMessageTypes.add(p.getMessagetype()));
         outputAdapters.forEach(oa -> outputMessageTypes.add(oa.getMessagetype()));
 
-        // Validate: Each input message type should have at least one parser
+        // Validate: Each input message type should have at least one parser (warning only)
         for (String inputMsgType : inputMessageTypes) {
             if (!parserMessageTypes.contains(inputMsgType)) {
-                errors.add(String.format("Input message type '%s' has no corresponding parser", inputMsgType));
+                warnings.add(String.format("Input message type '%s' has no corresponding parser - will pass through", inputMsgType));
             }
         }
 

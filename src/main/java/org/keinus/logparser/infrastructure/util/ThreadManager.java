@@ -38,6 +38,7 @@ public class ThreadManager extends ThreadPoolExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(ThreadManager.class);
     private final Map<String, Thread> threads = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> pendingThreads = new ConcurrentHashMap<>();
+    private final Map<Runnable, String> taskToThreadName = new ConcurrentHashMap<>();
 
     public ThreadManager(String threadName) {
         super(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), new CustomThreadFactory(threadName));
@@ -83,10 +84,19 @@ public class ThreadManager extends ThreadPoolExecutor {
         };
 
         try {
+            // Store mapping from task to custom thread name BEFORE executing
+            taskToThreadName.put(namedTask, threadName);
+
+            LOGGER.info(">>> DEBUG: Before execute '{}' - PoolSize: {}, ActiveCount: {}, CorePoolSize: {}, MaxPoolSize: {}, QueueSize: {}",
+                    threadName, this.getPoolSize(), this.getActiveCount(), this.getCorePoolSize(),
+                    this.getMaximumPoolSize(), this.getQueue().size());
             this.execute(namedTask);
-            LOGGER.debug("Task submitted with thread name: {}", threadName);
+            LOGGER.info(">>> DEBUG: After execute '{}' - PoolSize: {}, ActiveCount: {}, CorePoolSize: {}, MaxPoolSize: {}, QueueSize: {}",
+                    threadName, this.getPoolSize(), this.getActiveCount(), this.getCorePoolSize(),
+                    this.getMaximumPoolSize(), this.getQueue().size());
         } catch (Exception e) {
             // 제출 실패 시 정리
+            taskToThreadName.remove(namedTask);
             pendingThreads.remove(threadName);
             LOGGER.error("Failed to submit task with thread name '{}': {}", threadName, e.getMessage(), e);
             throw e;
@@ -262,9 +272,23 @@ public class ThreadManager extends ThreadPoolExecutor {
     @Override
     protected void beforeExecute(Thread t, Runnable r) {
         super.beforeExecute(t, r);
-        String threadName = t.getName();
-        threads.put(threadName, t);
-        LOGGER.debug("Thread '{}' is starting task", threadName);
+
+        // Look up the custom thread name from the mapping
+        String customThreadName = taskToThreadName.get(r);
+
+        if (customThreadName != null) {
+            // Use the custom name for registration and rename the thread
+            t.setName(customThreadName);
+            threads.put(customThreadName, t);
+            LOGGER.info(">>> DEBUG: beforeExecute - Thread '{}' (custom name) registered in ThreadManager, total threads: {}",
+                        customThreadName, threads.size());
+        } else {
+            // Fallback to factory name if no mapping found
+            String factoryThreadName = t.getName();
+            threads.put(factoryThreadName, t);
+            LOGGER.info(">>> DEBUG: beforeExecute - Thread '{}' (factory name) registered in ThreadManager, total threads: {}",
+                        factoryThreadName, threads.size());
+        }
     }
 
     @Override
@@ -274,6 +298,7 @@ public class ThreadManager extends ThreadPoolExecutor {
         String threadName = current.getName();
         threads.remove(threadName);
         pendingThreads.remove(threadName);  // pending 스레드도 제거
+        taskToThreadName.remove(r);  // Clean up the mapping to prevent memory leak
 
         if (t != null) {
             LOGGER.error("Task failed in thread '{}': {}", threadName, t.getMessage(), t);

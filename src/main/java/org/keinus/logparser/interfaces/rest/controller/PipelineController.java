@@ -2,7 +2,8 @@ package org.keinus.logparser.interfaces.rest.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.keinus.logparser.application.config.PipelineReloadService;
+
+import org.keinus.logparser.application.pipeline.PipelineReloadService;
 import org.keinus.logparser.application.service.ThreadMonitoringService;
 import org.keinus.logparser.interfaces.rest.dto.response.ThreadDetailDto;
 import org.springframework.http.ResponseEntity;

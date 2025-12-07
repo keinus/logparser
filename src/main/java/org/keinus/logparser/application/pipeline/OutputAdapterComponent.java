@@ -1,6 +1,7 @@
 package org.keinus.logparser.application.pipeline;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -14,8 +15,9 @@ import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,7 +46,7 @@ import com.google.gson.JsonPrimitive;
  */
 @Slf4j
 @Component
-public class OutputAdapterComponent {
+public class OutputAdapterComponent implements ApplicationListener<ApplicationReadyEvent> {
 
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
@@ -52,6 +54,7 @@ public class OutputAdapterComponent {
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
     private final BatchingOutputService batchingOutputService;
+    private final ApplicationProperties appProp;
 
     // 출력 어댑터를 메시지 타입별로 그룹화
     private final MergingHashMap<OutputAdapter> outputAdapterMap = new MergingHashMap<>();
@@ -72,6 +75,7 @@ public class OutputAdapterComponent {
 
     public OutputAdapterComponent(ApplicationProperties appProp, ThreadManager threadManager,
                                   MessageDispatcher dispatcher, BatchingOutputService batchingOutputService) {
+        this.appProp = appProp;
         this.threadManager = threadManager;
         this.dispatcher = dispatcher;
         this.batchingOutputService = batchingOutputService;
@@ -81,13 +85,22 @@ public class OutputAdapterComponent {
                 .registerTypeAdapter(Instant.class, instantSerializer)
                 .registerTypeAdapter(Instant.class, instantDeserializer)
                 .create();
-
-        initializeOutputAdapters(appProp);
     }
 
-    private void initializeOutputAdapters(ApplicationProperties appProp) {
-        for (OutputAdapterConfig config : appProp.getOutput()) {
+    private void initializeOutputAdapters() {
+        List<OutputAdapterConfig> outputConfigs = appProp.getOutput();
+        log.info("Initializing output adapters. Config count: {}",
+                outputConfigs == null ? "null" : outputConfigs.size());
+
+        if (outputConfigs == null || outputConfigs.isEmpty()) {
+            log.warn("No output adapters configured in ApplicationProperties!");
+            return;
+        }
+
+        for (OutputAdapterConfig config : outputConfigs) {
             try {
+                log.info("Creating OutputAdapter for type: {}, messagetype: {}",
+                        config.getType(), config.getMessagetype());
                 OutputAdapter adapter = OutputFactory.getOutputAdapter(config);
                 String msgType = adapter.getType();
                 outputAdapterMap.put(msgType, adapter);
@@ -106,16 +119,42 @@ public class OutputAdapterComponent {
     }
 
 
-    @PostConstruct
+    @Override
+    public void onApplicationEvent(ApplicationReadyEvent event) {
+        log.info("=== ApplicationReadyEvent received ===");
+        startPipeline();
+    }
+
     public void startPipeline() {
         try {
-            log.info("Starting Output Adaptor Component");
+            log.info("=== Starting Output Adapters ===");
+
+            // Initialize adapters from ApplicationProperties (after all beans are ready)
+            initializeOutputAdapters();
+
+            log.info("Starting Output Adaptor Component with {} adapters", outputAdapterMap.getAllKeys().size());
+
+            if (outputAdapterMap.getAllKeys().isEmpty()) {
+                log.warn("No output adapters to start!");
+                return;
+            }
+
             running.set(true);
 
             // 메시지 처리 스레드 시작
-            threadManager.executeWithName("processOutputAdapter", this::processOutputMessages);
-            log.info("Started output message processor with {} output adapters",
-                outputAdapterMap.getAllKeys().size());
+            String threadName = "processOutputAdapter";
+            log.info(">>> DEBUG: About to call executeWithName for output processor, thread name: {}", threadName);
+
+            try {
+                threadManager.executeWithName(threadName, this::processOutputMessages);
+                log.info(">>> DEBUG: executeWithName succeeded for thread: {}", threadName);
+            } catch (Exception ex) {
+                log.error(">>> DEBUG: executeWithName FAILED for thread: {}", threadName, ex);
+                throw ex;
+            }
+
+            log.info("Started output message processor successfully");
+            log.info("=== Output Adapters started successfully ===");
         } catch (Exception e) {
             log.error("Failed to initialize output adapters.", e);
             throw new RuntimeException("Output Pipeline startup failed", e);

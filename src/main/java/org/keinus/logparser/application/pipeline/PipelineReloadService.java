@@ -1,10 +1,11 @@
-package org.keinus.logparser.application.config;
+package org.keinus.logparser.application.pipeline;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.keinus.logparser.application.pipeline.InputAdapterComponent;
-import org.keinus.logparser.application.pipeline.MessageDispatcher;
-import org.keinus.logparser.application.pipeline.OutputAdapterComponent;
+
+import org.keinus.logparser.application.config.ConfigManagementService;
+import org.keinus.logparser.application.config.ConfigValidationService;
+import org.keinus.logparser.application.config.ConfigValidationService.PipelineIntegrityResult;
 import org.keinus.logparser.domain.parsing.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
 import org.springframework.context.ApplicationContext;

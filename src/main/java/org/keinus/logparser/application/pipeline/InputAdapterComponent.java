@@ -14,8 +14,9 @@ import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.keinus.logparser.domain.model.LogEvent;
 
 import org.springframework.stereotype.Component;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,7 +38,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
-public class InputAdapterComponent {
+public class InputAdapterComponent implements ApplicationListener<ApplicationReadyEvent> {
     /**
      * input adapter
      */
@@ -45,6 +46,7 @@ public class InputAdapterComponent {
     private static final AtomicBoolean running = new AtomicBoolean(true);
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
+    private final ApplicationProperties appProp;
 
     // 타임아웃 및 대기 시간 상수
     private static final long NO_DATA_SLEEP_MS = 100;  // 데이터가 없을 때 대기 시간
@@ -62,14 +64,28 @@ public class InputAdapterComponent {
 
     public InputAdapterComponent(ApplicationProperties appProp, ThreadManager threadManager,
             MessageDispatcher dispatcher) {
+        this.appProp = appProp;
         this.threadManager = threadManager;
         this.dispatcher = dispatcher;
+    }
 
-        for (InputAdapterConfig param : appProp.getInput()) {
+    private void initializeInputAdapters() {
+        List<InputAdapterConfig> inputConfigs = appProp.getInput();
+        log.info("Initializing input adapters. Config count: {}",
+                inputConfigs == null ? "null" : inputConfigs.size());
+
+        if (inputConfigs == null || inputConfigs.isEmpty()) {
+            log.warn("No input adapters configured in ApplicationProperties!");
+            return;
+        }
+
+        for (InputAdapterConfig param : inputConfigs) {
             try {
+                log.info("Creating InputAdapter for type: {}, messagetype: {}",
+                        param.getType(), param.getMessagetype());
                 InputAdapter adapter = InputFactory.getInputAdapter(param);
                 this.inputList.add(adapter);
-                log.info("InputAdapter {} registered", adapter.getClass().getSimpleName());
+                log.info("InputAdapter {} registered successfully", adapter.getClass().getSimpleName());
 
             } catch (Exception e) {
                 log.error("InputAdapter {} initialize error: {}", param.getMessagetype(), e.getMessage(), e);
@@ -77,20 +93,46 @@ public class InputAdapterComponent {
         }
     }
 
-    @PostConstruct
+    @Override
+    public void onApplicationEvent(ApplicationReadyEvent event) {
+        log.info("=== ApplicationReadyEvent received ===");
+        startPipeline();
+    }
+
     public void startPipeline() {
         try {
+            log.info("=== Starting Input Adapters ===");
+
+            // Initialize adapters from ApplicationProperties (after all beans are ready)
+            initializeInputAdapters();
+
             log.info("Starting Input Adaptor Component with {} adapters...", inputList.size());
+
+            if (inputList.isEmpty()) {
+                log.warn("No input adapters to start!");
+                return;
+            }
+
             running.set(true);
             int count = 1;
             for (InputAdapter adapter : inputList) {
                 String threadName = adapter.getName() + "-" + count++;
-                log.info("Submitting task for adapter: {} with thread name: {}", adapter.getClass().getSimpleName(),
-                        threadName);
+                log.info(">>> DEBUG: About to call executeWithName for adapter: {}, thread name: {}",
+                        adapter.getClass().getSimpleName(), threadName);
+
                 Runnable lamda = () -> this.processInputAdapter(adapter);
-                threadManager.executeWithName(threadName, lamda);
+
+                try {
+                    threadManager.executeWithName(threadName, lamda);
+                    log.info(">>> DEBUG: executeWithName succeeded for thread: {}", threadName);
+                } catch (Exception ex) {
+                    log.error(">>> DEBUG: executeWithName FAILED for thread: {}", threadName, ex);
+                    throw ex;
+                }
+
                 log.info("Started adapter: {}", adapter);
             }
+            log.info("=== Input Adapters started successfully ===");
         } catch (Exception e) {
             log.error("Failed to initialize input adapters.", e);
             throw new RuntimeException("ETL Pipeline startup failed", e);
