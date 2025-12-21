@@ -34,12 +34,15 @@ public class ParserEntity {
     private String param;
 
     @Column(name = "priority")
+    @Builder.Default
     private Integer priority = 0;
 
     @Column(name = "enabled")
+    @Builder.Default
     private Boolean enabled = true;
 
     @Column(name = "continue_on_failure")
+    @Builder.Default
     private Boolean continueOnFailure = false;
 
     @CreatedDate

@@ -31,6 +31,7 @@ public class TransformEntity {
     private String messagetype;
 
     @Column(name = "priority")
+    @Builder.Default
     private Integer priority = 0;
 
     @Column(name = "filter_pass", columnDefinition = "TEXT")
@@ -49,6 +50,7 @@ public class TransformEntity {
     private String configParams;
 
     @Column(name = "enabled")
+    @Builder.Default
     private Boolean enabled = true;
 
     @CreatedDate

@@ -179,7 +179,6 @@ public class ConfigValidationService {
         // Get all entities
         List<InputAdapterEntity> inputAdapters = inputAdapterRepository.findAll();
         List<ParserEntity> parsers = parserRepository.findAll();
-        List<TransformEntity> transforms = transformRepository.findAll();
         List<OutputAdapterEntity> outputAdapters = outputAdapterRepository.findAll();
 
         // If DB is completely empty, return valid with warnings (allow runtime configuration)
@@ -196,9 +195,6 @@ public class ConfigValidationService {
         }
         if (parsers.isEmpty()) {
             warnings.add("No parsers configured - messages will pass through without parsing");
-        }
-        if (outputAdapters.isEmpty()) {
-            errors.add("At least one output adapter is required");
         }
 
         // Collect all message types

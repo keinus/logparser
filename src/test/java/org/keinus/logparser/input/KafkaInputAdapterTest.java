@@ -10,12 +10,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.ingestion.model.KafkaInputAdapter;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,21 +27,22 @@ import static org.mockito.Mockito.*;
  * KafkaInputAdapter 클래스의 단위 테스트
  *
  * 테스트 대상 함수들:
- * - KafkaInputAdapter(Map<String, String>) : 생성자 테스트
+ * - KafkaInputAdapter(InputAdapterConfig) : 생성자 테스트
  * - run() : 메시지 폴링 및 큐 처리 로직 테스트
  * - close() : 리소스 정리 테스트
  */
 @ExtendWith(MockitoExtension.class)
 class KafkaInputAdapterTest {
 
-    private Map<String, String> validConfig;
+    private InputAdapterConfig validConfig;
 
     @BeforeEach
     void setUp() {
-        validConfig = new HashMap<>();
-        validConfig.put("bootstrapservers", "localhost:9092");
-        validConfig.put("topicid", "test-topic");
-        validConfig.put("messagetype", "test-message");
+        validConfig = new InputAdapterConfig();
+        validConfig.setType("KafkaInputAdapter");
+        validConfig.setBootstrapservers("localhost:9092");
+        validConfig.setTopicid("test-topic");
+        validConfig.setMessagetype("test-message");
     }
 
     @Test
@@ -63,18 +64,16 @@ class KafkaInputAdapterTest {
     }
 
     @Test
-    @DisplayName("생성자 테스트 - 필수 필드 누락 시 NPE 발생")
+    @DisplayName("생성자 테스트 - 필수 필드 누락 시 예외 발생")
     void testConstructorWithMissingFields() {
         // Given
-        Map<String, String> incompleteConfig = new HashMap<>();
-        incompleteConfig.put("bootstrapservers", "localhost:9092");
-        // topicid 누락
+        InputAdapterConfig incompleteConfig = new InputAdapterConfig();
+        incompleteConfig.setBootstrapservers("localhost:9092");
+        incompleteConfig.setType("KafkaInputAdapter");
+        // topicid is missing
 
         // When & Then
-        try (MockedConstruction<KafkaConsumer> ignored = mockConstruction(KafkaConsumer.class)) {
-            assertDoesNotThrow(() -> new KafkaInputAdapter(incompleteConfig));
-            // topicid가 null이어도 생성자에서는 예외가 발생하지 않음
-        }
+        assertThrows(IllegalArgumentException.class, () -> new KafkaInputAdapter(incompleteConfig));
     }
 
     @Test
@@ -158,7 +157,7 @@ class KafkaInputAdapterTest {
     @DisplayName("getSourceHost() 테스트 - 소스 호스트 반환")
     void testGetSourceHost() throws IOException {
         // Given
-        validConfig.put("host", "custom-host");
+        validConfig.setHost("custom-host");
         try (MockedConstruction<KafkaConsumer> ignored = mockConstruction(KafkaConsumer.class)) {
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
 

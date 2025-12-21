@@ -4,13 +4,12 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 
 /**
@@ -63,8 +62,8 @@ public class FakeInputAdapter extends InputAdapter {
         "ET POLICY Outbound Connection to Suspicious Domain"
     };
 
-    public FakeInputAdapter(Map<String, String> obj) throws IOException {
-        super(obj);
+    public FakeInputAdapter(InputAdapterConfig config) throws IOException {
+        super(config);
         this.hostName = java.net.InetAddress.getLocalHost().getHostName();
         logger.info("Fake Input Adapter initialized. Host: {}.", hostName);
     }

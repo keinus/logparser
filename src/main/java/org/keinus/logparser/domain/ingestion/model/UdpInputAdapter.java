@@ -4,11 +4,10 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
-import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 
 /**
@@ -30,10 +29,13 @@ public class UdpInputAdapter extends InputAdapter {
 	private static final int MAX_PACKET_SIZE = 1600; 
 	private DatagramSocket serverSocket = null;
 
-	public UdpInputAdapter(Map<String, String> obj) throws IOException {
-		super(obj);
+	public UdpInputAdapter(InputAdapterConfig config) throws IOException {
+		super(config);
 
-		int port = Integer.parseInt(obj.get("port"));
+		if (config.getPort() == null) {
+			throw new IllegalArgumentException("Port is required for UDP Input Adapter");
+		}
+		int port = config.getPort();
 		try {
 			serverSocket = new DatagramSocket(port);
 			log.info("UDP Input Adapter started at port {}", port);

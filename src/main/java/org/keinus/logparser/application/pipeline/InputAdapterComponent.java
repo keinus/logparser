@@ -51,17 +51,6 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     // 타임아웃 및 대기 시간 상수
     private static final long NO_DATA_SLEEP_MS = 100;  // 데이터가 없을 때 대기 시간
 
-    // 백프레셔 임계값 및 대기 시간 (queue 점유율에 따라 동적 조절)
-    private static final double BACKPRESSURE_THRESHOLD_LOW = 0.5;    // 50% - 경량 백프레셔
-    private static final double BACKPRESSURE_THRESHOLD_MEDIUM = 0.7;  // 70% - 중간 백프레셔
-    private static final double BACKPRESSURE_THRESHOLD_HIGH = 0.85;   // 85% - 높은 백프레셔
-    private static final double BACKPRESSURE_THRESHOLD_CRITICAL = 0.95; // 95% - 임계 백프레셔
-
-    private static final long BACKPRESSURE_SLEEP_LOW_MS = 50;      // 50% 점유율 시 대기
-    private static final long BACKPRESSURE_SLEEP_MEDIUM_MS = 200;  // 70% 점유율 시 대기
-    private static final long BACKPRESSURE_SLEEP_HIGH_MS = 500;    // 85% 점유율 시 대기
-    private static final long BACKPRESSURE_SLEEP_CRITICAL_MS = 2000; // 95% 점유율 시 대기
-
     public InputAdapterComponent(ApplicationProperties appProp, ThreadManager threadManager,
             MessageDispatcher dispatcher) {
         this.appProp = appProp;
@@ -100,43 +89,38 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     }
 
     public void startPipeline() {
-        try {
-            log.info("=== Starting Input Adapters ===");
+        log.info("=== Starting Input Adapters ===");
 
-            // Initialize adapters from ApplicationProperties (after all beans are ready)
-            initializeInputAdapters();
+        // Initialize adapters from ApplicationProperties (after all beans are ready)
+        initializeInputAdapters();
 
-            log.info("Starting Input Adaptor Component with {} adapters...", inputList.size());
+        log.info("Starting Input Adaptor Component with {} adapters...", inputList.size());
 
-            if (inputList.isEmpty()) {
-                log.warn("No input adapters to start!");
-                return;
-            }
-
-            running.set(true);
-            int count = 1;
-            for (InputAdapter adapter : inputList) {
-                String threadName = adapter.getName() + "-" + count++;
-                log.info(">>> DEBUG: About to call executeWithName for adapter: {}, thread name: {}",
-                        adapter.getClass().getSimpleName(), threadName);
-
-                Runnable lamda = () -> this.processInputAdapter(adapter);
-
-                try {
-                    threadManager.executeWithName(threadName, lamda);
-                    log.info(">>> DEBUG: executeWithName succeeded for thread: {}", threadName);
-                } catch (Exception ex) {
-                    log.error(">>> DEBUG: executeWithName FAILED for thread: {}", threadName, ex);
-                    throw ex;
-                }
-
-                log.info("Started adapter: {}", adapter);
-            }
-            log.info("=== Input Adapters started successfully ===");
-        } catch (Exception e) {
-            log.error("Failed to initialize input adapters.", e);
-            throw new RuntimeException("ETL Pipeline startup failed", e);
+        if (inputList.isEmpty()) {
+            log.warn("No input adapters to start!");
+            return;
         }
+
+        running.set(true);
+        int count = 1;
+        for (InputAdapter adapter : inputList) {
+            String threadName = adapter.getName() + "-" + count++;
+            log.info(">>> DEBUG: About to call executeWithName for adapter: {}, thread name: {}",
+                    adapter.getClass().getSimpleName(), threadName);
+
+            Runnable lamda = () -> this.processInputAdapter(adapter);
+
+            try {
+                threadManager.executeWithName(threadName, lamda);
+                log.info(">>> DEBUG: executeWithName succeeded for thread: {}", threadName);
+            } catch (Exception ex) {
+                log.error(">>> DEBUG: executeWithName FAILED for thread: {}", threadName, ex);
+                throw ex;
+            }
+
+            log.info("Started adapter: {}", adapter);
+        }
+        log.info("=== Input Adapters started successfully ===");
     }
 
     @PreDestroy
@@ -151,21 +135,28 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
 
     private void processInputAdapter(InputAdapter mInputAdapter) {
         log.info("processInputAdapter started for adapter: {}", mInputAdapter.getClass().getSimpleName());
+        LogEvent pendingLogEvent = null;
         while (running.get()) {
             try {
-                // Queue 점유율 확인하여 백프레셔 적용 (메시지를 읽기 전에)
-                double queueUtilization = dispatcher.getGlobalQueueUtilization();
-                applyBackpressureBeforeRead(queueUtilization, mInputAdapter);
+                LogEvent logEvent;
+                // 이전에 실패한 로그 이벤트가 있다면 먼저 처리
+                if (pendingLogEvent != null) {
+                    logEvent = pendingLogEvent;
+                } else {
+                    // 새로운 로그 이벤트 가져오기
+                    logEvent = mInputAdapter.run();
+                }
 
-                LogEvent logEvent = mInputAdapter.run();
                 if (logEvent != null) {
-                    // 메시지 전송 시도
                     boolean sent = dispatcher.putGlobalMsg(logEvent);
                     if (!sent) {
-                        // 전송 실패 시 추가 백프레셔 적용
-                        log.debug("Failed to send message, applying backpressure for adapter: {}",
-                                mInputAdapter.getClass().getSimpleName());
-                        ThreadUtil.sleep(BACKPRESSURE_SLEEP_CRITICAL_MS);
+                        log.debug("Failed to send message: {}", mInputAdapter.getClass().getSimpleName());
+                        // 실패한 이벤트를 저장하고 다음 루프에서 재시도
+                        pendingLogEvent = logEvent;
+                        ThreadUtil.sleep(NO_DATA_SLEEP_MS);
+                    } else {
+                        // 성공적으로 전송되었으므로 pendingLogEvent 초기화
+                        pendingLogEvent = null;
                     }
                 } else {
                     ThreadUtil.sleep(NO_DATA_SLEEP_MS); // 데이터가 없을 때 대기
@@ -179,44 +170,8 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
         }
 
         // running이 false가 되어 정상적으로 종료되는 경우에만 여기 도달
+        // 어댑터 close는 stopPipeline() -> close()에서 처리됨 (중복 close 방지)
         log.info("processInputAdapter shutting down for adapter: {}", mInputAdapter.getClass().getSimpleName());
-        try {
-            mInputAdapter.close();
-        } catch (IOException e) {
-            log.error("Failed to close InputAdapter", e);
-        }
-    }
-
-    /**
-     * Queue 점유율에 따라 백프레셔를 적용합니다.
-     * 점유율이 높을수록 더 오래 대기하여 input 속도를 조절합니다.
-     *
-     * @param queueUtilization 현재 queue 점유율 (0.0 ~ 1.0)
-     * @param adapter 현재 처리 중인 input adapter
-     */
-    private void applyBackpressureBeforeRead(double queueUtilization, InputAdapter adapter) {
-        if (queueUtilization >= BACKPRESSURE_THRESHOLD_CRITICAL) {
-            // 95% 이상: 임계 상태 - 매우 긴 대기
-            log.warn("Queue critical ({}%), applying strong backpressure for adapter: {}",
-                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
-            ThreadUtil.sleep(BACKPRESSURE_SLEEP_CRITICAL_MS);
-        } else if (queueUtilization >= BACKPRESSURE_THRESHOLD_HIGH) {
-            // 85% 이상: 높은 점유율 - 긴 대기
-            log.debug("Queue high ({}%), applying high backpressure for adapter: {}",
-                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
-            ThreadUtil.sleep(BACKPRESSURE_SLEEP_HIGH_MS);
-        } else if (queueUtilization >= BACKPRESSURE_THRESHOLD_MEDIUM) {
-            // 70% 이상: 중간 점유율 - 중간 대기
-            log.debug("Queue medium ({}%), applying medium backpressure for adapter: {}",
-                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
-            ThreadUtil.sleep(BACKPRESSURE_SLEEP_MEDIUM_MS);
-        } else if (queueUtilization >= BACKPRESSURE_THRESHOLD_LOW) {
-            // 50% 이상: 낮은 점유율 - 짧은 대기
-            log.debug("Queue moderate ({}%), applying low backpressure for adapter: {}",
-                    String.format("%.1f", queueUtilization * 100), adapter.getClass().getSimpleName());
-            ThreadUtil.sleep(BACKPRESSURE_SLEEP_LOW_MS);
-        }
-        // 50% 미만: 정상 상태 - 대기 없음
     }
 
     public void close() {

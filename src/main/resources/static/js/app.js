@@ -371,17 +371,31 @@ async function editAdapter(type, id) {
 
 function populateFormFields(adapter) {
     Object.entries(adapter).forEach(([key, value]) => {
+        // Special handling for 'param' object in Transforms
+        if (key === 'param' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+             Object.entries(value).forEach(([subKey, subValue]) => {
+                 const input = document.querySelector(`[name="${subKey}"]`);
+                 if (input) setInputValue(input, subValue);
+             });
+             return;
+        }
+
         const input = document.querySelector(`[name="${key}"]`);
         if (input && value != null) {
-            if (input.type === 'checkbox') {
-                input.checked = value;
-            } else if (typeof value === 'object') {
-                input.value = JSON.stringify(value);
-            } else {
-                input.value = value;
-            }
+            setInputValue(input, value);
         }
     });
+}
+
+function setInputValue(input, value) {
+    if (input.type === 'checkbox') {
+        input.checked = value;
+    } else if (typeof value === 'object') {
+        // Pretty print JSON for textareas
+        input.value = JSON.stringify(value, null, 2);
+    } else {
+        input.value = value;
+    }
 }
 
 function closeModal() {
@@ -475,18 +489,40 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
         enabled: document.getElementById('enabled').checked
     };
 
+    // Prepare param object for transforms
+    if (currentAdapterType === 'transform') {
+        data.param = {};
+    }
+
     // Add dynamic fields
     formData.forEach((value, key) => {
         if (key !== 'type' && key !== 'messagetype' && key !== 'enabled') {
+            let parsedValue = value;
             // Try to parse JSON for Map/List fields
             if (value.startsWith('{') || value.startsWith('[')) {
                 try {
-                    data[key] = JSON.parse(value);
+                    parsedValue = JSON.parse(value);
                 } catch {
-                    data[key] = value;
+                    parsedValue = value;
                 }
+            } else if (value === 'true' || value === 'false') {
+                // Parse boolean values (from checkboxes or selects)
+                parsedValue = value === 'true';
+            } else if (!isNaN(value) && value.trim() !== '') {
+                 // Attempt to parse numbers, but be careful with strings that look like numbers
+                 // For now, let's trust the input type or backend coercion, or explicitly parse if needed.
+                 // The backend uses strict types, so sending strings for numbers might work if Jackson handles it.
+                 // However, let's keep it as string unless we know it's a number field?
+                 // The schema has type info. Ideally we use that.
+                 // But here we don't have easy access to schema field type.
+                 // Let's rely on JSON.parse for explicit JSON/Arrays, and keep strings otherwise.
+                 // Actually, InputAdapterConfig uses Integer for port. "8080" string is fine for Jackson usually.
+            }
+
+            if (currentAdapterType === 'transform') {
+                data.param[key] = parsedValue;
             } else {
-                data[key] = value;
+                data[key] = parsedValue;
             }
         }
     });

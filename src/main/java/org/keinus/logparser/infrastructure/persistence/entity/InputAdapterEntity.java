@@ -61,6 +61,7 @@ public class InputAdapterEntity {
     private Integer timeoutMs;
 
     @Column(name = "enabled")
+    @Builder.Default
     private Boolean enabled = true;
 
     @Column(name = "worker_threads")

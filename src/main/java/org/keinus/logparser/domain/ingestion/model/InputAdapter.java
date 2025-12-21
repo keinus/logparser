@@ -2,8 +2,8 @@ package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Map;
 
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 
 import lombok.Getter;
@@ -14,11 +14,11 @@ import lombok.Getter;
  * 이 클래스는 다양한 입력 방식(예: File, TCP, UDP, Kafka)을 표준화된 인터페이스로 추상화합니다.
  * 모든 구체적인 입력 어댑터는 이 클래스를 상속받아 {@link #run()} 메서드를 구현해야 합니다.
  * <p>
- * 각 어댑터는 생성 시 설정 맵({@code Map<String, String>})을 통해 초기화되며,
+ * 각 어댑터는 생성 시 타입 안전한 설정 객체({@code InputAdapterConfig})를 통해 초기화되며,
  * 고유한 메시지 타입({@code messagetype})을 가집니다.
  *
  * @see java.io.Closeable
- * @see org.keinus.logparser.core.util.schema.LogEvent
+ * @see org.keinus.logparser.domain.configuration.model.InputAdapterConfig
  */
 public abstract class InputAdapter implements Closeable {
 	@Getter
@@ -28,12 +28,12 @@ public abstract class InputAdapter implements Closeable {
 	@Getter
 	private String sourceHost;
 
-	protected InputAdapter(Map<String, String> obj) throws IOException {
-		if (obj == null) {
-			throw new IOException("Property not found.");
+	protected InputAdapter(InputAdapterConfig config) throws IOException {
+		if (config == null) {
+			throw new IOException("Configuration not found.");
 		}
-		this.messageType = obj.get("messagetype");
-		this.sourceHost = obj.getOrDefault("host", "localhost");
+		this.messageType = config.getMessagetype();
+		this.sourceHost = config.getHost() != null ? config.getHost() : "localhost";
 		this.name = getClass().getSimpleName();
 	}
 

@@ -12,7 +12,7 @@ import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
 
-import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 
 /**
@@ -35,10 +35,13 @@ public class HttpInputAdapter extends InputAdapter {
 
 	private ServerSocket serverSocket;
 
-	public HttpInputAdapter(Map<String, String> obj) throws IOException {
-		super(obj);
+	public HttpInputAdapter(InputAdapterConfig config) throws IOException {
+		super(config);
 		try {
-			int port = Integer.parseInt(obj.get("port"));
+			if (config.getPort() == null) {
+				throw new IllegalArgumentException("Port is required for HTTP Input Adapter");
+			}
+			int port = config.getPort();
 			serverSocket = new ServerSocket(port);
 
 			log.info("HTTP Input Adapter start at port {}", port);

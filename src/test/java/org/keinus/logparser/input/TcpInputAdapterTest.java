@@ -4,11 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.AfterEach;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.ingestion.model.TcpInputAdapter;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,22 +15,23 @@ import static org.junit.jupiter.api.Assertions.*;
  * TcpInputAdapter 클래스의 단위 테스트
  *
  * 테스트 대상 함수들:
- * - TcpInputAdapter(Map<String, String>) : 생성자 테스트
+ * - TcpInputAdapter(InputAdapterConfig) : 생성자 테스트
  * - close() : 서버 소켓 정리 테스트
  * - getType(), getSourceHost() : 기본 속성 테스트
  */
 class TcpInputAdapterTest {
 
-    private Map<String, String> validConfig;
+    private InputAdapterConfig validConfig;
     private TcpInputAdapter adapter;
     private int testPort = 19081; // 테스트용 포트
 
     @BeforeEach
     void setUp() {
-        validConfig = new HashMap<>();
-        validConfig.put("port", String.valueOf(testPort));
-        validConfig.put("messagetype", "tcp-message");
-        validConfig.put("host", "localhost");
+        validConfig = new InputAdapterConfig();
+        validConfig.setType("TcpInputAdapter");
+        validConfig.setPort(testPort);
+        validConfig.setMessagetype("tcp-message");
+        validConfig.setHost("localhost");
     }
 
     @AfterEach
@@ -61,20 +61,10 @@ class TcpInputAdapterTest {
     @DisplayName("생성자 테스트 - 포트 누락 시 예외 발생")
     void testConstructorWithMissingPort() {
         // Given
-        validConfig.remove("port");
+        validConfig.setPort(null);
 
         // When & Then
-        assertThrows(NumberFormatException.class, () -> new TcpInputAdapter(validConfig));
-    }
-
-    @Test
-    @DisplayName("생성자 테스트 - 잘못된 포트 형식")
-    void testConstructorWithInvalidPort() {
-        // Given
-        validConfig.put("port", "invalid-port");
-
-        // When & Then
-        assertThrows(NumberFormatException.class, () -> new TcpInputAdapter(validConfig));
+        assertThrows(IllegalArgumentException.class, () -> new TcpInputAdapter(validConfig));
     }
 
     @Test

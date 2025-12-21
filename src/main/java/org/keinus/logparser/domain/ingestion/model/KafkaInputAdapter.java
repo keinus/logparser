@@ -2,7 +2,6 @@ package org.keinus.logparser.domain.ingestion.model;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -11,14 +10,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.deser.std.StringDeserializer;
-
-import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 
 /**
  * Apache Kafka 토픽으로부터 메시지를 수신하는 입력 어댑터입니다.
@@ -49,22 +47,24 @@ public class KafkaInputAdapter extends InputAdapter {
 	private KafkaConsumer<String, String> consumer = null;
 	private String host = null;
 
-	public KafkaInputAdapter(Map<String, String> obj) throws IOException {
-		super(obj);
+	public KafkaInputAdapter(InputAdapterConfig config) throws IOException {
+		super(config);
 
-		// topicid : csas
-		// bootstrapservers : "192.168.254.8:9092"
+		if (config.getBootstrapservers() == null || config.getTopicid() == null) {
+			throw new IllegalArgumentException("KafkaInputAdapter requires 'bootstrapservers' and 'topicid'");
+		}
 
-		String server = obj.get("bootstrapservers");
+		String server = config.getBootstrapservers();
+		String topic = config.getTopicid();
+		String groupId = config.getGroupId() != null ? config.getGroupId() : UUID.randomUUID().toString();
+
 		Properties consumerProperties = new Properties();
 		consumerProperties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, server);
 		consumerProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 		consumerProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-		consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
+		consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 
 		consumer = new KafkaConsumer<>(consumerProperties);
-
-		String topic = obj.get("topicid");
 		consumer.subscribe(java.util.Collections.singletonList(topic));
 
 		this.host = server;

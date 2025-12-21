@@ -14,80 +14,76 @@ public class ConfigMetadataService {
 
     public List<AdapterTypeInfo> getInputAdapterTypes() {
         return Arrays.asList(
-                new AdapterTypeInfo("tcp", "TCP Input", "Listen for TCP connections"),
-                new AdapterTypeInfo("udp", "UDP Input", "Listen for UDP datagrams"),
-                new AdapterTypeInfo("http", "HTTP Input", "HTTP REST endpoint"),
-                new AdapterTypeInfo("kafka", "Kafka Input", "Consume from Kafka topic"),
-                new AdapterTypeInfo("file", "File Input", "Read from files"),
-                new AdapterTypeInfo("fake", "Fake Input", "Generate test data")
+                new AdapterTypeInfo("TcpInputAdapter", "TCP Input", "Listen for TCP connections"),
+                new AdapterTypeInfo("UdpInputAdapter", "UDP Input", "Listen for UDP datagrams"),
+                new AdapterTypeInfo("HttpInputAdapter", "HTTP Input", "HTTP REST endpoint"),
+                new AdapterTypeInfo("KafkaInputAdapter", "Kafka Input", "Consume from Kafka topic"),
+                new AdapterTypeInfo("FileInputAdapter", "File Input", "Read from files"),
+                new AdapterTypeInfo("FakeInputAdapter", "Fake Input", "Generate test data")
         );
     }
 
     public List<AdapterTypeInfo> getOutputAdapterTypes() {
         return Arrays.asList(
-                new AdapterTypeInfo("console", "Console Output", "Print to console"),
-                new AdapterTypeInfo("tcp", "TCP Output", "Send via TCP"),
-                new AdapterTypeInfo("http", "HTTP Output", "Send via HTTP POST/PUT"),
-                new AdapterTypeInfo("kafka", "Kafka Output", "Produce to Kafka topic"),
-                new AdapterTypeInfo("opensearch", "OpenSearch Output", "Index to OpenSearch/Elasticsearch"),
-                new AdapterTypeInfo("rabbitmq", "RabbitMQ Output", "Publish to RabbitMQ exchange"),
-                new AdapterTypeInfo("benchmark", "Benchmark Output", "Performance testing")
+                new AdapterTypeInfo("ConsoleOutputAdapter", "Console Output", "Print to console"),
+                new AdapterTypeInfo("TcpOutputAdapter", "TCP Output", "Send via TCP"),
+                new AdapterTypeInfo("HttpOutputAdapter", "HTTP Output", "Send via HTTP POST/PUT"),
+                new AdapterTypeInfo("KafkaOutputAdapter", "Kafka Output", "Produce to Kafka topic"),
+                new AdapterTypeInfo("OpenSearchOutputAdapter", "OpenSearch Output", "Index to OpenSearch/Elasticsearch"),
+                new AdapterTypeInfo("RabbitMQAdapter", "RabbitMQ Output", "Publish to RabbitMQ exchange"),
+                new AdapterTypeInfo("BenchmarkAdapter", "Benchmark Output", "Performance testing")
         );
     }
 
     public List<AdapterTypeInfo> getParserTypes() {
         return Arrays.asList(
-                new AdapterTypeInfo("json", "JSON Parser", "Parse JSON formatted logs"),
-                new AdapterTypeInfo("grok", "Grok Parser", "Parse with Grok patterns"),
-                new AdapterTypeInfo("regex", "Regex Parser", "Parse with regular expressions"),
-                new AdapterTypeInfo("rfc3164", "RFC3164 Syslog Parser", "Parse RFC3164 syslog format"),
-                new AdapterTypeInfo("rfc5424", "RFC5424 Syslog Parser", "Parse RFC5424 syslog format"),
-                new AdapterTypeInfo("http", "HTTP Parser", "Parse HTTP access logs")
+                new AdapterTypeInfo("JsonParser", "JSON Parser", "Parse JSON formatted logs"),
+                new AdapterTypeInfo("GrokParser", "Grok Parser", "Parse with Grok patterns"),
+                new AdapterTypeInfo("RegexParser", "Regex Parser", "Parse with regular expressions"),
+                new AdapterTypeInfo("RFC3164SyslogParser", "RFC3164 Syslog Parser", "Parse RFC3164 syslog format"),
+                new AdapterTypeInfo("RFC5424SyslogParser", "RFC5424 Syslog Parser", "Parse RFC5424 syslog format"),
+                new AdapterTypeInfo("HttpParser", "HTTP Parser", "Parse HTTP access logs")
         );
     }
 
     public List<TransformTypeInfo> getTransformTypes() {
         return Arrays.asList(
-                new TransformTypeInfo("filter", "Filter Transform", "Filter messages based on conditions"),
-                new TransformTypeInfo("add_property", "Add Property", "Add fields to messages"),
-                new TransformTypeInfo("remove_property", "Remove Property", "Remove fields from messages")
+                new TransformTypeInfo("Filter", "Filter Transform", "Filter messages based on conditions"),
+                new TransformTypeInfo("AddProperty", "Add Property", "Add fields to messages"),
+                new TransformTypeInfo("RemoveProperty", "Remove Property", "Remove fields from messages")
         );
     }
 
     // ==================== Schema Information ====================
 
     public AdapterSchema getInputAdapterSchema(String type) {
-        return switch (type.toLowerCase()) {
-            case "tcp", "udp" -> new AdapterSchema(
+        return switch (type) {
+            case "TcpInputAdapter", "UdpInputAdapter" -> new AdapterSchema(
                     type,
-                    Arrays.asList(
-                            new FieldSchema("host", "string", true, "Host to bind to"),
-                            new FieldSchema("port", "integer", true, "Port to listen on"),
-                            new FieldSchema("bufferSize", "integer", false, "Buffer size in bytes"),
-                            new FieldSchema("timeoutMs", "integer", false, "Connection timeout in ms")
+                    List.of(
+                            new FieldSchema("port", "Integer", true, "Port to listen on")
                     )
             );
-            case "http" -> new AdapterSchema(
+            case "HttpInputAdapter" -> new AdapterSchema(
                     type,
-                    Arrays.asList(
-                            new FieldSchema("port", "integer", true, "Port to listen on"),
-                            new FieldSchema("path", "string", false, "HTTP path"),
-                            new FieldSchema("workerThreads", "integer", false, "Number of worker threads")
+                    List.of(
+                            new FieldSchema("port", "Integer", true, "Port to listen on"),
+                            new FieldSchema("path_pattern", "String", false, "HTTP path pattern (default: /)")
                     )
             );
-            case "kafka" -> new AdapterSchema(
+            case "KafkaInputAdapter" -> new AdapterSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("bootstrapservers", "string", true, "Kafka bootstrap servers"),
-                            new FieldSchema("topicid", "string", true, "Topic to consume from"),
-                            new FieldSchema("groupId", "string", true, "Consumer group ID")
+                            new FieldSchema("bootstrapservers", "String", true, "Kafka bootstrap servers"),
+                            new FieldSchema("topicid", "String", true, "Topic to consume from"),
+                            new FieldSchema("groupId", "String", false, "Consumer group ID")
                     )
             );
-            case "file" -> new AdapterSchema(
+            case "FileInputAdapter" -> new AdapterSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("path", "string", true, "File path or pattern"),
-                            new FieldSchema("pathPattern", "string", false, "Pattern for multiple files")
+                            new FieldSchema("path", "String", true, "File path"),
+                            new FieldSchema("isFromBeginning", "Boolean", false, "Read from beginning")
                     )
             );
             default -> new AdapterSchema(type, List.of());
@@ -95,49 +91,51 @@ public class ConfigMetadataService {
     }
 
     public AdapterSchema getOutputAdapterSchema(String type) {
-        return switch (type.toLowerCase()) {
-            case "tcp" -> new AdapterSchema(
+        return switch (type) {
+            case "TcpOutputAdapter" -> new AdapterSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("host", "string", true, "Destination host"),
-                            new FieldSchema("port", "integer", true, "Destination port"),
-                            new FieldSchema("timeoutMs", "integer", false, "Connection timeout")
+                            new FieldSchema("host", "String", true, "Destination host"),
+                            new FieldSchema("port", "Integer", true, "Destination port"),
+                            new FieldSchema("timeoutMs", "Integer", false, "Connection timeout")
                     )
             );
-            case "http" -> new AdapterSchema(
+            case "HttpOutputAdapter" -> new AdapterSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("url", "string", true, "Target URL"),
-                            new FieldSchema("method", "string", false, "HTTP method (POST, PUT)"),
-                            new FieldSchema("headers", "json", false, "HTTP headers")
+                            new FieldSchema("url", "String", true, "Target URL"),
+                            new FieldSchema("method", "String", false, "HTTP method (POST, PUT)"),
+                            new FieldSchema("headers", "Map", false, "HTTP headers")
                     )
             );
-            case "kafka" -> new AdapterSchema(
+            case "KafkaOutputAdapter" -> new AdapterSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("bootstrapservers", "string", true, "Kafka bootstrap servers"),
-                            new FieldSchema("topicid", "string", true, "Topic to produce to"),
-                            new FieldSchema("key", "string", false, "Message key")
+                            new FieldSchema("bootstrapservers", "String", true, "Kafka bootstrap servers"),
+                            new FieldSchema("topicid", "String", true, "Topic to produce to"),
+                            new FieldSchema("key", "String", false, "Message key")
                     )
             );
-            case "opensearch" -> new AdapterSchema(
+            case "OpenSearchOutputAdapter" -> new AdapterSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("host", "string", true, "OpenSearch host"),
-                            new FieldSchema("port", "integer", true, "OpenSearch port"),
-                            new FieldSchema("indexTemplate", "string", false, "Index name template"),
-                            new FieldSchema("osUsername", "string", false, "Username"),
-                            new FieldSchema("osPassword", "string", false, "Password")
+                            new FieldSchema("url", "String", true, "OpenSearch URL (http://host:port)"),
+                            new FieldSchema("index", "String", true, "Index name template"),
+                            new FieldSchema("osUsername", "String", false, "Username"),
+                            new FieldSchema("osPassword", "String", false, "Password"),
+                            new FieldSchema("action", "String", false, "Action (index, create, etc.)")
                     )
             );
-            case "rabbitmq" -> new AdapterSchema(
+            case "RabbitMQAdapter" -> new AdapterSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("host", "string", true, "RabbitMQ host"),
-                            new FieldSchema("exchange", "string", true, "Exchange name"),
-                            new FieldSchema("routingkey", "string", false, "Routing key"),
-                            new FieldSchema("rmqUsername", "string", false, "Username"),
-                            new FieldSchema("rmqPassword", "string", false, "Password")
+                            new FieldSchema("host", "String", true, "RabbitMQ host"),
+                            new FieldSchema("rmqPort", "Integer", false, "RabbitMQ port"),
+                            new FieldSchema("exchange", "String", true, "Exchange name"),
+                            new FieldSchema("routingkey", "String", true, "Routing key"),
+                            new FieldSchema("rmqUsername", "String", false, "Username"),
+                            new FieldSchema("rmqPassword", "String", false, "Password"),
+                            new FieldSchema("tagpass", "Map", false, "Tag filtering")
                     )
             );
             default -> new AdapterSchema(type, List.of());
@@ -145,40 +143,36 @@ public class ConfigMetadataService {
     }
 
     public AdapterSchema getParserSchema(String type) {
-        return switch (type.toLowerCase()) {
-            case "grok", "regex" -> new AdapterSchema(
+        return switch (type) {
+            case "GrokParser", "RegexParser" -> new AdapterSchema(
                     type,
                     List.of(
-                            new FieldSchema("param", "string", true, "Pattern to match")
+                            new FieldSchema("param", "String", true, "Pattern to match")
                     )
-            );
-            case "json", "rfc3164", "rfc5424", "http" -> new AdapterSchema(
-                    type,
-                    List.of()
             );
             default -> new AdapterSchema(type, List.of());
         };
     }
 
     public TransformSchema getTransformSchema(String type) {
-        return switch (type.toLowerCase()) {
-            case "filter" -> new TransformSchema(
+        return switch (type) {
+            case "Filter" -> new TransformSchema(
                     type,
                     Arrays.asList(
-                            new FieldSchema("filterPass", "json", false, "Pass conditions"),
-                            new FieldSchema("filterDrop", "json", false, "Drop conditions")
+                            new FieldSchema("pass", "Map", false, "Pass conditions (Map)"),
+                            new FieldSchema("drop", "Map", false, "Drop conditions (Map)")
                     )
             );
-            case "add_property" -> new TransformSchema(
+            case "AddProperty" -> new TransformSchema(
                     type,
                     List.of(
-                            new FieldSchema("addProperties", "json", true, "Properties to add")
+                            new FieldSchema("add", "Map", true, "Properties to add (Map<String, List>)")
                     )
             );
-            case "remove_property" -> new TransformSchema(
+            case "RemoveProperty" -> new TransformSchema(
                     type,
                     List.of(
-                            new FieldSchema("removeProperties", "array", true, "Properties to remove")
+                            new FieldSchema("remove", "List", true, "Properties to remove (List)")
                     )
             );
             default -> new TransformSchema(type, List.of());

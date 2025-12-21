@@ -7,7 +7,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 
 
@@ -49,14 +48,13 @@ public class TcpInputAdapter extends InputAdapter {
 	private static final int MAX_RETRIES = 3;
 	private final AtomicBoolean terminated = new AtomicBoolean(false);
     
-	public TcpInputAdapter(Map<String, String> obj) throws IOException {
-		super(obj);
+	public TcpInputAdapter(InputAdapterConfig config) throws IOException {
+		super(config);
 		try {
-            String portStr = obj.get("port");
-            if (portStr == null || portStr.trim().isEmpty()) {
+            if (config.getPort() == null) {
                 throw new IllegalArgumentException("Port is required for TCP Input Adapter");
             }
-            port = Integer.parseInt(portStr);
+            port = config.getPort();
 
             // 클라이언트 처리용 스레드 풀 초기화
             clientHandlerPool = Executors.newFixedThreadPool(MAX_CLIENTS,

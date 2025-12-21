@@ -6,11 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.keinus.logparser.domain.model.LogEvent;
 
@@ -44,9 +43,9 @@ public class FileInputAdapter extends InputAdapter {
     private static final int MAX_FILE_OPEN_RETRY = 12; // 1분 동안 재시도
     private long lastFileSize = 0;
 
-    public FileInputAdapter(Map<String, String> obj) throws IOException {
-        super(obj);
-        String pathStr = obj.get("path");
+    public FileInputAdapter(InputAdapterConfig config) throws IOException {
+        super(config);
+        String pathStr = config.getPath();
         if (pathStr == null || pathStr.isEmpty()) {
             throw new IllegalArgumentException("File path must not be null or empty.");
         }
@@ -54,7 +53,7 @@ public class FileInputAdapter extends InputAdapter {
         if (Files.exists(filePath) && Files.isDirectory(filePath)) {
             throw new IllegalArgumentException("File path must not be a directory: " + filePath);
         }
-        this.isFromBeginning = Boolean.parseBoolean(obj.getOrDefault("isFromBeginning", "false"));
+        this.isFromBeginning = config.getIsFromBeginning() != null ? config.getIsFromBeginning() : false;
         this.hostName = java.net.InetAddress.getLocalHost().getHostName();
         this.currentLineNumber = 0;
         logger.info("File Input Adapter initialized for path: {}. Reading from beginning: {}. Host: {}",

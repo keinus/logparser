@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.application.config.ConfigManagementService;
 import org.keinus.logparser.application.config.ConfigValidationService;
-import org.keinus.logparser.application.config.ConfigValidationService.PipelineIntegrityResult;
 import org.keinus.logparser.domain.parsing.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
 import org.springframework.context.ApplicationContext;

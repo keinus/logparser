@@ -45,6 +45,7 @@ public class ConfigurationVersionEntity {
     private String commonSettings;
 
     @Column(name = "status", length = 50)
+    @Builder.Default
     private String status = "DRAFT";
 
     @Column(name = "created_by", length = 255)

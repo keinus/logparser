@@ -4,12 +4,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.AfterEach;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.ingestion.model.HttpInputAdapter;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -17,23 +16,24 @@ import static org.junit.jupiter.api.Assertions.*;
  * HttpInputAdapter 클래스의 단위 테스트
  *
  * 테스트 대상 함수들:
- * - HttpInputAdapter(Map<String, String>) : 생성자 테스트
+ * - HttpInputAdapter(InputAdapterConfig) : 생성자 테스트
  * - run() : HTTP 요청 수신 및 처리 테스트
  * - close() : 서버 소켓 정리 테스트
  * - read(Socket) : HTTP 요청 파싱 테스트 (private 메서드이지만 run()을 통해 간접 테스트)
  */
 class HttpInputAdapterTest {
 
-    private Map<String, String> validConfig;
+    private InputAdapterConfig validConfig;
     private HttpInputAdapter adapter;
     private int testPort = 19080; // 테스트용 포트
 
     @BeforeEach
     void setUp() {
-        validConfig = new HashMap<>();
-        validConfig.put("port", String.valueOf(testPort));
-        validConfig.put("messagetype", "http-message");
-        validConfig.put("host", "localhost");
+        validConfig = new InputAdapterConfig();
+        validConfig.setType("HttpInputAdapter");
+        validConfig.setPort(testPort);
+        validConfig.setMessagetype("http-message");
+        validConfig.setHost("localhost");
     }
 
     @AfterEach
@@ -63,20 +63,10 @@ class HttpInputAdapterTest {
     @DisplayName("생성자 테스트 - 포트 누락 시 예외 발생")
     void testConstructorWithMissingPort() {
         // Given
-        validConfig.remove("port");
+        validConfig.setPort(null);
 
         // When & Then
-        assertThrows(NumberFormatException.class, () -> new HttpInputAdapter(validConfig));
-    }
-
-    @Test
-    @DisplayName("생성자 테스트 - 잘못된 포트 형식")
-    void testConstructorWithInvalidPort() {
-        // Given
-        validConfig.put("port", "invalid-port");
-
-        // When & Then
-        assertThrows(NumberFormatException.class, () -> new HttpInputAdapter(validConfig));
+        assertThrows(IllegalArgumentException.class, () -> new HttpInputAdapter(validConfig));
     }
 
     @Test

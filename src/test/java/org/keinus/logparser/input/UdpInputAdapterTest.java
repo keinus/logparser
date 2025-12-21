@@ -4,12 +4,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.AfterEach;
+import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.ingestion.model.UdpInputAdapter;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -17,22 +16,23 @@ import static org.junit.jupiter.api.Assertions.*;
  * UdpInputAdapter 클래스의 단위 테스트
  *
  * 테스트 대상 함수들:
- * - UdpInputAdapter(Map<String, String>) : 생성자 테스트
+ * - UdpInputAdapter(InputAdapterConfig) : 생성자 테스트
  * - close() : 데이터그램 소켓 정리 테스트
  * - getType(), getSourceHost() : 기본 속성 테스트
  */
 class UdpInputAdapterTest {
 
-    private Map<String, String> validConfig;
+    private InputAdapterConfig validConfig;
     private UdpInputAdapter adapter;
     private int testPort = 19082; // 테스트용 포트
 
     @BeforeEach
     void setUp() {
-        validConfig = new HashMap<>();
-        validConfig.put("port", String.valueOf(testPort));
-        validConfig.put("messagetype", "udp-message");
-        validConfig.put("host", "localhost");
+        validConfig = new InputAdapterConfig();
+        validConfig.setType("UdpInputAdapter");
+        validConfig.setPort(testPort);
+        validConfig.setMessagetype("udp-message");
+        validConfig.setHost("localhost");
     }
 
     @AfterEach
@@ -62,20 +62,10 @@ class UdpInputAdapterTest {
     @DisplayName("생성자 테스트 - 포트 누락 시 예외 발생")
     void testConstructorWithMissingPort() {
         // Given
-        validConfig.remove("port");
+        validConfig.setPort(null);
 
         // When & Then
-        assertThrows(NumberFormatException.class, () -> new UdpInputAdapter(validConfig));
-    }
-
-    @Test
-    @DisplayName("생성자 테스트 - 잘못된 포트 형식")
-    void testConstructorWithInvalidPort() {
-        // Given
-        validConfig.put("port", "invalid-port");
-
-        // When & Then
-        assertThrows(NumberFormatException.class, () -> new UdpInputAdapter(validConfig));
+        assertThrows(IllegalArgumentException.class, () -> new UdpInputAdapter(validConfig));
     }
 
     @Test

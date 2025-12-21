@@ -42,6 +42,9 @@ public class ConfigManagementService {
 
     public void deleteInputAdapter(Long id) {
         log.info("Deleting input adapter: id={}", id);
+        if (!inputAdapterRepository.existsById(id)) {
+            throw new ConfigNotFoundException("InputAdapter", id);
+        }
         inputAdapterRepository.deleteById(id);
     }
 
@@ -104,6 +107,9 @@ public class ConfigManagementService {
 
     public void deleteParser(Long id) {
         log.info("Deleting parser: id={}", id);
+        if (!parserRepository.existsById(id)) {
+            throw new ConfigNotFoundException("Parser", id);
+        }
         parserRepository.deleteById(id);
     }
 
@@ -157,6 +163,9 @@ public class ConfigManagementService {
 
     public void deleteTransform(Long id) {
         log.info("Deleting transform: id={}", id);
+        if (!transformRepository.existsById(id)) {
+            throw new ConfigNotFoundException("Transform", id);
+        }
         transformRepository.deleteById(id);
     }
 
@@ -210,6 +219,9 @@ public class ConfigManagementService {
 
     public void deleteOutputAdapter(Long id) {
         log.info("Deleting output adapter: id={}", id);
+        if (!outputAdapterRepository.existsById(id)) {
+            throw new ConfigNotFoundException("OutputAdapter", id);
+        }
         outputAdapterRepository.deleteById(id);
     }
 

@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/debug")
@@ -79,12 +78,12 @@ public class DebugController {
 
             List<Map<String, Object>> threadDetails = allThreads.stream().map(t -> {
                 Map<String, Object> detail = new HashMap<>();
-                detail.put("name", t.getName());
-                detail.put("id", t.getId());
-                detail.put("state", t.getState().toString());
-                detail.put("alive", t.isAlive());
+                detail.put("name", t.name());           // record 방식
+                detail.put("id", t.id());               // record 방식
+                detail.put("state", t.state().toString()); // record 방식
+                detail.put("alive", t.alive());         // record 방식
                 return detail;
-            }).collect(Collectors.toList());
+            }).toList();
 
             result.put("threads", threadDetails);
 

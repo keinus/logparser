@@ -77,19 +77,9 @@ public class MessageDispatcher {
     private static final double QUEUE_CRITICAL_THRESHOLD = 0.95; // 95% 이상 시 위험
 
     // 타임아웃 및 대기 시간 상수
-    private static final long NO_DATA_SLEEP_MS = 100;  // 데이터가 없을 때 대기 시간
     private static final long QUEUE_OFFER_TIMEOUT_MS = 5_000;  // 큐 삽입 시 최대 대기 시간 (5초)
     private static final long QUEUE_MONITORING_INTERVAL_MS = 30_000;  // 30초
     private static final long DLQ_FLUSH_INTERVAL_MS = 300_000;  // 5분
-
-    // Parser 백프레셔 임계값 및 대기 시간
-    private static final double PARSER_BACKPRESSURE_THRESHOLD_MEDIUM = 0.7;  // 70% - 중간 백프레셔
-    private static final double PARSER_BACKPRESSURE_THRESHOLD_HIGH = 0.85;   // 85% - 높은 백프레셔
-    private static final double PARSER_BACKPRESSURE_THRESHOLD_CRITICAL = 0.95; // 95% - 임계 백프레셔
-
-    private static final long PARSER_BACKPRESSURE_SLEEP_MEDIUM_MS = 100;  // 70% 점유율 시 대기
-    private static final long PARSER_BACKPRESSURE_SLEEP_HIGH_MS = 500;    // 85% 점유율 시 대기
-    private static final long PARSER_BACKPRESSURE_SLEEP_CRITICAL_MS = 2000; // 95% 점유율 시 대기
 
     // Dead Letter Queue
     private DeadLetterQueue deadLetterQueue;
@@ -204,18 +194,10 @@ public class MessageDispatcher {
                     continue;
                 }
 
-                // Output queue 점유율 확인하여 백프레셔 적용 (메시지를 처리하기 전에)
-                double outputUtilization = getOutputQueueUtilization();
-                applyParserBackpressure(outputUtilization);
-
                 LogEvent logEvent = globalMessageQueue.take();
-                if (logEvent != null) {
-                    processLogEvent(logEvent);
-                    // 성공 시 실패 카운터 리셋
-                    recordSuccess();
-                } else {
-                    ThreadUtil.sleep(NO_DATA_SLEEP_MS);
-                }
+                processLogEvent(logEvent);
+                // 성공 시 실패 카운터 리셋
+                recordSuccess();
             } catch (InterruptedException e) {
                 // Interrupt는 정상적인 shutdown 시그널일 수 있으므로
                 // running 플래그를 확인하여 처리
@@ -297,32 +279,6 @@ public class MessageDispatcher {
             circuitState = CircuitState.OPEN;
             circuitOpenedAt = System.currentTimeMillis();
         }
-    }
-
-    /**
-     * Output queue 점유율에 따라 parser 백프레셔를 적용합니다.
-     * 점유율이 높을수록 더 오래 대기하여 processing 속도를 조절합니다.
-     *
-     * @param outputUtilization 현재 output queue 점유율 (0.0 ~ 1.0)
-     */
-    private void applyParserBackpressure(double outputUtilization) {
-        if (outputUtilization >= PARSER_BACKPRESSURE_THRESHOLD_CRITICAL) {
-            // 95% 이상: 임계 상태 - 매우 긴 대기
-            log.debug("Output queue critical ({}%), applying strong backpressure to parser",
-                    String.format("%.1f", outputUtilization * 100));
-            ThreadUtil.sleep(PARSER_BACKPRESSURE_SLEEP_CRITICAL_MS);
-        } else if (outputUtilization >= PARSER_BACKPRESSURE_THRESHOLD_HIGH) {
-            // 85% 이상: 높은 점유율 - 긴 대기
-            log.debug("Output queue high ({}%), applying high backpressure to parser",
-                    String.format("%.1f", outputUtilization * 100));
-            ThreadUtil.sleep(PARSER_BACKPRESSURE_SLEEP_HIGH_MS);
-        } else if (outputUtilization >= PARSER_BACKPRESSURE_THRESHOLD_MEDIUM) {
-            // 70% 이상: 중간 점유율 - 중간 대기
-            log.debug("Output queue medium ({}%), applying medium backpressure to parser",
-                    String.format("%.1f", outputUtilization * 100));
-            ThreadUtil.sleep(PARSER_BACKPRESSURE_SLEEP_MEDIUM_MS);
-        }
-        // 70% 미만: 정상 상태 - 대기 없음
     }
 
     private void processLogEvent(LogEvent logEvent) {
@@ -524,26 +480,6 @@ public class MessageDispatcher {
                 totalMessagesProcessed.get(),
                 totalMessagesDropped.get(),
                 totalMessagesFailed.get());
-    }
-
-    /**
-     * Global queue의 현재 점유율을 반환합니다 (0.0 ~ 1.0)
-     * Input adapter가 백프레셔를 적용하기 위해 사용합니다.
-     *
-     * @return queue 점유율 (0.0 = 비어있음, 1.0 = 가득 참)
-     */
-    public double getGlobalQueueUtilization() {
-        return (double) globalMessageQueue.size() / queueSize;
-    }
-
-    /**
-     * Output queue의 현재 점유율을 반환합니다 (0.0 ~ 1.0)
-     * Parser 스레드가 백프레셔를 적용하기 위해 사용합니다.
-     *
-     * @return queue 점유율 (0.0 = 비어있음, 1.0 = 가득 참)
-     */
-    public double getOutputQueueUtilization() {
-        return (double) outputMessageQueue.size() / queueSize;
     }
 
     /**

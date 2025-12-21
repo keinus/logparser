@@ -100,9 +100,11 @@ public class OutputAdapterEntity {
     private Integer retryDelayMs;
 
     @Column(name = "add_origin_text")
+    @Builder.Default
     private Boolean addOriginText = false;
 
     @Column(name = "enabled")
+    @Builder.Default
     private Boolean enabled = true;
 
     @Column(name = "timeout_ms")
