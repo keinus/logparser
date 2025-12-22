@@ -3,7 +3,9 @@ package org.keinus.logparser.application.pipeline;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
@@ -59,6 +61,8 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
 
     // 출력 어댑터를 메시지 타입별로 그룹화
     private final MergingHashMap<OutputAdapter> outputAdapterMap = new MergingHashMap<>();
+    private final Map<Long, OutputAdapter> adapterIdMap = new ConcurrentHashMap<>();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * Instant를 ISO-8601 문자열로 직렬화하는 JsonSerializer
@@ -155,23 +159,34 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
 
         log.info("Initializing {} output adapters", outputConfigs.size());
 
-        for (OutputAdapterConfig config : outputConfigs) {
-            try {
-                log.info("Creating OutputAdapter for type: {}, messageType: {}",
-                        config.getType(), config.getMessagetype());
+        lock.writeLock().lock();
+        try {
+            for (OutputAdapterConfig config : outputConfigs) {
+                if (!config.getEnabled()) {
+                    continue;
+                }
+                try {
+                    log.info("Creating OutputAdapter for type: {}, messageType: {}",
+                            config.getType(), config.getMessagetype());
 
-                OutputAdapter adapter = OutputFactory.getOutputAdapter(config);
-                String msgType = adapter.getType();
+                    OutputAdapter adapter = OutputFactory.getOutputAdapter(config);
+                    String msgType = adapter.getType(); // This is actually messagetype (field name confusion in OutputAdapter)
 
-                outputAdapterMap.put(msgType, adapter);
-                log.info("OutputAdapter {} registered for message type: {}",
-                        adapter.getClass().getSimpleName(), getDisplayMessageType(msgType));
+                    outputAdapterMap.put(msgType, adapter);
+                    if (adapter.getId() != null) {
+                        adapterIdMap.put(adapter.getId(), adapter);
+                    }
+                    log.info("OutputAdapter {} registered for message type: {}",
+                            adapter.getClass().getSimpleName(), getDisplayMessageType(msgType));
 
-                registerToBatchingServiceIfApplicable(adapter);
+                    registerToBatchingServiceIfApplicable(adapter);
 
-            } catch (Exception e) {
-                log.error("Failed to initialize OutputAdapter {}: {}", config.getType(), e.getMessage());
+                } catch (Exception e) {
+                    log.error("Failed to initialize OutputAdapter {}: {}", config.getType(), e.getMessage());
+                }
             }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -184,15 +199,21 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
 
     private void processLogEvent(LogEvent logEvent) {
         String messageType = logEvent.getMessageType();
-        var adapters = outputAdapterMap.get(messageType);
+        
+        lock.readLock().lock();
+        try {
+            var adapters = outputAdapterMap.get(messageType);
 
-        if (adapters.isEmpty()) {
-            log.warn("No output adapters found for message type: {}", messageType);
-            return;
+            if (adapters.isEmpty()) {
+                log.warn("No output adapters found for message type: {}", messageType);
+                return;
+            }
+
+            sendToAdapters(adapters, logEvent);
+            log.debug("Sent log event for message type: {}", messageType);
+        } finally {
+            lock.readLock().unlock();
         }
-
-        sendToAdapters(adapters, logEvent);
-        log.debug("Sent log event for message type: {}", messageType);
     }
 
     /**
@@ -217,12 +238,64 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
     }
 
     private void closeAllAdapters() {
-        for (String msgType : outputAdapterMap.getAllKeys()) {
-            for (OutputAdapter adapter : outputAdapterMap.get(msgType)) {
-                closeAdapter(adapter, msgType);
+        lock.writeLock().lock();
+        try {
+            for (String msgType : outputAdapterMap.getAllKeys()) {
+                for (OutputAdapter adapter : outputAdapterMap.get(msgType)) {
+                    closeAdapter(adapter, msgType);
+                }
             }
+            outputAdapterMap.clear();
+            adapterIdMap.clear();
+        } finally {
+            lock.writeLock().unlock();
         }
-        outputAdapterMap.clear();
+    }
+
+    public void addAdapter(OutputAdapterConfig config) {
+        if (!config.getEnabled()) {
+            return;
+        }
+        lock.writeLock().lock();
+        try {
+            OutputAdapter adapter = OutputFactory.getOutputAdapter(config);
+            String msgType = adapter.getType(); // messagetype
+
+            outputAdapterMap.put(msgType, adapter);
+            if (adapter.getId() != null) {
+                adapterIdMap.put(adapter.getId(), adapter);
+            }
+            log.info("Added output adapter: id={}, type={}, messageType={}", adapter.getId(), adapter.getClass().getSimpleName(), msgType);
+            
+            registerToBatchingServiceIfApplicable(adapter);
+        } catch (Exception e) {
+            log.error("Failed to add output adapter", e);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void removeAdapter(Long id) {
+        lock.writeLock().lock();
+        try {
+            OutputAdapter adapter = adapterIdMap.remove(id);
+            if (adapter != null) {
+                outputAdapterMap.removeValue(adapter);
+                try {
+                    adapter.close();
+                } catch (Exception e) {
+                    log.error("Error closing adapter id={}", id, e);
+                }
+                log.info("Removed output adapter: id={}", id);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void restartAdapter(OutputAdapterConfig config) {
+        removeAdapter(config.getId());
+        addAdapter(config);
     }
 
     private void closeAdapter(OutputAdapter adapter, String msgType) {

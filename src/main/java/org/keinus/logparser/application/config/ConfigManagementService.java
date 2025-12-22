@@ -2,9 +2,12 @@ package org.keinus.logparser.application.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.keinus.logparser.domain.configuration.model.*;
+import org.keinus.logparser.domain.event.*;
 import org.keinus.logparser.infrastructure.persistence.entity.*;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -24,12 +27,15 @@ public class ConfigManagementService {
     private final TransformRepository transformRepository;
     private final OutputAdapterRepository outputAdapterRepository;
     private final ConfigSettingsRepository configSettingsRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ==================== InputAdapter Management ====================
 
     public InputAdapterEntity createInputAdapter(InputAdapterEntity entity) {
         log.info("Creating input adapter: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
-        return inputAdapterRepository.save(entity);
+        InputAdapterEntity saved = inputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
+        return saved;
     }
 
     public InputAdapterEntity updateInputAdapter(Long id, InputAdapterEntity entity) {
@@ -37,7 +43,9 @@ public class ConfigManagementService {
         InputAdapterEntity existing = getInputAdapter(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
-        return inputAdapterRepository.save(entity);
+        InputAdapterEntity saved = inputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
+        return saved;
     }
 
     public void deleteInputAdapter(Long id) {
@@ -46,6 +54,7 @@ public class ConfigManagementService {
             throw new ConfigNotFoundException("InputAdapter", id);
         }
         inputAdapterRepository.deleteById(id);
+        eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.DELETED, id));
     }
 
     @Transactional(readOnly = true)
@@ -75,14 +84,18 @@ public class ConfigManagementService {
         log.info("Enabling input adapter: id={}", id);
         InputAdapterEntity entity = getInputAdapter(id);
         entity.setEnabled(true);
-        return inputAdapterRepository.save(entity);
+        InputAdapterEntity saved = inputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.ENABLED, convertToConfig(saved)));
+        return saved;
     }
 
     public InputAdapterEntity disableInputAdapter(Long id) {
         log.info("Disabling input adapter: id={}", id);
         InputAdapterEntity entity = getInputAdapter(id);
         entity.setEnabled(false);
-        return inputAdapterRepository.save(entity);
+        InputAdapterEntity saved = inputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.DISABLED, convertToConfig(saved)));
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -94,7 +107,9 @@ public class ConfigManagementService {
 
     public ParserEntity createParser(ParserEntity entity) {
         log.info("Creating parser: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
-        return parserRepository.save(entity);
+        ParserEntity saved = parserRepository.save(entity);
+        eventPublisher.publishEvent(new ParserChangedEvent(this, ParserChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
+        return saved;
     }
 
     public ParserEntity updateParser(Long id, ParserEntity entity) {
@@ -102,7 +117,9 @@ public class ConfigManagementService {
         ParserEntity existing = getParser(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
-        return parserRepository.save(entity);
+        ParserEntity saved = parserRepository.save(entity);
+        eventPublisher.publishEvent(new ParserChangedEvent(this, ParserChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
+        return saved;
     }
 
     public void deleteParser(Long id) {
@@ -111,6 +128,7 @@ public class ConfigManagementService {
             throw new ConfigNotFoundException("Parser", id);
         }
         parserRepository.deleteById(id);
+        eventPublisher.publishEvent(new ParserChangedEvent(this, ParserChangedEvent.ChangeType.DELETED, id));
     }
 
     @Transactional(readOnly = true)
@@ -138,7 +156,9 @@ public class ConfigManagementService {
         log.info("Updating parser priority: id={}, newPriority={}", id, newPriority);
         ParserEntity entity = getParser(id);
         entity.setPriority(newPriority);
-        return parserRepository.save(entity);
+        ParserEntity saved = parserRepository.save(entity);
+        eventPublisher.publishEvent(new ParserChangedEvent(this, ParserChangedEvent.ChangeType.PRIORITY_CHANGED, convertToConfig(saved)));
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -150,7 +170,9 @@ public class ConfigManagementService {
 
     public TransformEntity createTransform(TransformEntity entity) {
         log.info("Creating transform: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
-        return transformRepository.save(entity);
+        TransformEntity saved = transformRepository.save(entity);
+        eventPublisher.publishEvent(new TransformChangedEvent(this, TransformChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
+        return saved;
     }
 
     public TransformEntity updateTransform(Long id, TransformEntity entity) {
@@ -158,7 +180,9 @@ public class ConfigManagementService {
         TransformEntity existing = getTransform(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
-        return transformRepository.save(entity);
+        TransformEntity saved = transformRepository.save(entity);
+        eventPublisher.publishEvent(new TransformChangedEvent(this, TransformChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
+        return saved;
     }
 
     public void deleteTransform(Long id) {
@@ -167,6 +191,7 @@ public class ConfigManagementService {
             throw new ConfigNotFoundException("Transform", id);
         }
         transformRepository.deleteById(id);
+        eventPublisher.publishEvent(new TransformChangedEvent(this, TransformChangedEvent.ChangeType.DELETED, id));
     }
 
     @Transactional(readOnly = true)
@@ -194,7 +219,9 @@ public class ConfigManagementService {
         log.info("Updating transform priority: id={}, newPriority={}", id, newPriority);
         TransformEntity entity = getTransform(id);
         entity.setPriority(newPriority);
-        return transformRepository.save(entity);
+        TransformEntity saved = transformRepository.save(entity);
+        eventPublisher.publishEvent(new TransformChangedEvent(this, TransformChangedEvent.ChangeType.PRIORITY_CHANGED, convertToConfig(saved)));
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -206,7 +233,9 @@ public class ConfigManagementService {
 
     public OutputAdapterEntity createOutputAdapter(OutputAdapterEntity entity) {
         log.info("Creating output adapter: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
-        return outputAdapterRepository.save(entity);
+        OutputAdapterEntity saved = outputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
+        return saved;
     }
 
     public OutputAdapterEntity updateOutputAdapter(Long id, OutputAdapterEntity entity) {
@@ -214,7 +243,9 @@ public class ConfigManagementService {
         OutputAdapterEntity existing = getOutputAdapter(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
-        return outputAdapterRepository.save(entity);
+        OutputAdapterEntity saved = outputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
+        return saved;
     }
 
     public void deleteOutputAdapter(Long id) {
@@ -223,6 +254,7 @@ public class ConfigManagementService {
             throw new ConfigNotFoundException("OutputAdapter", id);
         }
         outputAdapterRepository.deleteById(id);
+        eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.DELETED, id));
     }
 
     @Transactional(readOnly = true)
@@ -250,14 +282,18 @@ public class ConfigManagementService {
         log.info("Enabling output adapter: id={}", id);
         OutputAdapterEntity entity = getOutputAdapter(id);
         entity.setEnabled(true);
-        return outputAdapterRepository.save(entity);
+        OutputAdapterEntity saved = outputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.ENABLED, convertToConfig(saved)));
+        return saved;
     }
 
     public OutputAdapterEntity disableOutputAdapter(Long id) {
         log.info("Disabling output adapter: id={}", id);
         OutputAdapterEntity entity = getOutputAdapter(id);
         entity.setEnabled(false);
-        return outputAdapterRepository.save(entity);
+        OutputAdapterEntity saved = outputAdapterRepository.save(entity);
+        eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.DISABLED, convertToConfig(saved)));
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -345,5 +381,79 @@ public class ConfigManagementService {
             throw new IllegalArgumentException(
                 String.format("Invalid configuration: '%s' is not a valid %s", value, dataType), e);
         }
+    }
+    private InputAdapterConfig convertToConfig(InputAdapterEntity entity) {
+        InputAdapterConfig config = new InputAdapterConfig();
+        config.setId(entity.getId());
+        config.setType(entity.getType()); // Assuming normalized or handled by factory
+        config.setMessagetype(entity.getMessagetype());
+        config.setHost(entity.getHost());
+        config.setPort(entity.getPort());
+        config.setPath(entity.getPath());
+        config.setTopicid(entity.getTopicid());
+        config.setBootstrapservers(entity.getBootstrapservers());
+        config.setGroupId(entity.getGroupId());
+        config.setCodec(entity.getCodec());
+        config.setPath_pattern(entity.getPathPattern());
+        config.setIsFromBeginning(entity.getIsFromBeginning());
+        config.setBufferSize(entity.getBufferSize());
+        config.setTimeoutMs(entity.getTimeoutMs());
+        config.setEnabled(entity.getEnabled());
+        config.setWorkerThreads(entity.getWorkerThreads());
+        config.setQueueSize(entity.getQueueSize());
+        return config;
+    }
+
+    private OutputAdapterConfig convertToConfig(OutputAdapterEntity entity) {
+        OutputAdapterConfig config = new OutputAdapterConfig();
+        config.setId(entity.getId());
+        config.setType(entity.getType());
+        config.setMessagetype(entity.getMessagetype());
+        config.setHost(entity.getHost());
+        config.setPort(entity.getPort());
+        config.setUrl(entity.getUrl());
+        config.setMethod(entity.getMethod());
+        // config.setHeaders(...) - Map conversion needed if stored as JSON/String
+        config.setTopicid(entity.getTopicid());
+        config.setBootstrapservers(entity.getBootstrapservers());
+        config.setKey(entity.getKey());
+        config.setIndex(entity.getIndexTemplate());
+        config.setOsUsername(entity.getOsUsername());
+        config.setOsPassword(entity.getOsPassword());
+        config.setAction(entity.getAction());
+        config.setRoutingkey(entity.getRoutingkey());
+        config.setExchange(entity.getExchange());
+        config.setRmqUsername(entity.getRmqUsername());
+        config.setRmqPassword(entity.getRmqPassword());
+        config.setRmqPort(entity.getRmqPort());
+        config.setBatchSize(entity.getBatchSize());
+        config.setFlushIntervalMs(entity.getFlushIntervalMs());
+        config.setRetryCount(entity.getRetryCount());
+        config.setRetryDelayMs(entity.getRetryDelayMs());
+        config.setAddOriginText(entity.getAddOriginText());
+        config.setEnabled(entity.getEnabled());
+        config.setTimeoutMs(entity.getTimeoutMs());
+        return config;
+    }
+    
+    private ParserAdapterConfig convertToConfig(ParserEntity entity) {
+        ParserAdapterConfig config = new ParserAdapterConfig();
+        config.setId(entity.getId());
+        config.setType(entity.getType());
+        config.setMessagetype(entity.getMessagetype());
+        config.setParam(entity.getParam());
+        config.setPriority(entity.getPriority());
+        config.setEnabled(entity.getEnabled());
+        config.setContinueOnFailure(entity.getContinueOnFailure());
+        return config;
+    }
+
+    private TransformConfig convertToConfig(TransformEntity entity) {
+        TransformConfig config = new TransformConfig();
+        config.setId(entity.getId());
+        config.setType(entity.getType());
+        config.setMessagetype(entity.getMessagetype());
+        // Param conversion is complex, skipped for now as event might just need basic info or trigger reload
+        return config;
     }
 }

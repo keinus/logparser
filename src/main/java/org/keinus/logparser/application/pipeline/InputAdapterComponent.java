@@ -40,9 +40,9 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class InputAdapterComponent implements ApplicationListener<ApplicationReadyEvent> {
     /**
-     * input adapter
+     * input adapter map
      */
-    private List<InputAdapter> inputList = new ArrayList<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, InputAdapter> adapterMap = new java.util.concurrent.ConcurrentHashMap<>();
     private static final AtomicBoolean running = new AtomicBoolean(true);
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
@@ -70,10 +70,14 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
 
         for (InputAdapterConfig param : inputConfigs) {
             try {
+                if (!param.getEnabled()) {
+                    log.info("Skipping disabled input adapter: {} (id={})", param.getMessagetype(), param.getId());
+                    continue;
+                }
                 log.info("Creating InputAdapter for type: {}, messagetype: {}",
                         param.getType(), param.getMessagetype());
                 InputAdapter adapter = InputFactory.getInputAdapter(param);
-                this.inputList.add(adapter);
+                this.adapterMap.put(adapter.getId(), adapter);
                 log.info("InputAdapter {} registered successfully", adapter.getClass().getSimpleName());
 
             } catch (Exception e) {
@@ -94,32 +98,68 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
         // Initialize adapters from ApplicationProperties (after all beans are ready)
         initializeInputAdapters();
 
-        log.info("Starting Input Adaptor Component with {} adapters...", inputList.size());
+        log.info("Starting Input Adaptor Component with {} adapters...", adapterMap.size());
 
-        if (inputList.isEmpty()) {
+        if (adapterMap.isEmpty()) {
             log.warn("No input adapters to start!");
             return;
         }
 
         running.set(true);
-        for (InputAdapter adapter : inputList) {
-            String threadName = "InputAdapter-" + adapter.getId() + "-" + adapter.getMessageType();
-            log.info(">>> DEBUG: About to call executeWithName for adapter: {}, thread name: {}",
-                    adapter.getClass().getSimpleName(), threadName);
-
-            Runnable lamda = () -> this.processInputAdapter(adapter);
-
-            try {
-                threadManager.executeWithName(threadName, lamda);
-                log.info(">>> DEBUG: executeWithName succeeded for thread: {}", threadName);
-            } catch (Exception ex) {
-                log.error(">>> DEBUG: executeWithName FAILED for thread: {}", threadName, ex);
-                throw ex;
-            }
-
-            log.info("Started adapter: {}", adapter);
+        for (InputAdapter adapter : adapterMap.values()) {
+            startAdapterThread(adapter);
         }
         log.info("=== Input Adapters started successfully ===");
+    }
+
+    private void startAdapterThread(InputAdapter adapter) {
+        String threadName = "InputAdapter-" + adapter.getId() + "-" + adapter.getMessageType();
+        log.info("Starting thread for adapter: {}", threadName);
+
+        Runnable lamda = () -> this.processInputAdapter(adapter);
+
+        try {
+            threadManager.executeWithName(threadName, lamda);
+        } catch (Exception ex) {
+            log.error("Failed to start thread: {}", threadName, ex);
+        }
+    }
+
+    public void addAdapter(InputAdapterConfig config) {
+        if (!config.getEnabled()) {
+            log.info("Adapter is disabled, skipping start: {}", config.getMessagetype());
+            return;
+        }
+        try {
+            InputAdapter adapter = InputFactory.getInputAdapter(config);
+            adapterMap.put(adapter.getId(), adapter);
+            startAdapterThread(adapter);
+            log.info("Added and started input adapter: id={}, type={}", adapter.getId(), adapter.getMessageType());
+        } catch (Exception e) {
+            log.error("Failed to add input adapter", e);
+            throw new RuntimeException("Failed to add input adapter", e);
+        }
+    }
+
+    public void removeAdapter(Long id) {
+        InputAdapter adapter = adapterMap.remove(id);
+        if (adapter != null) {
+            String threadName = "InputAdapter-" + adapter.getId() + "-" + adapter.getMessageType();
+            try {
+                threadManager.stopThread(threadName);
+                adapter.close();
+                log.info("Stopped and removed input adapter: id={}", id);
+            } catch (Exception e) {
+                log.error("Error stopping input adapter: id={}", id, e);
+            }
+        } else {
+            log.warn("Input adapter not found for removal: id={}", id);
+        }
+    }
+
+    public void restartAdapter(InputAdapterConfig config) {
+        removeAdapter(config.getId());
+        addAdapter(config);
     }
 
     @PreDestroy
@@ -175,7 +215,7 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
 
     public void close() {
         running.set(false);
-        for (InputAdapter adapter : inputList) {
+        for (InputAdapter adapter : adapterMap.values()) {
             try {
                 adapter.close();
                 log.info("InputAdapter {} closed", adapter.getClass().getSimpleName());
