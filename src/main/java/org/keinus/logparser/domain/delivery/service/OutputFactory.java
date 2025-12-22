@@ -48,6 +48,7 @@ public class OutputFactory {
 	private static Map<String, String> convertConfigToMap(OutputAdapterConfig config) {
 		Map<String, String> param = new HashMap<>();
 
+		if (config.getId() != null) param.put("id", String.valueOf(config.getId()));
 		param.put("type", config.getType());
 		if (config.getMessagetype() != null) param.put("messagetype", config.getMessagetype());
 		if (config.getAddOriginText() != null) param.put("addOriginText", String.valueOf(config.getAddOriginText()));

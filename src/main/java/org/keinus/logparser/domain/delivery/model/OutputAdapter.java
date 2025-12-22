@@ -20,6 +20,8 @@ import lombok.Getter;
  */
 public abstract class OutputAdapter implements Closeable {
 	@Getter
+	private Long id;
+	@Getter
 	private String name;
 
 	@Getter
@@ -31,6 +33,11 @@ public abstract class OutputAdapter implements Closeable {
 	protected OutputAdapter(Map<String, String> obj) throws IOException {
 		if (obj == null) {
 			throw new IOException("Property not found.");
+		}
+		// ID는 OutputFactory에서 설정하거나 Config 객체를 전달받도록 수정해야 함.
+		// 현재 구조상 Map을 전달받으므로 Map에서 꺼내야 함.
+		if (obj.containsKey("id")) {
+			this.id = Long.parseLong(obj.get("id"));
 		}
 		this.type = obj.getOrDefault("messagetype", null);
 		this.addOriginText = Boolean.parseBoolean(obj.get("add_origin_text"));

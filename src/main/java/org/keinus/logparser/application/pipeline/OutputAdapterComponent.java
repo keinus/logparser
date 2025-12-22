@@ -47,7 +47,7 @@ import com.google.gson.JsonPrimitive;
 public class OutputAdapterComponent implements ApplicationListener<ApplicationReadyEvent> {
 
     private static final String DEFAULT_MESSAGE_TYPE = "all";
-    private static final String OUTPUT_PROCESSOR_THREAD_NAME = "processOutputAdapter";
+    private static final String OUTPUT_PROCESSOR_THREAD_NAME = "OutputDispatcher";
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 

@@ -13,6 +13,7 @@ import lombok.Data;
  */
 @Data
 public class TransformConfig {
+    private Long id;
     String type;
     String messagetype;
     TransformParamConfig param;

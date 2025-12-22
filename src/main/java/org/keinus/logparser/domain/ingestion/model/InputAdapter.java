@@ -22,6 +22,8 @@ import lombok.Getter;
  */
 public abstract class InputAdapter implements Closeable {
 	@Getter
+	private Long id;
+	@Getter
 	private String messageType = "";
 	@Getter
 	private String name;
@@ -32,6 +34,7 @@ public abstract class InputAdapter implements Closeable {
 		if (config == null) {
 			throw new IOException("Configuration not found.");
 		}
+		this.id = config.getId();
 		this.messageType = config.getMessagetype();
 		this.sourceHost = config.getHost() != null ? config.getHost() : "localhost";
 		this.name = getClass().getSimpleName();

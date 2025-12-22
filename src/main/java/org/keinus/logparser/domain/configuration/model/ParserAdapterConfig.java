@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class ParserAdapterConfig {
 
+    private Long id;
+
     @Required
     @Choice(values = {
         "JsonParser",

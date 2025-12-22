@@ -102,9 +102,8 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
         }
 
         running.set(true);
-        int count = 1;
         for (InputAdapter adapter : inputList) {
-            String threadName = adapter.getName() + "-" + count++;
+            String threadName = "InputAdapter-" + adapter.getId() + "-" + adapter.getMessageType();
             log.info(">>> DEBUG: About to call executeWithName for adapter: {}, thread name: {}",
                     adapter.getClass().getSimpleName(), threadName);
 

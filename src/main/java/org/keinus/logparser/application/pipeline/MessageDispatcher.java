@@ -141,7 +141,7 @@ public class MessageDispatcher {
             
             // Start Parser Threads
             for (int i = 0; i < parserThreads; i++) {
-                String threadName = "Parser-" + (i + 1);
+                String threadName = "ParserThread-" + (i + 1);
                 ParseDispatcher parseDispatcher = new ParseDispatcher(
                     inputMessageQueue, transformQueue, parseService, 
                     deadLetterQueue, circuitBreaker, running, 
@@ -152,7 +152,7 @@ public class MessageDispatcher {
 
             // Start Transform Threads
             for (int i = 0; i < transformThreads; i++) {
-                String threadName = "Transformer-" + (i + 1);
+                String threadName = "TransformThread-" + (i + 1);
                 TransformDispatcher transformDispatcher = new TransformDispatcher(
                     transformQueue, outputMessageQueue, transformService, 
                     deadLetterQueue, running, totalMessagesFailed, 

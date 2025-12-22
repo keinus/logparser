@@ -27,7 +27,7 @@ public class InputAdapterEntity {
     @Column(name = "type", nullable = false, length = 100)
     private String type;
 
-    @Column(name = "messagetype", unique = true, nullable = false, length = 100)
+    @Column(name = "messagetype", nullable = false, length = 100)
     private String messagetype;
 
     @Column(name = "host", length = 255)

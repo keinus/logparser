@@ -11,6 +11,8 @@ import java.util.Map;
 @Data
 public class OutputAdapterConfig {
 
+    private Long id;
+
     @Required
     @Choice(values = {
         "ConsoleOutputAdapter",

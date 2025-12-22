@@ -10,6 +10,8 @@ import lombok.Data;
 @Data
 public class InputAdapterConfig {
 
+    private Long id;
+
     @Required
     @Choice(values = {
         "FileInputAdapter",

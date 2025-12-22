@@ -80,6 +80,7 @@ public class DatabaseConfigLoader {
 
         for (InputAdapterEntity entity : entities) {
             InputAdapterConfig config = new InputAdapterConfig();
+            config.setId(entity.getId());
             config.setType(normalizeAdapterType(entity.getType(), "InputAdapter"));
             config.setMessagetype(entity.getMessagetype());
             config.setHost(entity.getHost());
@@ -109,6 +110,7 @@ public class DatabaseConfigLoader {
 
         for (OutputAdapterEntity entity : entities) {
             OutputAdapterConfig config = new OutputAdapterConfig();
+            config.setId(entity.getId());
             config.setType(normalizeAdapterType(entity.getType(), "OutputAdapter"));
             config.setMessagetype(entity.getMessagetype());
 
@@ -161,6 +163,7 @@ public class DatabaseConfigLoader {
 
         for (ParserEntity entity : entities) {
             ParserAdapterConfig config = new ParserAdapterConfig();
+            config.setId(entity.getId());
             config.setType(normalizeAdapterType(entity.getType(), "Parser"));
             config.setMessagetype(entity.getMessagetype());
             config.setParam(entity.getParam());
@@ -177,6 +180,7 @@ public class DatabaseConfigLoader {
 
         for (TransformEntity entity : entities) {
             TransformConfig config = new TransformConfig();
+            config.setId(entity.getId());
             config.setType(entity.getType());
             config.setMessagetype(entity.getMessagetype());
 
