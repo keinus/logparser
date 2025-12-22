@@ -91,6 +91,10 @@ public class MessageDispatcher {
     // Circuit Breaker 관련
     private final CircuitBreaker circuitBreaker = new CircuitBreaker();
 
+    // Backpressure 로그 제한을 위한 변수
+    private long backpressureLastLogTime = 0;
+    private static final long BACKPRESSURE_LOG_INTERVAL_MS = 5000; // 5초
+
     /**
      * MessageDispatcher 생성자.
      * threadManager와 ApplicationProperties를 주입받아 초기화합니다.
@@ -202,15 +206,27 @@ public class MessageDispatcher {
     }
 
     public boolean putInputMsg(LogEvent logEvent) {
-        // 백프레셔 메커니즘: 큐가 임계값을 초과하면 즉시 거부
-        int currentSize = inputMessageQueue.size();
-        double utilizationRate = (double) currentSize / queueSize;
+        // 백프레셔 메커니즘: 어느 큐라도 임계값을 초과하면 즉시 거부 (Global Backpressure)
+        int inputSize = inputMessageQueue.size();
+        int transformSize = transformQueue.size();
+        int outputSize = outputMessageQueue.size();
+        
+        double inputRate = (double) inputSize / queueSize;
+        double transformRate = (double) transformSize / queueSize;
+        double outputRate = (double) outputSize / queueSize;
 
-        boolean success = false;
-
-        if (utilizationRate >= QUEUE_CRITICAL_THRESHOLD) {
-            log.warn("Queue critical! Size: {}/{} ({}%), rejecting message",
-                    currentSize, queueSize, String.format("%.1f", utilizationRate * 100));
+        if (inputRate >= QUEUE_CRITICAL_THRESHOLD || 
+            transformRate >= QUEUE_CRITICAL_THRESHOLD || 
+            outputRate >= QUEUE_CRITICAL_THRESHOLD) {
+            
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - backpressureLastLogTime >= BACKPRESSURE_LOG_INTERVAL_MS) {
+                log.warn("Backpressure triggered! Queue status - Input: {} ({}%), Transform: {} ({}%), Output: {} ({}%). Rejecting input message.",
+                        inputSize, String.format("%.1f", inputRate * 100),
+                        transformSize, String.format("%.1f", transformRate * 100),
+                        outputSize, String.format("%.1f", outputRate * 100));
+                backpressureLastLogTime = currentTime;
+            }
 
             // 임계치 초과 시 즉시 거부 (input adapter가 백프레셔를 적용하도록)
             totalMessagesDropped.incrementAndGet();
@@ -222,18 +238,17 @@ public class MessageDispatcher {
                 if (!offered) {
                     // 타임아웃 발생 시 메시지 드롭
                     totalMessagesDropped.incrementAndGet();
-                    log.warn("Message dropped due to queue insertion timeout. Queue size: {}/{}", currentSize,
+                    log.warn("Message dropped due to queue insertion timeout. Queue size: {}/{}", inputSize,
                             queueSize);
                     return false;
                 }
-                success = true;
+                return true;
             } catch (InterruptedException e) {
                 log.debug("Interrupted while offering message to queue - this is expected during shutdown");
                 Thread.currentThread().interrupt();
                 return false;
             }
         }
-        return success;
     }
 
     public LogEvent getOutputMsg() {

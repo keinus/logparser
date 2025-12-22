@@ -96,11 +96,6 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         int adapterCount = outputAdapterMap.getAllKeys().size();
         log.info("Output Adapter Component initialized with {} adapters", adapterCount);
 
-        if (adapterCount == 0) {
-            log.warn("No output adapters to start!");
-            return;
-        }
-
         running.set(true);
         threadManager.executeWithName(OUTPUT_PROCESSOR_THREAD_NAME, this::processOutputMessages);
 
@@ -162,7 +157,7 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         lock.writeLock().lock();
         try {
             for (OutputAdapterConfig config : outputConfigs) {
-                if (!config.getEnabled()) {
+                if (!config.getEnabled().booleanValue()) {
                     continue;
                 }
                 try {
@@ -197,6 +192,8 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         }
     }
 
+    private long lastNoAdapterLogTime = 0;
+
     private void processLogEvent(LogEvent logEvent) {
         String messageType = logEvent.getMessageType();
         
@@ -205,7 +202,11 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             var adapters = outputAdapterMap.get(messageType);
 
             if (adapters.isEmpty()) {
-                log.warn("No output adapters found for message type: {}", messageType);
+                long now = System.currentTimeMillis();
+                if (now - lastNoAdapterLogTime > 5000) {
+                    log.warn("No output adapters found for message type: {}. Message dropped.", messageType);
+                    lastNoAdapterLogTime = now;
+                }
                 return;
             }
 

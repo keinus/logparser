@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,33 +21,35 @@ import org.slf4j.LoggerFactory;
  * @see org.keinus.logparser.core.interfaces.OutputAdapter
  */
 public class BenchmarkAdapter extends OutputAdapter {
-	private static final Logger LOGGER = LoggerFactory.getLogger( BenchmarkAdapter.class );
-	AtomicInteger ai = new AtomicInteger();
-	long startElapse = 0L;
+	private static final Logger LOGGER = LoggerFactory.getLogger(BenchmarkAdapter.class);
+	
+	private final AtomicInteger intervalCounter = new AtomicInteger(0);
+	private final AtomicInteger totalCounter = new AtomicInteger(0);
+	private long lastLogTime = System.currentTimeMillis();
 	private final AtomicBoolean closed = new AtomicBoolean(false);
 	
 	public BenchmarkAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
-		LOGGER.info("Console Output Adapter created");
-		ai.set(0);
+		LOGGER.info("Benchmark Adapter created");
+		this.lastLogTime = System.currentTimeMillis();
 	}
 
+	@Override
 	public void send(Map<String, Object> json, String jsonString) {
-		try {
-			int count = ai.incrementAndGet();
-			if(count == 1) {
-				startElapse = System.currentTimeMillis();
+		intervalCounter.incrementAndGet();
+		if (totalCounter.incrementAndGet() == 1) {
+			LOGGER.info("Benchmark [{}]: Received first message!", getMessageType());
+		}
+		
+		long now = System.currentTimeMillis();
+		long elapsed = now - lastLogTime;
+		if (elapsed >= 1000) {
+			synchronized (this) {
+				int count = intervalCounter.getAndSet(0);
+				double tps = (double) count * 1000 / elapsed;
+				LOGGER.info("Benchmark [{}]: {} msg/s (Total: {})", getMessageType(), String.format("%.1f", tps), totalCounter.get());
+				lastLogTime = now;
 			}
-			if(count % 1000 == 0) {
-				long endElapse = System.currentTimeMillis();
-				double elapsedSeconds = (endElapse - startElapse) / 1000.0;
-				int processedPerSecond = (int) (count / elapsedSeconds); // Calculate count per second
-				LOGGER.info("Processed {} messages per second (total: {})", processedPerSecond, count);
-				startElapse = endElapse; // Reset start time for next measurement
-				ai.set(0);
-			}
-		} catch (Exception e) {
-			LOGGER.error(e.getMessage());
 		}
 	}
 
@@ -60,6 +61,6 @@ public class BenchmarkAdapter extends OutputAdapter {
 			return;
 		}
 
-		LOGGER.info("Benchmark Adapter closed");
+		LOGGER.info("Benchmark Adapter closed. Final Total: {}", totalCounter.get());
 	}
 }

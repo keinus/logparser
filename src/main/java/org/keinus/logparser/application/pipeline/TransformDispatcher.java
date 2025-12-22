@@ -24,6 +24,9 @@ public class TransformDispatcher implements Runnable {
     private final AtomicLong totalMessagesDropped;
     private final int maxQueueSize;
 
+    private long lastCriticalLogTime = 0;
+    private static final long LOG_INTERVAL_MS = 5000;
+
     private static final double QUEUE_CRITICAL_THRESHOLD = 0.95;
     private static final long QUEUE_OFFER_TIMEOUT_MS = 50_000;
 
@@ -90,8 +93,12 @@ public class TransformDispatcher implements Runnable {
         double utilizationRate = (double) currentSize / maxQueueSize;
 
         if (utilizationRate >= QUEUE_CRITICAL_THRESHOLD) {
-            log.warn("Output queue critical! Size: {}/{} ({}%), rejecting message",
-                    currentSize, maxQueueSize, String.format("%.1f", utilizationRate * 100));
+            long now = System.currentTimeMillis();
+            if (now - lastCriticalLogTime >= LOG_INTERVAL_MS) {
+                log.warn("Output queue critical! Size: {}/{} ({}%), rejecting message",
+                        currentSize, maxQueueSize, String.format("%.1f", utilizationRate * 100));
+                lastCriticalLogTime = now;
+            }
             totalMessagesDropped.incrementAndGet();
             return false;
         }
