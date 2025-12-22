@@ -23,7 +23,6 @@ public class PipelineController {
 
     @GetMapping("/status")
     public ResponseEntity<PipelineReloadService.PipelineStatusInfo> getPipelineStatus() {
-        log.info("GET /api/v1/pipeline/status");
         PipelineReloadService.PipelineStatusInfo status = pipelineReloadService.getPipelineStatus();
         return ResponseEntity.ok(status);
     }

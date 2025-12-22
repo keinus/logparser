@@ -148,7 +148,7 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
                 }
 
                 if (logEvent != null) {
-                    boolean sent = dispatcher.putGlobalMsg(logEvent);
+                    boolean sent = dispatcher.putInputMsg(logEvent);
                     if (!sent) {
                         log.debug("Failed to send message: {}", mInputAdapter.getClass().getSimpleName());
                         // 실패한 이벤트를 저장하고 다음 루프에서 재시도
