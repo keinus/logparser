@@ -90,6 +90,7 @@ public class DatabaseConfigLoader {
             config.setGroupId(entity.getGroupId());
             config.setCodec(entity.getCodec());
             config.setPath_pattern(entity.getPathPattern());
+            config.setIsFromBeginning(entity.getIsFromBeginning());
             config.setBufferSize(entity.getBufferSize());
             config.setTimeoutMs(entity.getTimeoutMs());
             config.setEnabled(entity.getEnabled());

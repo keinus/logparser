@@ -54,6 +54,10 @@ public class InputAdapterEntity {
     @Column(name = "path_pattern", length = 500)
     private String pathPattern;
 
+    @Column(name = "is_from_beginning")
+    @Builder.Default
+    private Boolean isFromBeginning = false;
+
     @Column(name = "buffer_size")
     private Integer bufferSize;
 

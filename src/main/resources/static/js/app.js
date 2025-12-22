@@ -110,8 +110,17 @@ async function refreshPipelineStatus() {
     try {
         const status = await pipelineAPI.getStatus();
         const statusValue = document.getElementById('statusValue');
-        statusValue.textContent = status.status || 'Unknown';
-        statusValue.className = 'status-value ' + (status.status || '').toLowerCase();
+        
+        // Map status to visual style
+        const statusText = status.status || 'Unknown';
+        statusValue.textContent = statusText;
+        
+        statusValue.className = 'status-value';
+        if (statusText === 'RUNNING') statusValue.classList.add('running');
+        else if (statusText === 'STOPPED') statusValue.classList.add('stopped');
+        else if (statusText === 'RELOADING') statusValue.classList.add('reloading');
+        else statusValue.classList.add('error');
+
     } catch (error) {
         console.error('Failed to refresh pipeline status:', error);
         document.getElementById('statusValue').textContent = 'Error';
@@ -222,7 +231,7 @@ function renderAdapterList(adapters, containerId, type) {
     if (!container) return;
 
     if (adapters.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 40px;">No adapters configured</p>';
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-tertiary); padding: 4rem;">No adapters configured</div>';
         return;
     }
 
@@ -231,41 +240,38 @@ function renderAdapterList(adapters, containerId, type) {
             <div class="adapter-header">
                 <div class="adapter-info">
                     <h3>
-                        <span class="material-icons" style="font-size: 20px; vertical-align: middle; margin-right: 8px;">${getAdapterIcon(type)}</span>
-                        <span class="adapter-type">${adapter.type}</span>
+                        <span class="material-icons" style="font-size: 1.25rem; color: var(--primary);">${getAdapterIcon(type)}</span>
+                        ${adapter.type}
                         <span class="status-badge ${adapter.enabled ? 'enabled' : 'disabled'}">
-                            <span class="material-icons" style="font-size: 14px; vertical-align: middle;">${adapter.enabled ? 'check_circle' : 'cancel'}</span>
                             ${adapter.enabled ? 'Enabled' : 'Disabled'}
                         </span>
                     </h3>
                     <div class="adapter-messagetype">
-                        <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">label</span>
-                        Message Type: ${adapter.messagetype}
+                        <span class="material-icons" style="font-size: 14px;">label</span>
+                        ${adapter.messagetype}
                     </div>
                 </div>
-                <div class="adapter-actions">
-                    ${adapter.enabled
-                        ? `<button class="btn btn-secondary btn-small" onclick="toggleAdapter('${type}', ${adapter.id}, false)">
-                            <span class="material-icons">toggle_off</span>
-                            <span>Disable</span>
-                           </button>`
-                        : `<button class="btn btn-success btn-small" onclick="toggleAdapter('${type}', ${adapter.id}, true)">
-                            <span class="material-icons">toggle_on</span>
-                            <span>Enable</span>
-                           </button>`
-                    }
-                    <button class="btn btn-primary btn-small" onclick="editAdapter('${type}', ${adapter.id})">
-                        <span class="material-icons">edit</span>
-                        <span>Edit</span>
-                    </button>
-                    <button class="btn btn-danger btn-small" onclick="deleteAdapter('${type}', ${adapter.id})">
-                        <span class="material-icons">delete</span>
-                        <span>Delete</span>
-                    </button>
-                </div>
             </div>
+            
             <div class="adapter-details">
                 ${renderAdapterDetails(adapter, type)}
+            </div>
+
+            <div class="adapter-footer">
+                ${adapter.enabled
+                    ? `<button class="btn btn-secondary btn-small" onclick="toggleAdapter('${type}', ${adapter.id}, false)">
+                        Disable
+                       </button>`
+                    : `<button class="btn btn-success btn-small" onclick="toggleAdapter('${type}', ${adapter.id}, true)">
+                        Enable
+                       </button>`
+                }
+                <button class="btn btn-primary btn-small" onclick="editAdapter('${type}', ${adapter.id})">
+                    Edit
+                </button>
+                <button class="btn btn-danger btn-small" onclick="deleteAdapter('${type}', ${adapter.id})">
+                    Delete
+                </button>
             </div>
         </div>
     `).join('');
@@ -282,22 +288,108 @@ function getAdapterIcon(type) {
     return iconMap[type] || 'settings';
 }
 
-// Render Adapter Details
+// Structured Render Details
 function renderAdapterDetails(adapter, type) {
-    const excludeFields = ['id', 'type', 'messagetype', 'enabled', 'createdAt', 'updatedAt'];
-    const fields = Object.entries(adapter)
-        .filter(([key, value]) => !excludeFields.includes(key) && value != null)
-        .map(([key, value]) => {
-            const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
-            return `
-                <div class="adapter-field">
-                    <div class="adapter-field-label">${formatFieldName(key)}:</div>
-                    <div class="adapter-field-value">${displayValue}</div>
-                </div>
-            `;
-        });
+    let detailsHtml = '';
 
-    return fields.length > 0 ? fields.join('') : '<p style="color: #6b7280;">No additional configuration</p>';
+    // Network Config (TCP/UDP/HTTP)
+    if (adapter.port || adapter.host || adapter.url) {
+        detailsHtml += '<div class="detail-group"><h4>Network</h4><div class="detail-grid">';
+        if (adapter.host) detailsHtml += createDetailItem('Host', adapter.host);
+        if (adapter.port) detailsHtml += createDetailItem('Port', adapter.port);
+        if (adapter.url) detailsHtml += createDetailItem('URL', adapter.url);
+        if (adapter.method) detailsHtml += createDetailItem('Method', adapter.method);
+        if (adapter.timeoutMs) detailsHtml += createDetailItem('Timeout', adapter.timeoutMs + ' ms');
+        detailsHtml += '</div></div>';
+    }
+
+    // Kafka Config
+    if (adapter.bootstrapservers || adapter.topicid) {
+        detailsHtml += '<div class="detail-group"><h4>Kafka</h4><div class="detail-grid">';
+        if (adapter.bootstrapservers) detailsHtml += createDetailItem('Bootstrap Servers', adapter.bootstrapservers);
+        if (adapter.topicid) detailsHtml += createDetailItem('Topic ID', adapter.topicid);
+        if (adapter.groupId) detailsHtml += createDetailItem('Group ID', adapter.groupId);
+        detailsHtml += '</div></div>';
+    }
+
+    // File Config
+    if (adapter.path) {
+        detailsHtml += '<div class="detail-group"><h4>File</h4><div class="detail-grid">';
+        detailsHtml += createDetailItem('Path', adapter.path);
+        if (adapter.pathPattern) detailsHtml += createDetailItem('Pattern', adapter.pathPattern);
+        detailsHtml += createDetailItem('Read From Beginning', adapter.isFromBeginning ? 'Yes' : 'No');
+        detailsHtml += '</div></div>';
+    }
+
+    // Parser Params (Grok/Regex)
+    if (adapter.param && typeof adapter.param === 'string') {
+        detailsHtml += '<div class="detail-group"><h4>Pattern</h4><div class="detail-grid full-width">';
+        detailsHtml += createDetailItem('Param', adapter.param);
+        if (adapter.priority !== undefined) detailsHtml += createDetailItem('Priority', adapter.priority);
+        detailsHtml += '</div></div>';
+    }
+
+    // Transform Params (Object)
+    if (adapter.param && typeof adapter.param === 'object') {
+        detailsHtml += '<div class="detail-group"><h4>Rules</h4><div class="detail-grid full-width">';
+        // Render nested objects nicely
+        let rulesHtml = '';
+        if (adapter.param.pass) rulesHtml += createDetailItem('Pass Filter', JSON.stringify(adapter.param.pass, null, 2));
+        if (adapter.param.drop) rulesHtml += createDetailItem('Drop Filter', JSON.stringify(adapter.param.drop, null, 2));
+        if (adapter.param.add) rulesHtml += createDetailItem('Add Props', JSON.stringify(adapter.param.add, null, 2));
+        if (adapter.param.remove) rulesHtml += createDetailItem('Remove Props', JSON.stringify(adapter.param.remove, null, 2));
+        
+        detailsHtml += rulesHtml || '<span class="detail-value">Custom Rules</span>';
+        detailsHtml += '</div></div>';
+    }
+
+    // OpenSearch/ES
+    if (adapter.index || adapter.osUsername) {
+         detailsHtml += '<div class="detail-group"><h4>OpenSearch</h4><div class="detail-grid">';
+         if (adapter.index) detailsHtml += createDetailItem('Index', adapter.index);
+         if (adapter.action) detailsHtml += createDetailItem('Action', adapter.action);
+         detailsHtml += '</div></div>';
+    }
+
+    // Fallback for any other fields
+    // Exclude common or already handled fields
+    const handledFields = [
+        'id', 'type', 'messagetype', 'enabled', 'createdAt', 'updatedAt', 'version',
+        'host', 'port', 'url', 'method', 'timeoutMs',
+        'bootstrapservers', 'topicid', 'groupId',
+        'path', 'pathPattern', 'isFromBeginning',
+        'param', 'priority',
+        'index', 'action', 'osUsername', 'osPassword', // passwords hidden
+        'rmqUsername', 'rmqPassword'
+    ];
+
+    let otherHtml = '';
+    Object.entries(adapter).forEach(([key, value]) => {
+        if (!handledFields.includes(key) && value != null && value !== '') {
+            otherHtml += createDetailItem(formatFieldName(key), typeof value === 'object' ? JSON.stringify(value) : value);
+        }
+    });
+
+    if (otherHtml) {
+        detailsHtml += `<div class="detail-group"><h4>Other Settings</h4><div class="detail-grid">${otherHtml}</div></div>`;
+    }
+
+    return detailsHtml || '<p style="color: var(--text-tertiary);">No additional configuration</p>';
+}
+
+function createDetailItem(label, value) {
+    // If value is a long JSON string, put it in a pre block or truncate
+    let displayValue = value;
+    if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+        displayValue = `<pre style="margin:0; white-space:pre-wrap; font-family:monospace; font-size:0.75rem;">${value}</pre>`;
+    }
+
+    return `
+        <div class="detail-item">
+            <span class="detail-label">${label}</span>
+            <span class="detail-value">${displayValue}</span>
+        </div>
+    `;
 }
 
 function formatFieldName(name) {
@@ -509,14 +601,13 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
                 // Parse boolean values (from checkboxes or selects)
                 parsedValue = value === 'true';
             } else if (!isNaN(value) && value.trim() !== '') {
-                 // Attempt to parse numbers, but be careful with strings that look like numbers
-                 // For now, let's trust the input type or backend coercion, or explicitly parse if needed.
-                 // The backend uses strict types, so sending strings for numbers might work if Jackson handles it.
-                 // However, let's keep it as string unless we know it's a number field?
-                 // The schema has type info. Ideally we use that.
-                 // But here we don't have easy access to schema field type.
-                 // Let's rely on JSON.parse for explicit JSON/Arrays, and keep strings otherwise.
-                 // Actually, InputAdapterConfig uses Integer for port. "8080" string is fine for Jackson usually.
+                 // Keep as string if schema says so, but here we don't know schema
+                 // Let's rely on backend parsing/coercion which usually works for basic types
+                 // Or if it looks like a number, parse it?
+                 // Safer to let backend parse strings if DTO fields are Integer.
+                 // But for untyped Maps, we might want numbers.
+                 // Let's parse int if it looks like int.
+                 if (/^-?\d+$/.test(value)) parsedValue = parseInt(value, 10);
             }
 
             if (currentAdapterType === 'transform') {

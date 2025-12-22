@@ -34,7 +34,7 @@ public class InputAdapterController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<InputAdapterEntity> getInputAdapter(@PathVariable Long id) {
+    public ResponseEntity<InputAdapterEntity> getInputAdapter(@PathVariable("id") Long id) {
         log.info("GET /api/v1/input-adapters/{}", id);
         InputAdapterEntity entity = configManagementService.getInputAdapter(id);
         return ResponseEntity.ok(entity);
@@ -42,7 +42,7 @@ public class InputAdapterController {
 
     @PutMapping("/{id}")
     public ResponseEntity<InputAdapterEntity> updateInputAdapter(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody InputAdapterEntity entity) {
         log.info("PUT /api/v1/input-adapters/{}", id);
         InputAdapterEntity updated = configManagementService.updateInputAdapter(id, entity);
@@ -50,35 +50,35 @@ public class InputAdapterController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInputAdapter(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteInputAdapter(@PathVariable("id") Long id) {
         log.info("DELETE /api/v1/input-adapters/{}", id);
         configManagementService.deleteInputAdapter(id);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/type/{type}")
-    public ResponseEntity<List<InputAdapterEntity>> getInputAdaptersByType(@PathVariable String type) {
+    public ResponseEntity<List<InputAdapterEntity>> getInputAdaptersByType(@PathVariable("type") String type) {
         log.info("GET /api/v1/input-adapters/type/{}", type);
         List<InputAdapterEntity> result = configManagementService.getInputAdaptersByType(type);
         return ResponseEntity.ok(result);
     }
 
     @GetMapping("/messagetype/{messageType}")
-    public ResponseEntity<InputAdapterEntity> getInputAdapterByMessageType(@PathVariable String messageType) {
+    public ResponseEntity<InputAdapterEntity> getInputAdapterByMessageType(@PathVariable("messageType") String messageType) {
         log.info("GET /api/v1/input-adapters/messagetype/{}", messageType);
         InputAdapterEntity entity = configManagementService.getInputAdapterByMessageType(messageType);
         return ResponseEntity.ok(entity);
     }
 
     @PatchMapping("/{id}/enable")
-    public ResponseEntity<InputAdapterEntity> enableInputAdapter(@PathVariable Long id) {
+    public ResponseEntity<InputAdapterEntity> enableInputAdapter(@PathVariable("id") Long id) {
         log.info("PATCH /api/v1/input-adapters/{}/enable", id);
         InputAdapterEntity entity = configManagementService.enableInputAdapter(id);
         return ResponseEntity.ok(entity);
     }
 
     @PatchMapping("/{id}/disable")
-    public ResponseEntity<InputAdapterEntity> disableInputAdapter(@PathVariable Long id) {
+    public ResponseEntity<InputAdapterEntity> disableInputAdapter(@PathVariable("id") Long id) {
         log.info("PATCH /api/v1/input-adapters/{}/disable", id);
         InputAdapterEntity entity = configManagementService.disableInputAdapter(id);
         return ResponseEntity.ok(entity);

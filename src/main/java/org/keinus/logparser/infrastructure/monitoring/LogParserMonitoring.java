@@ -47,55 +47,55 @@ public class LogParserMonitoring implements LogParserMonitoringMBean {
 
     @Override
     public long getGlobalQueueSize() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.globalQueueSize;
     }
 
     @Override
     public long getOutputQueueSize() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.outputQueueSize;
     }
 
     @Override
     public long getMaxQueueSize() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.maxQueueSize;
     }
 
     @Override
     public double getGlobalQueueUtilization() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.getGlobalUtilization() * 100.0;
     }
 
     @Override
     public double getOutputQueueUtilization() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.getOutputUtilization() * 100.0;
     }
 
     @Override
     public long getTotalMessagesReceived() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.totalReceived;
     }
 
     @Override
     public long getTotalMessagesProcessed() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.totalProcessed;
     }
 
     @Override
     public long getTotalMessagesDropped() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.totalDropped;
     }
 
     @Override
     public long getTotalMessagesFailed() {
-        MessageDispatcher.QueueMetrics metrics = messageDispatcher.getQueueMetrics();
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
         return metrics.totalFailed;
     }
 
@@ -165,6 +165,18 @@ public class LogParserMonitoring implements LogParserMonitoringMBean {
             return 0.0;
         }
         return (double) getTotalMessagesProcessed() / uptime;
+    }
+
+    @Override
+    public double getAverageProcessingTimeMs() {
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
+        return metrics.averageProcessingTimeMs;
+    }
+
+    @Override
+    public String getCircuitBreakerState() {
+        MessageDispatcher.DispatcherMetrics metrics = messageDispatcher.getDispatcherMetrics();
+        return metrics.circuitBreakerState;
     }
 
     @Override

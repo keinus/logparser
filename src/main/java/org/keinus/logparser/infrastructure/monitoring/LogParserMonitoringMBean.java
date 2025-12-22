@@ -139,6 +139,20 @@ public interface LogParserMonitoringMBean {
     double getMessagesPerSecond();
 
     /**
+     * 메시지 당 평균 처리 시간을 반환합니다.
+     * 
+     * @return 평균 처리 시간 (ms)
+     */
+    double getAverageProcessingTimeMs();
+
+    /**
+     * 서킷 브레이커의 현재 상태를 반환합니다.
+     * 
+     * @return 서킷 브레이커 상태 (CLOSED, OPEN, HALF_OPEN)
+     */
+    String getCircuitBreakerState();
+
+    /**
      * 패턴 캐시 히트율을 반환합니다.
      *
      * @return 히트율 (0.0 ~ 100.0)

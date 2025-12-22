@@ -34,7 +34,7 @@ public class OutputAdapterController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<OutputAdapterEntity> getOutputAdapter(@PathVariable Long id) {
+    public ResponseEntity<OutputAdapterEntity> getOutputAdapter(@PathVariable("id") Long id) {
         log.info("GET /api/v1/output-adapters/{}", id);
         OutputAdapterEntity entity = configManagementService.getOutputAdapter(id);
         return ResponseEntity.ok(entity);
@@ -42,7 +42,7 @@ public class OutputAdapterController {
 
     @PutMapping("/{id}")
     public ResponseEntity<OutputAdapterEntity> updateOutputAdapter(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody OutputAdapterEntity entity) {
         log.info("PUT /api/v1/output-adapters/{}", id);
         OutputAdapterEntity updated = configManagementService.updateOutputAdapter(id, entity);
@@ -50,35 +50,35 @@ public class OutputAdapterController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteOutputAdapter(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteOutputAdapter(@PathVariable("id") Long id) {
         log.info("DELETE /api/v1/output-adapters/{}", id);
         configManagementService.deleteOutputAdapter(id);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/type/{type}")
-    public ResponseEntity<List<OutputAdapterEntity>> getOutputAdaptersByType(@PathVariable String type) {
+    public ResponseEntity<List<OutputAdapterEntity>> getOutputAdaptersByType(@PathVariable("type") String type) {
         log.info("GET /api/v1/output-adapters/type/{}", type);
         List<OutputAdapterEntity> result = configManagementService.getOutputAdaptersByType(type);
         return ResponseEntity.ok(result);
     }
 
     @GetMapping("/messagetype/{messageType}")
-    public ResponseEntity<List<OutputAdapterEntity>> getOutputAdaptersByMessageType(@PathVariable String messageType) {
+    public ResponseEntity<List<OutputAdapterEntity>> getOutputAdaptersByMessageType(@PathVariable("messageType") String messageType) {
         log.info("GET /api/v1/output-adapters/messagetype/{}", messageType);
         List<OutputAdapterEntity> result = configManagementService.getOutputAdaptersByMessageType(messageType);
         return ResponseEntity.ok(result);
     }
 
     @PatchMapping("/{id}/enable")
-    public ResponseEntity<OutputAdapterEntity> enableOutputAdapter(@PathVariable Long id) {
+    public ResponseEntity<OutputAdapterEntity> enableOutputAdapter(@PathVariable("id") Long id) {
         log.info("PATCH /api/v1/output-adapters/{}/enable", id);
         OutputAdapterEntity entity = configManagementService.enableOutputAdapter(id);
         return ResponseEntity.ok(entity);
     }
 
     @PatchMapping("/{id}/disable")
-    public ResponseEntity<OutputAdapterEntity> disableOutputAdapter(@PathVariable Long id) {
+    public ResponseEntity<OutputAdapterEntity> disableOutputAdapter(@PathVariable("id") Long id) {
         log.info("PATCH /api/v1/output-adapters/{}/disable", id);
         OutputAdapterEntity entity = configManagementService.disableOutputAdapter(id);
         return ResponseEntity.ok(entity);

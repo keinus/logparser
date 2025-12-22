@@ -234,7 +234,7 @@ public class PipelineReloadService {
 
             try {
                 MessageDispatcher dispatcher = applicationContext.getBean(MessageDispatcher.class);
-                var metrics = dispatcher.getQueueMetrics();
+                var metrics = dispatcher.getDispatcherMetrics();
                 queueSize = metrics.globalQueueSize + metrics.outputQueueSize;
                 processedMessages = metrics.totalProcessed;
             } catch (Exception e) {

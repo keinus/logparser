@@ -3,7 +3,6 @@ package org.keinus.logparser.domain.parsing.service;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 
-import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.application.service.DatabaseConfigLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

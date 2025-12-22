@@ -36,7 +36,7 @@ public class MessageDispatcher {
     /**
      * 입력 메시지를 저장하는 BlockingQueue. 큐 크기는 10000으로 제한됩니다.
      */
-    private final BlockingQueue<LogEvent> globalMessageQueue;
+    private final BlockingQueue<LogEvent> inputMessageQueue;
 
     /**
      * 출력 메시지를 저장하는 BlockingQueue의 HashMap. 큐 크기는 10000으로 제한됩니다.
@@ -70,6 +70,7 @@ public class MessageDispatcher {
     private final AtomicLong totalMessagesProcessed = new AtomicLong(0);
     private final AtomicLong totalMessagesDropped = new AtomicLong(0);
     private final AtomicLong totalMessagesFailed = new AtomicLong(0);
+    private final AtomicLong totalProcessingTimeMs = new AtomicLong(0);
 
     // 큐 크기 및 임계값 설정
     private final int queueSize;
@@ -110,7 +111,7 @@ public class MessageDispatcher {
 
         this.threadManager = threadManager;
         this.queueSize = queueSize;
-        this.globalMessageQueue = new LinkedBlockingQueue<>(queueSize);
+        this.inputMessageQueue = new LinkedBlockingQueue<>(queueSize);
         this.outputMessageQueue = new LinkedBlockingQueue<>(queueSize);
 
         this.parseService = parseService;
@@ -122,9 +123,48 @@ public class MessageDispatcher {
 
         log.info("MessageDispatcher initialized with queue size: {}", queueSize);
     }
+    
+    // ... (rest of the file content until processLogEvent)
+
+    private void processLogEvent(LogEvent logEvent) {
+        long startTime = System.nanoTime();
+        try {
+            log.debug("Processing log event of type: {}", logEvent.getMessageType());
+
+            // 파싱 단계
+            boolean parseResult = parseService.parse(logEvent);
+            if (parseResult) {
+                logEvent.markAsParsed();
+
+                // 변환 단계
+                boolean transformResult = transformService.transform(logEvent);
+                if (transformResult) {
+                    logEvent.markAsTransformed();
+                    boolean queued = putOutputMsg(logEvent);
+                    log.debug("Log event processed and queued: {}, queue size: {}", queued, outputMessageQueue.size());
+                } else {
+                    log.debug("Log event filtered out by transform service");
+                }
+            } else {
+                log.debug("Log event parsing failed");
+                logEvent.markAsError("Parsing failed");
+                totalMessagesFailed.incrementAndGet();
+                // DLQ에 추가 (재시도 횟수 0으로 시작)
+                deadLetterQueue.addFromLogEvent(logEvent, 0);
+            }
+        } catch (Exception e) {
+            log.error("Error processing log event: {}", logEvent, e);
+            logEvent.markAsError("Processing error: " + e.getMessage());
+            totalMessagesFailed.incrementAndGet();
+            // DLQ에 추가
+            deadLetterQueue.addFromLogEvent(logEvent, 0);
+        } finally {
+            long duration = System.nanoTime() - startTime;
+            totalProcessingTimeMs.addAndGet(TimeUnit.NANOSECONDS.toMillis(duration));
+        }
+    }
 
     /**
-     * 메시지 디스패처를 초기화하고 파서 스레드를 시작
      * 메시지 디스패처를 초기화하고 파서 스레드를 시작합니다.
      * - 실행 상태 플래그 {@code running}을 활성화합니다.
      * - {@link ThreadManager}을 통해 지정된 수의 스레드를 생성하고, 각 스레드에서
@@ -179,7 +219,7 @@ public class MessageDispatcher {
         // 먼저 running 플래그를 false로 설정하여 루프들이 종료되도록 함
         running.set(false);
 
-        globalMessageQueue.clear();
+        inputMessageQueue.clear();
         this.threadManager.shutdownAllThreads();
         log.info("Message Dispatcher closed");
     }
@@ -194,7 +234,7 @@ public class MessageDispatcher {
                     continue;
                 }
 
-                LogEvent logEvent = globalMessageQueue.take();
+                LogEvent logEvent = inputMessageQueue.take();
                 processLogEvent(logEvent);
                 // 성공 시 실패 카운터 리셋
                 recordSuccess();
@@ -281,43 +321,11 @@ public class MessageDispatcher {
         }
     }
 
-    private void processLogEvent(LogEvent logEvent) {
-        try {
-            log.debug("Processing log event of type: {}", logEvent.getMessageType());
 
-            // 파싱 단계
-            boolean parseResult = parseService.parse(logEvent);
-            if (parseResult) {
-                logEvent.markAsParsed();
-
-                // 변환 단계
-                boolean transformResult = transformService.transform(logEvent);
-                if (transformResult) {
-                    logEvent.markAsTransformed();
-                    boolean queued = putOutputMsg(logEvent);
-                    log.debug("Log event processed and queued: {}, queue size: {}", queued, outputMessageQueue.size());
-                } else {
-                    log.debug("Log event filtered out by transform service");
-                }
-            } else {
-                log.debug("Log event parsing failed");
-                logEvent.markAsError("Parsing failed");
-                totalMessagesFailed.incrementAndGet();
-                // DLQ에 추가 (재시도 횟수 0으로 시작)
-                deadLetterQueue.addFromLogEvent(logEvent, 0);
-            }
-        } catch (Exception e) {
-            log.error("Error processing log event: {}", logEvent, e);
-            logEvent.markAsError("Processing error: " + e.getMessage());
-            totalMessagesFailed.incrementAndGet();
-            // DLQ에 추가
-            deadLetterQueue.addFromLogEvent(logEvent, 0);
-        }
-    }
 
     public boolean putGlobalMsg(LogEvent logEvent) {
         // 백프레셔 메커니즘: 큐가 임계값을 초과하면 즉시 거부
-        int currentSize = globalMessageQueue.size();
+        int currentSize = inputMessageQueue.size();
         double utilizationRate = (double) currentSize / queueSize;
 
         boolean success = false;
@@ -332,7 +340,7 @@ public class MessageDispatcher {
         } else {
             try {
                 // offer(timeout)를 사용하여 무한 블로킹 방지
-                boolean offered = globalMessageQueue.offer(logEvent, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                boolean offered = inputMessageQueue.offer(logEvent, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 if (!offered) {
                     // 타임아웃 발생 시 메시지 드롭
                     totalMessagesDropped.incrementAndGet();
@@ -416,7 +424,7 @@ public class MessageDispatcher {
             try {
                 ThreadUtil.sleep(QUEUE_MONITORING_INTERVAL_MS);
 
-                int globalQueueSize = globalMessageQueue.size();
+                int globalQueueSize = inputMessageQueue.size();
                 int outputQueueSize = outputMessageQueue.size();
 
                 double globalUtilization = (double) globalQueueSize / queueSize;
@@ -469,17 +477,22 @@ public class MessageDispatcher {
     }
 
     /**
-     * 큐 메트릭 조회 메서드
+     * 디스패처 메트릭 조회 메서드
      */
-    public QueueMetrics getQueueMetrics() {
-        return new QueueMetrics(
-                globalMessageQueue.size(),
+    public DispatcherMetrics getDispatcherMetrics() {
+        long processed = totalMessagesProcessed.get();
+        double avgTime = processed > 0 ? (double) totalProcessingTimeMs.get() / processed : 0.0;
+
+        return new DispatcherMetrics(
+                inputMessageQueue.size(),
                 outputMessageQueue.size(),
                 queueSize,
                 totalMessagesReceived.get(),
-                totalMessagesProcessed.get(),
+                processed,
                 totalMessagesDropped.get(),
-                totalMessagesFailed.get());
+                totalMessagesFailed.get(),
+                avgTime,
+                circuitState.name());
     }
 
     /**
@@ -500,13 +513,14 @@ public class MessageDispatcher {
         totalMessagesProcessed.set(0);
         totalMessagesDropped.set(0);
         totalMessagesFailed.set(0);
+        totalProcessingTimeMs.set(0);
         log.info("MessageDispatcher statistics reset");
     }
 
     /**
-     * 큐 메트릭 데이터 클래스
+     * 디스패처 메트릭 데이터 클래스
      */
-    public static class QueueMetrics {
+    public static class DispatcherMetrics {
         public final int globalQueueSize;
         public final int outputQueueSize;
         public final int maxQueueSize;
@@ -514,9 +528,12 @@ public class MessageDispatcher {
         public final long totalProcessed;
         public final long totalDropped;
         public final long totalFailed;
+        public final double averageProcessingTimeMs;
+        public final String circuitBreakerState;
 
-        public QueueMetrics(int globalQueueSize, int outputQueueSize, int maxQueueSize,
-                long totalReceived, long totalProcessed, long totalDropped, long totalFailed) {
+        public DispatcherMetrics(int globalQueueSize, int outputQueueSize, int maxQueueSize,
+                long totalReceived, long totalProcessed, long totalDropped, long totalFailed,
+                double averageProcessingTimeMs, String circuitBreakerState) {
             this.globalQueueSize = globalQueueSize;
             this.outputQueueSize = outputQueueSize;
             this.maxQueueSize = maxQueueSize;
@@ -524,6 +541,8 @@ public class MessageDispatcher {
             this.totalProcessed = totalProcessed;
             this.totalDropped = totalDropped;
             this.totalFailed = totalFailed;
+            this.averageProcessingTimeMs = averageProcessingTimeMs;
+            this.circuitBreakerState = circuitBreakerState;
         }
 
         public double getGlobalUtilization() {
@@ -537,10 +556,11 @@ public class MessageDispatcher {
         @Override
         public String toString() {
             return String.format(
-                    "QueueMetrics{global=%d/%d (%.1f%%), output=%d/%d (%.1f%%), received=%d, processed=%d, dropped=%d, failed=%d}",
+                    "DispatcherMetrics{global=%d/%d (%.1f%%), output=%d/%d (%.1f%%), received=%d, processed=%d, dropped=%d, failed=%d, avgTime=%.2fms, circuit=%s}",
                     globalQueueSize, maxQueueSize, getGlobalUtilization() * 100,
                     outputQueueSize, maxQueueSize, getOutputUtilization() * 100,
-                    totalReceived, totalProcessed, totalDropped, totalFailed);
+                    totalReceived, totalProcessed, totalDropped, totalFailed,
+                    averageProcessingTimeMs, circuitBreakerState);
         }
     }
 }

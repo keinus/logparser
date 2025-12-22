@@ -45,28 +45,28 @@ public class MetadataController {
     }
 
     @GetMapping("/input-adapter-schema/{type}")
-    public ResponseEntity<ConfigMetadataService.AdapterSchema> getInputAdapterSchema(@PathVariable String type) {
+    public ResponseEntity<ConfigMetadataService.AdapterSchema> getInputAdapterSchema(@PathVariable("type") String type) {
         log.info("GET /api/v1/metadata/input-adapter-schema/{}", type);
         ConfigMetadataService.AdapterSchema schema = metadataService.getInputAdapterSchema(type);
         return ResponseEntity.ok(schema);
     }
 
     @GetMapping("/parser-schema/{type}")
-    public ResponseEntity<ConfigMetadataService.AdapterSchema> getParserSchema(@PathVariable String type) {
+    public ResponseEntity<ConfigMetadataService.AdapterSchema> getParserSchema(@PathVariable("type") String type) {
         log.info("GET /api/v1/metadata/parser-schema/{}", type);
         ConfigMetadataService.AdapterSchema schema = metadataService.getParserSchema(type);
         return ResponseEntity.ok(schema);
     }
 
     @GetMapping("/transform-schema/{type}")
-    public ResponseEntity<ConfigMetadataService.TransformSchema> getTransformSchema(@PathVariable String type) {
+    public ResponseEntity<ConfigMetadataService.TransformSchema> getTransformSchema(@PathVariable("type") String type) {
         log.info("GET /api/v1/metadata/transform-schema/{}", type);
         ConfigMetadataService.TransformSchema schema = metadataService.getTransformSchema(type);
         return ResponseEntity.ok(schema);
     }
 
     @GetMapping("/output-adapter-schema/{type}")
-    public ResponseEntity<ConfigMetadataService.AdapterSchema> getOutputAdapterSchema(@PathVariable String type) {
+    public ResponseEntity<ConfigMetadataService.AdapterSchema> getOutputAdapterSchema(@PathVariable("type") String type) {
         log.info("GET /api/v1/metadata/output-adapter-schema/{}", type);
         ConfigMetadataService.AdapterSchema schema = metadataService.getOutputAdapterSchema(type);
         return ResponseEntity.ok(schema);
