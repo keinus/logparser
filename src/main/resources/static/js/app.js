@@ -771,73 +771,70 @@ function renderThreads(threads) {
         return;
     }
 
-    // Group threads by component type
-    const threadsByType = threads.reduce((acc, thread) => {
-        const type = thread.componentType || 'UNKNOWN';
-        if (!acc[type]) {
-            acc[type] = [];
-        }
-        acc[type].push(thread);
-        return acc;
-    }, {});
+    // Sort threads by ID
+    threads.sort((a, b) => a.threadId - b.threadId);
 
     const typeIcons = {
         'INPUT': 'input',
         'OUTPUT': 'output',
-        'PARSER': 'transform',
+        'PARSER': 'code',
         'BATCH': 'schedule',
         'MONITOR': 'visibility',
         'UNKNOWN': 'help_outline'
     };
+    
+    // Create Table
+    let html = `
+        <div class="table-responsive">
+            <table class="thread-table">
+                <thead>
+                    <tr>
+                        <th style="width: 60px; text-align: center;">Status</th>
+                        <th style="width: 60px;">ID</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Component</th>
+                        <th>State</th>
+                        <th style="width: 60px; text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
 
-    const typeColors = {
-        'INPUT': '#2196F3',
-        'OUTPUT': '#4CAF50',
-        'PARSER': '#FF9800',
-        'BATCH': '#9C27B0',
-        'MONITOR': '#00BCD4',
-        'UNKNOWN': '#757575'
-    };
+    html += threads.map(thread => {
+        const statusColor = thread.alive ? 'var(--success)' : 'var(--danger)';
+        const type = thread.componentType || 'UNKNOWN';
+        const icon = typeIcons[type] || 'help_outline';
+        
+        return `
+            <tr onclick="showThreadDetail(${JSON.stringify(thread).replace(/"/g, '&quot;')})" style="cursor: pointer;">
+                <td style="text-align: center;">
+                    <span class="material-icons" style="font-size: 1.2em; color: ${statusColor}; vertical-align: middle;">${thread.alive ? 'check_circle' : 'cancel'}</span>
+                </td>
+                <td style="font-family: monospace;">${thread.threadId}</td>
+                <td class="thread-name-cell" style="font-weight: 500;">${thread.name}</td>
+                <td>
+                    <span class="thread-type-badge ${type.toLowerCase()}">
+                        <span class="material-icons" style="font-size: 14px; margin-right: 4px;">${icon}</span>
+                        ${type}
+                    </span>
+                </td>
+                <td>${thread.componentName || '-'}</td>
+                <td><span class="thread-state-badge">${thread.state}</span></td>
+                <td style="text-align: center;">
+                    <span class="material-icons btn-icon-small">info</span>
+                </td>
+            </tr>
+        `;
+    }).join('');
 
-    container.innerHTML = Object.entries(threadsByType).map(([type, threads]) => `
-        <div class="thread-group">
-            <div class="thread-group-header" style="border-left-color: ${typeColors[type]}">
-                <span class="material-icons">${typeIcons[type]}</span>
-                <span>${type} (${threads.length})</span>
-            </div>
-            <div class="thread-list">
-                ${threads.map(thread => renderThreadCard(thread, typeColors[type])).join('')}
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderThreadCard(thread, color) {
-    const statusIcon = thread.alive ? 'check_circle' : 'cancel';
-    const statusColor = thread.alive ? '#4CAF50' : '#f44336';
-
-    return `
-        <div class="thread-card" onclick="showThreadDetail(${JSON.stringify(thread).replace(/"/g, '&quot;')})">
-            <div class="thread-card-header">
-                <div class="thread-name">
-                    <span class="material-icons" style="color: ${color}">${statusIcon}</span>
-                    <span>${thread.name}</span>
-                </div>
-                <div class="thread-state" style="background-color: ${statusColor}20; color: ${statusColor}">
-                    ${thread.state}
-                </div>
-            </div>
-            ${thread.componentName ? `
-                <div class="thread-component">
-                    <span class="material-icons">label</span>
-                    <span>${thread.componentName}</span>
-                </div>
-            ` : ''}
-            <div class="thread-meta">
-                <span>ID: ${thread.threadId}</span>
-            </div>
+    html += `
+                </tbody>
+            </table>
         </div>
     `;
+
+    container.innerHTML = html;
 }
 
 function showThreadDetail(thread) {

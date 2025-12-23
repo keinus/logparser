@@ -698,3 +698,73 @@ header {
     font-size: 1rem;
     color: var(--primary);
 }
+
+/* ========================================
+   Threads Table
+======================================== */
+.table-responsive {
+    overflow-x: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+}
+
+.thread-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-primary);
+    font-size: 0.875rem;
+}
+
+.thread-table th,
+.thread-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.thread-table th {
+    background: var(--bg-tertiary);
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.thread-table tr:hover {
+    background: var(--bg-secondary);
+}
+
+.thread-table tr:last-child td {
+    border-bottom: none;
+}
+
+.thread-type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.thread-type-badge.input { background: rgba(33, 150, 243, 0.1); color: #2196F3; }
+.thread-type-badge.output { background: rgba(76, 175, 80, 0.1); color: #4CAF50; }
+.thread-type-badge.parser { background: rgba(255, 152, 0, 0.1); color: #FF9800; }
+.thread-type-badge.batch { background: rgba(156, 39, 176, 0.1); color: #9C27B0; }
+.thread-type-badge.monitor { background: rgba(0, 188, 212, 0.1); color: #00BCD4; }
+.thread-type-badge.unknown { background: rgba(117, 117, 117, 0.1); color: #757575; }
+
+.thread-state-badge {
+    padding: 0.125rem 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 0.25rem;
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.btn-icon-small {
+    color: var(--text-tertiary);
+    font-size: 1.25rem;
+    vertical-align: middle;
+}
