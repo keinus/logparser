@@ -75,6 +75,12 @@ public class MessageDispatcher {
     private final AtomicLong totalMessagesDropped = new AtomicLong(0);
     private final AtomicLong totalMessagesFailed = new AtomicLong(0);
 
+    // Output throughput monitoring
+    private final AtomicLong outputMessageCount = new AtomicLong(0);
+    private volatile double currentOutputThroughput = 0.0;
+    private long lastOutputMessageCount = 0;
+    private long lastMonitorTime = System.currentTimeMillis();
+
     // 큐 크기 및 임계값 설정
     private final int queueSize;
     private static final double QUEUE_WARNING_THRESHOLD = 0.8; // 80% 이상 시 경고
@@ -253,7 +259,9 @@ public class MessageDispatcher {
 
     public LogEvent getOutputMsg() {
         try {
-            return outputMessageQueue.take();
+            LogEvent event = outputMessageQueue.take();
+            outputMessageCount.incrementAndGet();
+            return event;
         } catch (InterruptedException e) {
             // 종료 시 예상되는 동작이므로 DEBUG 레벨로 로깅
             log.debug("Interrupted while getting message from output queue - this is expected during shutdown");
@@ -279,23 +287,33 @@ public class MessageDispatcher {
                 double transformUtilization = (double) transformQueueSize / queueSize;
                 double outputUtilization = (double) outputQueueSize / queueSize;
 
+                // Calculate throughput
+                long currentCount = outputMessageCount.get();
+                long currentTime = System.currentTimeMillis();
+                double elapsedSeconds = (currentTime - lastMonitorTime) / 1000.0;
+                if (elapsedSeconds > 0) {
+                    currentOutputThroughput = (currentCount - lastOutputMessageCount) / elapsedSeconds;
+                }
+                lastOutputMessageCount = currentCount;
+                lastMonitorTime = currentTime;
+
                 // 경고 레벨 체크
                 if (inputUtilization >= QUEUE_WARNING_THRESHOLD || transformUtilization >= QUEUE_WARNING_THRESHOLD || outputUtilization >= QUEUE_WARNING_THRESHOLD) {
                     log.warn(
-                            "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {}",
+                            "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {} | Throughput: {:.1f}/s",
                             inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
                             transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
                             outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
                             totalMessagesDropped.get(), totalMessagesFailed.get(),
-                            deadLetterQueue.getStats());
+                            deadLetterQueue.getStats(), currentOutputThroughput);
                 } else {
                     log.info(
-                            "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {}",
+                            "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {} | Throughput: {:.1f}/s",
                             inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
                             transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
                             outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
                             totalMessagesDropped.get(), totalMessagesFailed.get(),
-                            deadLetterQueue.getStats());
+                            deadLetterQueue.getStats(), currentOutputThroughput);
                 }
             } catch (Exception e) {
                 log.error("Error in queue monitoring thread", e);
@@ -336,7 +354,8 @@ public class MessageDispatcher {
                 queueSize,
                 totalMessagesDropped.get(),
                 totalMessagesFailed.get(),
-                circuitBreaker.getState());
+                circuitBreaker.getState(),
+                currentOutputThroughput);
     }
 
     /**
@@ -351,6 +370,7 @@ public class MessageDispatcher {
         public final long totalDropped;
         public final long totalFailed;
         public final String circuitBreakerState;
+        public final double outputThroughput;
 
         public double getGlobalUtilization() {
             return (double) globalQueueSize / maxQueueSize;
@@ -367,12 +387,13 @@ public class MessageDispatcher {
         @Override
         public String toString() {
             return String.format(
-                    "DispatcherMetrics{input=%d/%d (%.1f%%), transform=%d/%d (%.1f%%), output=%d/%d (%.1f%%), dropped=%d, failed=%d, circuit=%s}",
+                    "DispatcherMetrics{input=%d/%d (%.1f%%), transform=%d/%d (%.1f%%), output=%d/%d (%.1f%%), dropped=%d, failed=%d, circuit=%s, throughput=%.1f/s}",
                     globalQueueSize, maxQueueSize, getGlobalUtilization() * 100,
                     transformQueueSize, maxQueueSize, getTransformUtilization() * 100,
                     outputQueueSize, maxQueueSize, getOutputUtilization() * 100,
                     totalDropped, totalFailed,
-                    circuitBreakerState);
+                    circuitBreakerState,
+                    outputThroughput);
         }
     }
 }
