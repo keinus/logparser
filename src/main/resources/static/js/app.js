@@ -794,8 +794,9 @@ function renderThreads(threads) {
                         <th>Name</th>
                         <th>Type</th>
                         <th>Component</th>
+                        <th>Comp. ID</th>
                         <th>State</th>
-                        <th style="width: 60px; text-align: center;">Action</th>
+                        <th>Extra Info</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -805,6 +806,20 @@ function renderThreads(threads) {
         const statusColor = thread.alive ? 'var(--success)' : 'var(--danger)';
         const type = thread.componentType || 'UNKNOWN';
         const icon = typeIcons[type] || 'help_outline';
+        
+        // Prepare extra info summary
+        let extraInfo = '';
+        if (thread.metadata && Object.keys(thread.metadata).length > 0) {
+            extraInfo = Object.entries(thread.metadata)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+        } else if (thread.componentConfig && Object.keys(thread.componentConfig).length > 0) {
+            // Fallback to config if no metadata
+             extraInfo = Object.entries(thread.componentConfig)
+                .filter(([k, v]) => typeof v !== 'object')
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+        }
         
         return `
             <tr onclick="showThreadDetail(${JSON.stringify(thread).replace(/"/g, '&quot;')})" style="cursor: pointer;">
@@ -820,9 +835,10 @@ function renderThreads(threads) {
                     </span>
                 </td>
                 <td>${thread.componentName || '-'}</td>
+                <td>${thread.componentId || '-'}</td>
                 <td><span class="thread-state-badge">${thread.state}</span></td>
-                <td style="text-align: center;">
-                    <span class="material-icons btn-icon-small">info</span>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; color: var(--text-secondary);">
+                    ${extraInfo || '-'}
                 </td>
             </tr>
         `;
