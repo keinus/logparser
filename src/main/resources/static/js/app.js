@@ -51,7 +51,7 @@ function showTab(tabName, event) {
     // Find and activate the clicked tab button
     const tabButtons = document.querySelectorAll('.tab-button');
     tabButtons.forEach((btn, index) => {
-        const tabs = ['dashboard', 'input', 'parser', 'transform', 'output', 'monitor'];
+        const tabs = ['dashboard', 'input', 'parser', 'transform', 'output'];
         if (tabs[index] === tabName) {
             btn.classList.add('active');
         }
@@ -67,6 +67,7 @@ function showTab(tabName, event) {
     switch (tabName) {
         case 'dashboard':
             loadDashboard();
+            loadMonitoringData();
             break;
         case 'input':
             loadInputAdapters();
@@ -79,9 +80,6 @@ function showTab(tabName, event) {
             break;
         case 'output':
             loadOutputAdapters();
-            break;
-        case 'monitor':
-            loadMonitoringData();
             break;
     }
 }
@@ -136,7 +134,10 @@ async function reloadPipeline() {
         const result = await pipelineAPI.reload();
         showToast(result.message || 'Pipeline reloaded successfully', 'success');
         await refreshPipelineStatus();
-        setTimeout(loadDashboard, 2000);
+        setTimeout(() => {
+            loadDashboard();
+            loadMonitoringData();
+        }, 2000);
     } catch (error) {
         showToast('Failed to reload pipeline: ' + error.message, 'error');
     } finally {
@@ -152,7 +153,10 @@ async function validateAndReload() {
         const result = await pipelineAPI.validateAndReload();
         showToast(result.message || 'Configuration validated and reloaded', 'success');
         await refreshPipelineStatus();
-        setTimeout(loadDashboard, 2000);
+        setTimeout(() => {
+            loadDashboard();
+            loadMonitoringData();
+        }, 2000);
     } catch (error) {
         showToast('Failed to validate and reload: ' + error.message, 'error');
     } finally {
@@ -168,7 +172,10 @@ async function restartPipeline() {
         const result = await pipelineAPI.restart();
         showToast(result.message || 'Pipeline restarted successfully', 'success');
         await refreshPipelineStatus();
-        setTimeout(loadDashboard, 3000);
+        setTimeout(() => {
+            loadDashboard();
+            loadMonitoringData();
+        }, 3000);
     } catch (error) {
         showToast('Failed to restart pipeline: ' + error.message, 'error');
     } finally {
@@ -879,7 +886,7 @@ function showToast(message, type = 'info') {
 // Auto Refresh
 function startAutoRefresh() {
     refreshInterval = setInterval(async () => {
-        if (currentTab === 'monitor') {
+        if (currentTab === 'dashboard') {
             await loadMonitoringData();
         }
         await refreshPipelineStatus();
