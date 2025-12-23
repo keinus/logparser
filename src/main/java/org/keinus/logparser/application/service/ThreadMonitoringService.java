@@ -5,9 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.infrastructure.persistence.entity.InputAdapterEntity;
 import org.keinus.logparser.infrastructure.persistence.entity.OutputAdapterEntity;
 import org.keinus.logparser.infrastructure.persistence.entity.ParserEntity;
+import org.keinus.logparser.infrastructure.persistence.entity.TransformEntity;
 import org.keinus.logparser.infrastructure.persistence.repository.InputAdapterRepository;
 import org.keinus.logparser.infrastructure.persistence.repository.OutputAdapterRepository;
 import org.keinus.logparser.infrastructure.persistence.repository.ParserRepository;
+import org.keinus.logparser.infrastructure.persistence.repository.TransformRepository;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.interfaces.rest.dto.response.ThreadDetailDto;
 import org.springframework.stereotype.Service;
@@ -29,9 +31,11 @@ public class ThreadMonitoringService {
     private final InputAdapterRepository inputAdapterRepository;
     private final OutputAdapterRepository outputAdapterRepository;
     private final ParserRepository parserRepository;
+    private final TransformRepository transformRepository;
 
     private static final Pattern INPUT_ADAPTER_PATTERN = Pattern.compile("(.+InputAdapter)-(\\d+)");
-    private static final Pattern PARSER_PATTERN = Pattern.compile("LogParser-(\\d+)");
+    private static final Pattern PARSER_PATTERN = Pattern.compile("ParserThread-(\\d+)");
+    private static final Pattern TRANSFORM_PATTERN = Pattern.compile("TransformThread-(\\d+)");
 
     /**
      * 모든 활성 스레드의 상세 정보를 반환합니다.
@@ -40,9 +44,10 @@ public class ThreadMonitoringService {
         Map<Long, InputAdapterEntity> inputAdaptersById = loadInputAdapters();
         Map<Long, OutputAdapterEntity> outputAdaptersById = loadOutputAdapters();
         List<ParserEntity> parsers = parserRepository.findAll();
+        List<TransformEntity> transforms = transformRepository.findAll();
 
         return threadManager.getAllThreadInfo().stream()
-                .map(info -> mapThreadInfoToDetail(info, inputAdaptersById, outputAdaptersById, parsers))
+                .map(info -> mapThreadInfoToDetail(info, inputAdaptersById, outputAdaptersById, parsers, transforms))
                 .toList();
     }
 
@@ -53,7 +58,8 @@ public class ThreadMonitoringService {
             ThreadManager.ThreadInfo threadInfo,
             Map<Long, InputAdapterEntity> inputAdaptersById,
             Map<Long, OutputAdapterEntity> outputAdaptersById,
-            List<ParserEntity> parsers
+            List<ParserEntity> parsers,
+            List<TransformEntity> transforms
     ) {
         String threadName = threadInfo.name();  // record 방식
 
@@ -67,11 +73,14 @@ public class ThreadMonitoringService {
         // 스레드 이름을 기반으로 컴포넌트 타입 결정
         Matcher inputMatcher = INPUT_ADAPTER_PATTERN.matcher(threadName);
         Matcher parserMatcher = PARSER_PATTERN.matcher(threadName);
+        Matcher transformMatcher = TRANSFORM_PATTERN.matcher(threadName);
 
         if (inputMatcher.matches()) {
             mapInputAdapterThread(builder, inputMatcher, inputAdaptersById);
         } else if (parserMatcher.matches()) {
             mapParserThread(builder, parserMatcher, parsers);
+        } else if (transformMatcher.matches()) {
+            mapTransformThread(builder, transformMatcher, transforms);
         } else {
             mapSpecialThread(builder, threadName, outputAdaptersById);
         }
@@ -124,6 +133,17 @@ public class ThreadMonitoringService {
                .metadata(Map.of("threadNumber", threadNumber, "totalParsers", parsers.size()));
     }
 
+    private void mapTransformThread(
+            ThreadDetailDto.ThreadDetailDtoBuilder builder,
+            Matcher matcher,
+            List<TransformEntity> transforms
+    ) {
+        String threadNumber = matcher.group(1);
+        builder.componentType("TRANSFORM")
+               .componentName("Transform Worker #" + threadNumber)
+               .metadata(Map.of("threadNumber", threadNumber, "totalTransforms", transforms.size()));
+    }
+
     private void mapSpecialThread(
             ThreadDetailDto.ThreadDetailDtoBuilder builder,
             String threadName,
@@ -133,6 +153,10 @@ public class ThreadMonitoringService {
             case "processOutputAdapter" -> builder
                     .componentType("OUTPUT")
                     .componentName("Output Message Processor")
+                    .metadata(Map.of("activeAdapters", outputAdaptersById.size()));
+            case "OutputDispatcher" -> builder
+                    .componentType("OUTPUT")
+                    .componentName("Output Dispatcher")
                     .metadata(Map.of("activeAdapters", outputAdaptersById.size()));
             case "BatchFlushScheduler" -> builder
                     .componentType("BATCH")
