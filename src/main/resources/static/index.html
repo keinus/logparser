@@ -222,62 +222,98 @@
 
             <!-- Input Adapters Tab -->
             <div id="input-tab" class="tab-content">
-                <div class="tab-header">
-                    <h2>
-                        <span class="material-icons">input</span>
-                        Input Adapters
-                    </h2>
-                    <button onclick="openCreateModal('input')" class="btn btn-primary">
-                        <span class="material-icons">add</span>
-                        <span>Add Adapter</span>
-                    </button>
+                <div class="tab-toolbar">
+                    <div class="toolbar-title">
+                        <h2>
+                            <span class="material-icons">input</span>
+                            Input Adapters
+                        </h2>
+                        <span class="badge" id="inputBadge">0</span>
+                    </div>
+                    <div class="toolbar-actions">
+                        <div class="search-box">
+                            <span class="material-icons">search</span>
+                            <input type="text" placeholder="Search inputs..." onkeyup="filterAdapters('input', this.value)">
+                        </div>
+                        <button onclick="openCreateModal('input')" class="btn btn-primary">
+                            <span class="material-icons">add</span>
+                            <span>Create</span>
+                        </button>
+                    </div>
                 </div>
-                <div id="inputList" class="adapter-list"></div>
+                <div id="inputList" class="adapter-grid"></div>
             </div>
 
             <!-- Parsers Tab -->
             <div id="parser-tab" class="tab-content">
-                <div class="tab-header">
-                    <h2>
-                        <span class="material-icons">code</span>
-                        Parsers
-                    </h2>
-                    <button onclick="openCreateModal('parser')" class="btn btn-primary">
-                        <span class="material-icons">add</span>
-                        <span>Add Parser</span>
-                    </button>
+                <div class="tab-toolbar">
+                    <div class="toolbar-title">
+                        <h2>
+                            <span class="material-icons">code</span>
+                            Parsers
+                        </h2>
+                         <span class="badge" id="parserBadge">0</span>
+                    </div>
+                    <div class="toolbar-actions">
+                        <div class="search-box">
+                            <span class="material-icons">search</span>
+                            <input type="text" placeholder="Search parsers..." onkeyup="filterAdapters('parser', this.value)">
+                        </div>
+                        <button onclick="openCreateModal('parser')" class="btn btn-primary">
+                            <span class="material-icons">add</span>
+                            <span>Create</span>
+                        </button>
+                    </div>
                 </div>
-                <div id="parserList" class="adapter-list"></div>
+                <div id="parserList" class="adapter-grid"></div>
             </div>
 
             <!-- Transforms Tab -->
             <div id="transform-tab" class="tab-content">
-                <div class="tab-header">
-                    <h2>
-                        <span class="material-icons">transform</span>
-                        Transforms
-                    </h2>
-                    <button onclick="openCreateModal('transform')" class="btn btn-primary">
-                        <span class="material-icons">add</span>
-                        <span>Add Transform</span>
-                    </button>
+                <div class="tab-toolbar">
+                    <div class="toolbar-title">
+                        <h2>
+                            <span class="material-icons">transform</span>
+                            Transforms
+                        </h2>
+                         <span class="badge" id="transformBadge">0</span>
+                    </div>
+                    <div class="toolbar-actions">
+                        <div class="search-box">
+                            <span class="material-icons">search</span>
+                            <input type="text" placeholder="Search transforms..." onkeyup="filterAdapters('transform', this.value)">
+                        </div>
+                        <button onclick="openCreateModal('transform')" class="btn btn-primary">
+                            <span class="material-icons">add</span>
+                            <span>Create</span>
+                        </button>
+                    </div>
                 </div>
-                <div id="transformList" class="adapter-list"></div>
+                <div id="transformList" class="adapter-grid"></div>
             </div>
 
             <!-- Output Adapters Tab -->
             <div id="output-tab" class="tab-content">
-                <div class="tab-header">
-                    <h2>
-                        <span class="material-icons">output</span>
-                        Output Adapters
-                    </h2>
-                    <button onclick="openCreateModal('output')" class="btn btn-primary">
-                        <span class="material-icons">add</span>
-                        <span>Add Adapter</span>
-                    </button>
+                <div class="tab-toolbar">
+                    <div class="toolbar-title">
+                        <h2>
+                            <span class="material-icons">output</span>
+                            Output Adapters
+                        </h2>
+                         <span class="badge" id="outputBadge">0</span>
+                    </div>
+                    <div class="toolbar-actions">
+                        <div class="search-box">
+                            <span class="material-icons">search</span>
+                            <input type="text" placeholder="Search outputs..." onkeyup="filterAdapters('output', this.value)">
+                        </div>
+                        <button onclick="openCreateModal('output')" class="btn btn-primary">
+                            <span class="material-icons">add</span>
+                            <span>Create</span>
+                        </button>
+                    </div>
                 </div>
-                <div id="outputList" class="adapter-list"></div>
+                <div id="outputList" class="adapter-grid"></div>
             </div>
         </main>
     </div>

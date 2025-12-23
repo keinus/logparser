@@ -4,6 +4,12 @@ let currentAdapterType = 'input';
 let currentEditingId = null;
 let adapterTypes = {};
 let refreshInterval = null;
+let adapterData = {
+    input: [],
+    parser: [],
+    transform: [],
+    output: []
+};
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
@@ -15,6 +21,13 @@ async function initializeApp() {
     await loadMetadata();
     await refreshPipelineStatus();
     await loadDashboard();
+    // Pre-load all data for filtering
+    await Promise.all([
+        loadInputAdapters(),
+        loadParsers(),
+        loadTransforms(),
+        loadOutputAdapters()
+    ]);
     showTab('dashboard');
 }
 
@@ -199,7 +212,9 @@ function showProgress(show, message = 'Processing...') {
 async function loadInputAdapters() {
     try {
         const data = await inputAdapterAPI.getAll();
-        renderAdapterList(data.content || [], 'inputList', 'input');
+        adapterData.input = data.content || [];
+        updateBadge('input', adapterData.input.length);
+        renderAdapterList(adapterData.input, 'inputList', 'input');
     } catch (error) {
         showToast('Failed to load input adapters: ' + error.message, 'error');
     }
@@ -208,7 +223,9 @@ async function loadInputAdapters() {
 async function loadParsers() {
     try {
         const data = await parserAPI.getAll();
-        renderAdapterList(data.content || [], 'parserList', 'parser');
+        adapterData.parser = data.content || [];
+        updateBadge('parser', adapterData.parser.length);
+        renderAdapterList(adapterData.parser, 'parserList', 'parser');
     } catch (error) {
         showToast('Failed to load parsers: ' + error.message, 'error');
     }
@@ -217,7 +234,9 @@ async function loadParsers() {
 async function loadTransforms() {
     try {
         const data = await transformAPI.getAll();
-        renderAdapterList(data.content || [], 'transformList', 'transform');
+        adapterData.transform = data.content || [];
+        updateBadge('transform', adapterData.transform.length);
+        renderAdapterList(adapterData.transform, 'transformList', 'transform');
     } catch (error) {
         showToast('Failed to load transforms: ' + error.message, 'error');
     }
@@ -226,10 +245,28 @@ async function loadTransforms() {
 async function loadOutputAdapters() {
     try {
         const data = await outputAdapterAPI.getAll();
-        renderAdapterList(data.content || [], 'outputList', 'output');
+        adapterData.output = data.content || [];
+        updateBadge('output', adapterData.output.length);
+        renderAdapterList(adapterData.output, 'outputList', 'output');
     } catch (error) {
         showToast('Failed to load output adapters: ' + error.message, 'error');
     }
+}
+
+function updateBadge(type, count) {
+    const badge = document.getElementById(`${type}Badge`);
+    if (badge) badge.textContent = count;
+}
+
+// Filter Adapters
+function filterAdapters(type, query) {
+    const term = query.toLowerCase();
+    const filtered = adapterData[type].filter(item => 
+        (item.messagetype && item.messagetype.toLowerCase().includes(term)) ||
+        (item.type && item.type.toLowerCase().includes(term)) ||
+        (item.id && item.id.toString().includes(term))
+    );
+    renderAdapterList(filtered, `${type}List`, type);
 }
 
 // Render Adapter List
@@ -238,50 +275,78 @@ function renderAdapterList(adapters, containerId, type) {
     if (!container) return;
 
     if (adapters.length === 0) {
-        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-tertiary); padding: 4rem;">No adapters configured</div>';
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-tertiary); padding: 4rem;">No adapters found</div>';
         return;
     }
 
     container.innerHTML = adapters.map(adapter => `
         <div class="adapter-card">
             <div class="adapter-header">
-                <div class="adapter-info">
-                    <h3>
-                        <span class="material-icons" style="font-size: 1.25rem; color: var(--primary);">${getAdapterIcon(type)}</span>
-                        ${adapter.type}
-                        <span class="status-badge ${adapter.enabled ? 'enabled' : 'disabled'}">
-                            ${adapter.enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                    </h3>
-                    <div class="adapter-messagetype">
-                        <span class="material-icons" style="font-size: 14px;">label</span>
-                        ${adapter.messagetype}
+                <div style="display: flex; align-items: center;">
+                    <div class="adapter-icon">
+                        <span class="material-icons">${getAdapterIcon(type)}</span>
+                    </div>
+                    <div class="adapter-title">
+                        <h3>${adapter.messagetype}</h3>
+                        <span class="adapter-subtitle">${adapter.type}</span>
                     </div>
                 </div>
+                <label class="switch">
+                    <input type="checkbox" ${adapter.enabled ? 'checked' : ''} onchange="toggleAdapter('${type}', ${adapter.id}, this.checked)">
+                    <span class="slider"></span>
+                </label>
             </div>
             
-            <div class="adapter-details">
-                ${renderAdapterDetails(adapter, type)}
+            <div class="adapter-body">
+                <div class="info-grid">
+                    ${renderKeyInfo(adapter)}
+                </div>
             </div>
 
             <div class="adapter-footer">
-                ${adapter.enabled
-                    ? `<button class="btn btn-secondary btn-small" onclick="toggleAdapter('${type}', ${adapter.id}, false)">
-                        Disable
-                       </button>`
-                    : `<button class="btn btn-success btn-small" onclick="toggleAdapter('${type}', ${adapter.id}, true)">
-                        Enable
-                       </button>`
-                }
-                <button class="btn btn-primary btn-small" onclick="editAdapter('${type}', ${adapter.id})">
-                    Edit
+                <button class="btn btn-secondary btn-small" onclick="editAdapter('${type}', ${adapter.id})">
+                    <span class="material-icons" style="font-size: 14px;">edit</span> Edit
                 </button>
                 <button class="btn btn-danger btn-small" onclick="deleteAdapter('${type}', ${adapter.id})">
-                    Delete
+                    <span class="material-icons" style="font-size: 14px;">delete</span> Delete
                 </button>
             </div>
         </div>
     `).join('');
+}
+
+// Render Key Info (Simplified View)
+function renderKeyInfo(adapter) {
+    let items = [];
+    
+    // Add specific high-value fields first
+    if (adapter.host) items.push(createInfoItem('Host', adapter.host));
+    if (adapter.port) items.push(createInfoItem('Port', adapter.port));
+    if (adapter.bootstrapservers) items.push(createInfoItem('Brokers', adapter.bootstrapservers));
+    if (adapter.topicid) items.push(createInfoItem('Topic', adapter.topicid));
+    if (adapter.url) items.push(createInfoItem('URL', adapter.url));
+    if (adapter.path) items.push(createInfoItem('Path', adapter.path));
+    if (adapter.index) items.push(createInfoItem('Index', adapter.index));
+    
+    // For parser/transform params
+    if (adapter.param) {
+         if (typeof adapter.param === 'string') {
+             items.push(createInfoItem('Pattern', adapter.param));
+         } else if (typeof adapter.param === 'object') {
+             items.push(createInfoItem('Rules', Object.keys(adapter.param).join(', ')));
+         }
+    }
+
+    return items.join('') || '<div style="color: var(--text-tertiary); font-size: 0.875rem;">No detailed settings</div>';
+}
+
+function createInfoItem(label, value) {
+    return `
+        <div class="info-item">
+            <span class="info-label">${label}</span>
+            <span class="info-value" title="${value}">${value}</span>
+        </div>
+    `;
 }
 
 // Get Icon for Adapter Type
@@ -295,110 +360,8 @@ function getAdapterIcon(type) {
     return iconMap[type] || 'settings';
 }
 
-// Structured Render Details
-function renderAdapterDetails(adapter, type) {
-    let detailsHtml = '';
-
-    // Network Config (TCP/UDP/HTTP)
-    if (adapter.port || adapter.host || adapter.url) {
-        detailsHtml += '<div class="detail-group"><h4>Network</h4><div class="detail-grid">';
-        if (adapter.host) detailsHtml += createDetailItem('Host', adapter.host);
-        if (adapter.port) detailsHtml += createDetailItem('Port', adapter.port);
-        if (adapter.url) detailsHtml += createDetailItem('URL', adapter.url);
-        if (adapter.method) detailsHtml += createDetailItem('Method', adapter.method);
-        if (adapter.timeoutMs) detailsHtml += createDetailItem('Timeout', adapter.timeoutMs + ' ms');
-        detailsHtml += '</div></div>';
-    }
-
-    // Kafka Config
-    if (adapter.bootstrapservers || adapter.topicid) {
-        detailsHtml += '<div class="detail-group"><h4>Kafka</h4><div class="detail-grid">';
-        if (adapter.bootstrapservers) detailsHtml += createDetailItem('Bootstrap Servers', adapter.bootstrapservers);
-        if (adapter.topicid) detailsHtml += createDetailItem('Topic ID', adapter.topicid);
-        if (adapter.groupId) detailsHtml += createDetailItem('Group ID', adapter.groupId);
-        detailsHtml += '</div></div>';
-    }
-
-    // File Config
-    if (adapter.path) {
-        detailsHtml += '<div class="detail-group"><h4>File</h4><div class="detail-grid">';
-        detailsHtml += createDetailItem('Path', adapter.path);
-        if (adapter.pathPattern) detailsHtml += createDetailItem('Pattern', adapter.pathPattern);
-        detailsHtml += createDetailItem('Read From Beginning', adapter.isFromBeginning ? 'Yes' : 'No');
-        detailsHtml += '</div></div>';
-    }
-
-    // Parser Params (Grok/Regex)
-    if (adapter.param && typeof adapter.param === 'string') {
-        detailsHtml += '<div class="detail-group"><h4>Pattern</h4><div class="detail-grid full-width">';
-        detailsHtml += createDetailItem('Param', adapter.param);
-        if (adapter.priority !== undefined) detailsHtml += createDetailItem('Priority', adapter.priority);
-        detailsHtml += '</div></div>';
-    }
-
-    // Transform Params (Object)
-    if (adapter.param && typeof adapter.param === 'object') {
-        detailsHtml += '<div class="detail-group"><h4>Rules</h4><div class="detail-grid full-width">';
-        // Render nested objects nicely
-        let rulesHtml = '';
-        if (adapter.param.pass) rulesHtml += createDetailItem('Pass Filter', JSON.stringify(adapter.param.pass, null, 2));
-        if (adapter.param.drop) rulesHtml += createDetailItem('Drop Filter', JSON.stringify(adapter.param.drop, null, 2));
-        if (adapter.param.add) rulesHtml += createDetailItem('Add Props', JSON.stringify(adapter.param.add, null, 2));
-        if (adapter.param.remove) rulesHtml += createDetailItem('Remove Props', JSON.stringify(adapter.param.remove, null, 2));
-        
-        detailsHtml += rulesHtml || '<span class="detail-value">Custom Rules</span>';
-        detailsHtml += '</div></div>';
-    }
-
-    // OpenSearch/ES
-    if (adapter.index || adapter.osUsername) {
-         detailsHtml += '<div class="detail-group"><h4>OpenSearch</h4><div class="detail-grid">';
-         if (adapter.index) detailsHtml += createDetailItem('Index', adapter.index);
-         if (adapter.action) detailsHtml += createDetailItem('Action', adapter.action);
-         detailsHtml += '</div></div>';
-    }
-
-    // Fallback for any other fields
-    // Exclude common or already handled fields
-    const handledFields = [
-        'id', 'type', 'messagetype', 'enabled', 'createdAt', 'updatedAt', 'version',
-        'host', 'port', 'url', 'method', 'timeoutMs',
-        'bootstrapservers', 'topicid', 'groupId',
-        'path', 'pathPattern', 'isFromBeginning',
-        'param', 'priority',
-        'index', 'action', 'osUsername', 'osPassword', // passwords hidden
-        'rmqUsername', 'rmqPassword'
-    ];
-
-    let otherHtml = '';
-    Object.entries(adapter).forEach(([key, value]) => {
-        if (!handledFields.includes(key) && value != null && value !== '') {
-            otherHtml += createDetailItem(formatFieldName(key), typeof value === 'object' ? JSON.stringify(value) : value);
-        }
-    });
-
-    if (otherHtml) {
-        detailsHtml += `<div class="detail-group"><h4>Other Settings</h4><div class="detail-grid">${otherHtml}</div></div>`;
-    }
-
-    return detailsHtml || '<p style="color: var(--text-tertiary);">No additional configuration</p>';
-}
-
-function createDetailItem(label, value) {
-    // If value is a long JSON string, put it in a pre block or truncate
-    let displayValue = value;
-    if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
-        displayValue = `<pre style="margin:0; white-space:pre-wrap; font-family:monospace; font-size:0.75rem;">${value}</pre>`;
-    }
-
-    return `
-        <div class="detail-item">
-            <span class="detail-label">${label}</span>
-            <span class="detail-value">${displayValue}</span>
-        </div>
-    `;
-}
-
+// Structured Render Details (Still needed for filtering or other logic?) 
+// No, the new card view uses renderKeyInfo. But we still need formatFieldName for form generation
 function formatFieldName(name) {
     return name.replace(/([A-Z])/g, ' $1')
         .replace(/^./, str => str.toUpperCase())
@@ -635,6 +598,12 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
         }
 
         closeModal();
+        // Refresh the current tab data
+        if (currentAdapterType === 'input') await loadInputAdapters();
+        else if (currentAdapterType === 'parser') await loadParsers();
+        else if (currentAdapterType === 'transform') await loadTransforms();
+        else if (currentAdapterType === 'output') await loadOutputAdapters();
+        
         showTab(currentAdapterType);
     } catch (error) {
         showToast('Failed to save adapter: ' + error.message, 'error');
@@ -681,7 +650,12 @@ async function deleteAdapter(type, id) {
         }
 
         showToast('Adapter deleted successfully', 'success');
-        showTab(type);
+        // Refresh and re-filter
+        if (type === 'input') await loadInputAdapters();
+        else if (type === 'parser') await loadParsers();
+        else if (type === 'transform') await loadTransforms();
+        else if (type === 'output') await loadOutputAdapters();
+        
     } catch (error) {
         showToast('Failed to delete adapter: ' + error.message, 'error');
     }
@@ -700,9 +674,19 @@ async function toggleAdapter(type, id, enable) {
         }
 
         showToast(`Adapter ${enable ? 'enabled' : 'disabled'} successfully`, 'success');
-        showTab(type);
+        // No need to reload everything, just update state locally if needed, but simplest to let it be
+        // Update local data cache? 
+        const item = adapterData[type].find(a => a.id === id);
+        if (item) item.enabled = enable;
+        
     } catch (error) {
         showToast('Failed to toggle adapter: ' + error.message, 'error');
+        // Revert toggle visually? Ideally yes, but simplistic for now
+        // reload data to reset switch
+        if (type === 'input') await loadInputAdapters();
+        else if (type === 'parser') await loadParsers();
+        else if (type === 'transform') await loadTransforms();
+        else if (type === 'output') await loadOutputAdapters();
     }
 }
 
