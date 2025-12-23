@@ -1,103 +1,178 @@
 # Logparser (로그파서)
 
-Logparser는 Spring Boot로 구축된 고성능, 유연성 및 동적 설정이 가능한 로그 처리 애플리케이션입니다. 다양한 소스에서 로그를 수집하고, 강력한 패턴을 사용하여 구문 분석(Parsing) 및 변환(Transform)한 후 구조화된 데이터를 여러 목적지로 전달할 수 있습니다.
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/keinus/logparser)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-0.2.3-blue)](https://github.com/keinus/logparser)
+[![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.8-green)](https://spring.io/projects/spring-boot)
 
-## 주요 기능
+**Logparser**는 Spring Boot 기반의 고성능 로그 처리 파이프라인 엔진입니다. 다양한 프로토콜(TCP, UDP, HTTP, Kafka)을 통해 로그를 수집하고, 정교한 패턴 매칭(Grok, Regex)으로 데이터를 구조화하여, 여러 목적지(Kafka, OpenSearch, RDB 등)로 실시간 전달합니다.
 
-*   **동적 파이프라인**: 애플리케이션 재시작 없이 입력, 파싱, 출력 단계를 동적으로 구성할 수 있습니다.
-*   **데이터베이스 기반 설정**: 파이프라인 설정은 영속성 및 관리 용이성을 위해 SQLite에 저장됩니다.
-*   **핫 리로드 (Hot Reload)**: 설정 변경사항을 자동으로 감지하고 즉시 적용합니다.
-*   **고성능**: 논블로킹(Non-blocking) I/O 원칙을 기반으로 구축되었으며 처리량에 최적화되어 있습니다.
-*   **보안**: 비밀번호와 같은 민감한 설정 데이터는 암호화되어 저장됩니다.
+데이터베이스 기반의 동적 설정 관리와 핫 리로드(Hot-Reload) 기능을 통해, 서비스 중단 없이 파이프라인 구성을 변경할 수 있습니다.
 
-### 지원 구성 요소
+---
 
-**입력 어댑터 (Input Adapters):**
-*   **File**: 파일을 추적(Tail)하여 새로운 라인을 수집합니다.
-*   **HTTP**: HTTP POST 요청을 통해 로그를 수신합니다.
-*   **Kafka**: Kafka 토픽에서 메시지를 소비합니다.
-*   **TCP**: Raw TCP 연결을 통해 로그를 수신합니다.
-*   **UDP**: UDP 패킷을 통해 로그를 수신합니다.
-*   **Fake**: 테스트 및 벤치마킹을 위한 가상 로그를 생성합니다.
+## 📋 목차
 
-**파서 (Parsers):**
-*   **Grok**: 강력한 Grok 패턴을 사용하여 비정형 텍스트를 분석합니다.
-*   **JSON**: JSON 형식의 로그를 파싱합니다.
-*   **Regex**: 사용자 정의 추출을 위해 정규 표현식을 사용합니다.
-*   **Syslog**: RFC3164 및 RFC5424 시스로그 형식을 지원합니다.
-*   **HTTP**: HTTP 전용 로그 형식을 파싱합니다.
+- [아키텍처](#-아키텍처)
+- [주요 기능](#-주요-기능)
+- [기술 스택](#-기술-스택)
+- [시작하기](#-시작하기)
+  - [전제 조건](#전제-조건)
+  - [설치 및 실행](#설치-및-실행)
+- [설정 가이드](#-설정-가이드)
+- [API 명세](#-api-명세)
+- [라이선스](#-라이선스)
 
-**출력 어댑터 (Output Adapters):**
-*   **Console**: 표준 출력(stdout)으로 로그를 출력합니다 (디버깅용).
-*   **HTTP**: 외부 HTTP 엔드포인트로 로그를 전달합니다.
-*   **Kafka**: Kafka 토픽으로 로그를 발행합니다.
-*   **OpenSearch**: OpenSearch 클러스터에 로그를 인덱싱합니다.
-*   **RabbitMQ**: RabbitMQ 익스체인지로 로그를 발행합니다.
-*   **TCP**: TCP를 통해 로그를 전달합니다.
-*   **Benchmark**: 처리 성능을 측정합니다 (데이터 폐기).
+---
 
-## 사전 요구 사항
+## 🏗 아키텍처
 
-*   **Java 21** 이상
-*   **Gradle** (Wrapper 포함)
+Logparser의 데이터 처리 흐름은 다음과 같은 파이프라인 구조를 따릅니다:
 
-## 시작하기
+```mermaid
+graph LR
+    Input[Input Sources] --> IA[Input Adapters]
+    IA --> Q1{Internal Queue}
+    Q1 --> P[Parsers]
+    P --> T[Transformers]
+    T --> Q2{Internal Queue}
+    Q2 --> OA[Output Adapters]
+    OA --> Dest[Destinations]
 
-### 빌드
-
-제공된 Gradle 래퍼를 사용하여 프로젝트를 빌드합니다:
-
-```bash
-./gradlew build
+    subgraph "Control Plane"
+        DB[(SQLite Config DB)] --> CM[Config Manager]
+        CM -.->|Hot Reload| IA
+        CM -.->|Hot Reload| P
+        CM -.->|Hot Reload| OA
+    end
 ```
 
-### 실행
+1.  **Input Adapter**: 다양한 소스(File, TCP, Kafka 등)로부터 Raw 데이터를 수집합니다.
+2.  **Parser**: 수집된 비정형 데이터를 구조화된 포맷(Map/JSON)으로 변환합니다 (Grok, Syslog 등).
+3.  **Transformer**: 데이터 필터링, 마스킹, 필드 추가/삭제 등의 가공을 수행합니다.
+4.  **Output Adapter**: 최종 데이터를 목적지(OpenSearch, Kafka 등)로 전달합니다.
 
-Gradle을 사용하여 직접 애플리케이션을 실행할 수 있습니다:
+---
 
-```bash
-./gradlew bootRun
+## ✨ 주요 기능
+
+| 분류 | 기능 | 설명 |
+| :--- | :--- | :--- |
+| **수집 (Ingestion)** | 다양한 프로토콜 지원 | File, HTTP, TCP, UDP, Kafka, Fake(테스트용) 어댑터 제공 |
+| **분석 (Parsing)** | 강력한 패턴 매칭 | Grok, Regex, JSON, Syslog (RFC3164/5424), HTTP 로그 파싱 지원 |
+| **전달 (Delivery)** | 멀티 채널 출력 | Console, HTTP, Kafka, OpenSearch, RabbitMQ, TCP 지원 |
+| **운영 (Ops)** | **동적 설정 변경** | DB 기반 설정 관리 및 **Hot Reload** (재시작 없는 설정 적용) 지원 |
+| | 스레드 모니터링 | 파이프라인별 스레드 상태 실시간 모니터링 API 제공 |
+| **보안 (Security)** | 설정 암호화 | DB에 저장되는 민감 정보(비밀번호 등) 암호화 처리 |
+
+---
+
+## 🛠 기술 스택
+
+- **Language**: Java 21
+- **Framework**: Spring Boot 3.5.8
+- **Build Tool**: Gradle
+- **Database**: SQLite (설정 저장용), JPA/Hibernate
+- **Parsing**: Java Grok, Gson
+- **Messaging**: Spring Kafka, Spring AMQP
+- **Docs**: SpringDoc OpenAPI (Swagger)
+
+---
+
+## 🚀 시작하기
+
+### 전제 조건
+
+- **Java JDK 21** 이상
+- **Gradle** (포함된 `gradlew` 사용 권장)
+
+### 설치 및 실행
+
+1.  **저장소 클론**
+    ```bash
+    git clone https://github.com/keinus/logparser.git
+    cd logparser
+    ```
+
+2.  **빌드**
+    ```bash
+    ./gradlew build
+    ```
+
+3.  **환경 변수 설정 (권장)**
+    보안을 위해 암호화 키를 환경 변수로 설정합니다.
+    ```bash
+    export LOGPARSER_CRYPTO_KEY="$(openssl rand -base64 32)"
+    export LOGPARSER_CRYPTO_SALT="$(openssl rand -hex 16)"
+    ```
+
+4.  **애플리케이션 실행**
+    ```bash
+    java -jar build/libs/logparser-0.2.3.jar
+    ```
+
+---
+
+## ⚙ 설정 가이드
+
+### `application.yml`
+기본 애플리케이션 설정입니다. (`src/main/resources/application.yml`)
+
+```yaml
+server:
+  port: 8765  # 기본 포트
+
+logparser:
+  config-source: DATABASE # 설정 소스 (DB)
+  auto-reload: true       # 설정 변경 시 자동 리로드 활성화
+  crypto:
+    secret-key: ${LOGPARSER_CRYPTO_KEY} # 암호화 키
 ```
 
-또는 빌드된 JAR 파일을 실행합니다:
+### 파이프라인 구성
+파이프라인 구성(Input, Parser, Output)은 내장된 SQLite 데이터베이스(`~/logparser/data/config.db`)에 저장되며, REST API를 통해 관리됩니다.
 
-```bash
-java -jar build/libs/logparser-0.2.3.jar
-```
+---
 
-## 설정 (Configuration)
+## 📡 API 명세
 
-### 애플리케이션 설정
-주요 설정 파일은 `src/main/resources/application.yml`에 위치합니다:
+서버 실행 후 **Swagger UI**를 통해 전체 API 명세를 확인하고 테스트할 수 있습니다.
+- URL: `http://localhost:8765/swagger-ui.html`
 
-*   **서버 포트**: 기본값은 `8765`입니다.
-*   **데이터베이스**: 기본적으로 SQLite가 사용됩니다 (`~/logparser/data/config.db`).
-*   **보안**: 민감한 데이터 암호화를 위한 키 설정.
+### 주요 Endpoints
 
-### 환경 변수
+#### 1. 파이프라인 관리 (`/api/v1/pipeline`)
 
-운영 환경에서는 다음과 같은 환경 변수를 설정하는 것을 **강력히 권장**합니다:
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/status` | 현재 파이프라인 상태 조회 |
+| `POST` | `/reload` | 설정 강제 리로드 |
+| `POST` | `/restart` | 파이프라인 재시작 |
+| `GET` | `/threads` | 파이프라인 스레드 상세 정보 모니터링 |
 
-*   `SERVER_PORT`: 애플리케이션 실행 포트 (기본값: 8765).
-*   `LOGPARSER_CRYPTO_KEY`: 암호화를 위한 32자 이상의 Base64 인코딩된 비밀키.
-*   `LOGPARSER_CRYPTO_SALT`: 임의의 솔트(Salt) 값.
+#### 2. 입력 어댑터 관리 (`/api/v1/input-adapters`)
 
-예시:
-```bash
-export LOGPARSER_CRYPTO_KEY="$(openssl rand -base64 32)"
-export LOGPARSER_CRYPTO_SALT="$(openssl rand -hex 16)"
-java -jar build/libs/logparser-0.2.3.jar
-```
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/` | 모든 입력 어댑터 목록 조회 (Paging) |
+| `POST` | `/` | 새로운 입력 어댑터 생성 |
+| `GET` | `/{id}` | 특정 입력 어댑터 조회 |
+| `PUT` | `/{id}` | 입력 어댑터 설정 수정 |
+| `PATCH` | `/{id}/enable` | 입력 어댑터 활성화 |
+| `PATCH` | `/{id}/disable` | 입력 어댑터 비활성화 |
 
-### 파이프라인 설정
-파이프라인 설정(입력, 파서, 출력)은 데이터베이스를 통해 관리됩니다. 애플리케이션은 초기 설정 가져오기 및 마이그레이션을 지원합니다.
+*(Output Adapter, Parser, Transform API도 유사한 패턴을 따릅니다)*
 
-## API 문서
+#### 3. 시스템 설정 (`/api/v1/settings`)
 
-애플리케이션은 관리 및 모니터링을 위한 REST API를 제공합니다. Swagger UI를 통해 대화형 문서를 확인할 수 있습니다:
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/` | 전역 설정 목록 조회 |
+| `PUT` | `/{key}` | 특정 설정 값 변경 (예: 스레드 풀 크기 등) |
 
-*   **URL**: `http://localhost:8765/swagger-ui.html`
+---
 
-## 라이선스
+## 📜 라이선스
 
-이 프로젝트는 MIT 라이선스를 따릅니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+이 프로젝트는 **MIT License** 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
