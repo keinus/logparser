@@ -230,11 +230,13 @@ public class PipelineReloadService {
 
             // MessageDispatcher에서 큐 정보 가져오기
             int queueSize = 0;
+            double throughput = 0.0;
 
             try {
                 MessageDispatcher dispatcher = applicationContext.getBean(MessageDispatcher.class);
                 var metrics = dispatcher.getDispatcherMetrics();
                 queueSize = metrics.globalQueueSize + metrics.transformQueueSize + metrics.outputQueueSize;
+                throughput = metrics.outputThroughput;
             } catch (Exception e) {
                 log.debug("Could not retrieve queue metrics: {}", e.getMessage());
             }
@@ -245,13 +247,14 @@ public class PipelineReloadService {
                     parserCount,
                     transformCount,
                     outputAdapterCount,
-                    queueSize
+                    queueSize,
+                    throughput
             );
         } catch (Exception e) {
             log.error("Error getting pipeline status", e);
             return new PipelineStatusInfo(
                     PipelineStatus.ERROR,
-                    0, 0, 0, 0, 0
+                    0, 0, 0, 0, 0, 0.0
             );
         }
     }
@@ -290,6 +293,7 @@ public class PipelineReloadService {
             int parserCount,
             int transformCount,
             int outputAdapterCount,
-            int queueSize
+            int queueSize,
+            double throughput
     ) {}
 }

@@ -216,13 +216,54 @@
                         </h2>
                     </div>
                     <div class="card-body">
-                        <div class="monitoring-grid">
+                        <!-- Key Metrics -->
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-icon status">
+                                    <span class="material-icons">health_and_safety</span>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Pipeline Status</span>
+                                    <span class="metric-value" id="monitorStatus">-</span>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon throughput">
+                                    <span class="material-icons">speed</span>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Throughput</span>
+                                    <span class="metric-value" id="monitorThroughput">0/s</span>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon queue">
+                                    <span class="material-icons">layers</span>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Queue Size</span>
+                                    <span class="metric-value" id="monitorQueueSize">0</span>
+                                </div>
+                            </div>
+                             <div class="metric-card">
+                                <div class="metric-icon active-threads">
+                                    <span class="material-icons">memory</span>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Active Threads</span>
+                                    <span class="metric-value" id="monitorThreadCount">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Detailed Stats -->
+                        <div class="monitoring-details-grid">
                             <div class="monitoring-panel">
                                 <h3>
-                                    <span class="material-icons">info</span>
-                                    Status Details
+                                    <span class="material-icons">settings_input_component</span>
+                                    Component Status
                                 </h3>
-                                <div id="statusDetailContent"></div>
+                                <div id="componentStatusList" class="status-list"></div>
                             </div>
                             <div class="monitoring-panel">
                                 <h3>
@@ -237,7 +278,7 @@
                         <div class="monitoring-section">
                             <h3>
                                 <span class="material-icons">settings_applications</span>
-                                Active Threads
+                                Active Threads Detail
                             </h3>
                             <div id="threadsContainer" class="threads-container"></div>
                         </div>

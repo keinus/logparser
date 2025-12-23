@@ -708,14 +708,44 @@ async function loadMonitoringData() {
             pipelineAPI.getThreads()
         ]);
 
-        // Render status details
-        const statusContent = document.getElementById('statusDetailContent');
-        statusContent.innerHTML = Object.entries(status).map(([key, value]) => `
-            <div class="status-item">
-                <div class="status-item-label">${formatFieldName(key)}:</div>
-                <div class="status-item-value">${typeof value === 'object' ? JSON.stringify(value) : value}</div>
+        // Key Metrics
+        const statusEl = document.getElementById('monitorStatus');
+        statusEl.textContent = status.status;
+        // Reset classes and add specific status class
+        statusEl.className = 'metric-value';
+        statusEl.classList.add(status.status ? status.status.toLowerCase() : 'unknown');
+        
+        // Throughput
+        const throughput = status.throughput !== undefined ? status.throughput : 0;
+        document.getElementById('monitorThroughput').textContent = `${parseFloat(throughput).toFixed(1)}/s`;
+        
+        document.getElementById('monitorQueueSize').textContent = status.queueSize;
+        document.getElementById('monitorThreadCount').textContent = threads.length;
+
+        // Component Status List
+        const componentList = document.getElementById('componentStatusList');
+        componentList.innerHTML = `
+            <div class="status-row">
+                <span class="material-icons" style="font-size: 1.2em; color: var(--primary);">input</span>
+                <span>Input Adapters</span>
+                <strong style="margin-left: auto;">${status.inputAdapterCount}</strong>
             </div>
-        `).join('');
+            <div class="status-row">
+                <span class="material-icons" style="font-size: 1.2em; color: var(--warning);">code</span>
+                <span>Parsers</span>
+                <strong style="margin-left: auto;">${status.parserCount}</strong>
+            </div>
+            <div class="status-row">
+                <span class="material-icons" style="font-size: 1.2em; color: var(--secondary);">transform</span>
+                <span>Transforms</span>
+                <strong style="margin-left: auto;">${status.transformCount}</strong>
+            </div>
+            <div class="status-row">
+                <span class="material-icons" style="font-size: 1.2em; color: var(--success);">output</span>
+                <span>Output Adapters</span>
+                <strong style="margin-left: auto;">${status.outputAdapterCount}</strong>
+            </div>
+        `;
 
         // Render progress details
         const progressContent = document.getElementById('reloadProgressDetail');
