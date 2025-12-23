@@ -822,7 +822,7 @@ function renderThreads(threads) {
         }
         
         return `
-            <tr onclick="showThreadDetail(${JSON.stringify(thread).replace(/"/g, '&quot;')})" style="cursor: pointer;">
+            <tr>
                 <td style="text-align: center;">
                     <span class="material-icons" style="font-size: 1.2em; color: ${statusColor}; vertical-align: middle;">${thread.alive ? 'check_circle' : 'cancel'}</span>
                 </td>
@@ -851,94 +851,6 @@ function renderThreads(threads) {
     `;
 
     container.innerHTML = html;
-}
-
-function showThreadDetail(thread) {
-    const modal = document.getElementById('threadDetailModal');
-    const content = document.getElementById('threadDetailContent');
-
-    content.innerHTML = `
-        <div class="thread-detail">
-            <div class="detail-section">
-                <h4>Basic Information</h4>
-                <div class="detail-grid">
-                    <div class="detail-item">
-                        <span class="detail-label">Thread Name:</span>
-                        <span class="detail-value">${thread.name}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Thread ID:</span>
-                        <span class="detail-value">${thread.threadId}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">State:</span>
-                        <span class="detail-value">${thread.state}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Status:</span>
-                        <span class="detail-value">${thread.alive ? 'Alive' : 'Dead'}</span>
-                    </div>
-                </div>
-            </div>
-
-            ${thread.componentName ? `
-                <div class="detail-section">
-                    <h4>Component Information</h4>
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">Type:</span>
-                            <span class="detail-value">${thread.componentType}</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Name:</span>
-                            <span class="detail-value">${thread.componentName}</span>
-                        </div>
-                        ${thread.componentId ? `
-                            <div class="detail-item">
-                                <span class="detail-label">Component ID:</span>
-                                <span class="detail-value">${thread.componentId}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            ` : ''}
-
-            ${thread.componentConfig && Object.keys(thread.componentConfig).length > 0 ? `
-                <div class="detail-section">
-                    <h4>Configuration</h4>
-                    <div class="detail-grid">
-                        ${Object.entries(thread.componentConfig).map(([key, value]) => `
-                            <div class="detail-item">
-                                <span class="detail-label">${formatFieldName(key)}:</span>
-                                <span class="detail-value">${value}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            ` : ''}
-
-            ${thread.metadata && Object.keys(thread.metadata).length > 0 ? `
-                <div class="detail-section">
-                    <h4>Metadata</h4>
-                    <div class="detail-grid">
-                        ${Object.entries(thread.metadata).map(([key, value]) => `
-                            <div class="detail-item">
-                                <span class="detail-label">${formatFieldName(key)}:</span>
-                                <span class="detail-value">${value}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            ` : ''}
-        </div>
-    `;
-
-    modal.style.display = 'block';
-}
-
-function closeThreadDetailModal() {
-    const modal = document.getElementById('threadDetailModal');
-    modal.style.display = 'none';
 }
 
 // Toast Notification
