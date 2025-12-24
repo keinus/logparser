@@ -168,6 +168,26 @@
                                     <span>Restart Pipeline</span>
                                 </button>
                             </div>
+
+                            <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid var(--border-color);">
+
+                            <form id="pipelineSettingsForm" onsubmit="savePipelineSettings(event)">
+                                <h3 style="margin-bottom: 1rem; font-size: 1rem; color: var(--text-secondary);">Global Settings</h3>
+                                <div class="form-group">
+                                    <label for="parserThreadsInput" style="display: block; margin-bottom: 0.5rem;">Parser & Transform Threads</label>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <input type="number" id="parserThreadsInput" min="1" style="flex: 1; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--surface-ground); color: var(--text-primary);">
+                                        <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
+                                            <span class="material-icons">save</span> Save
+                                        </button>
+                                    </div>
+                                    <small style="display: block; margin-top: 0.5rem; color: var(--text-tertiary);">
+                                        <span class="material-icons" style="font-size: 12px; vertical-align: middle;">info</span>
+                                        Requires pipeline restart to take effect.
+                                    </small>
+                                </div>
+                            </form>
+
                             <div id="reloadProgress" class="reload-progress" style="display: none;">
                                 <div class="progress-bar">
                                     <div class="progress-fill" id="progressFill"></div>

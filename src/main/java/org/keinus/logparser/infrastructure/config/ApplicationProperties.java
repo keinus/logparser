@@ -46,34 +46,6 @@ public class ApplicationProperties {
         log.info("Loading pipeline configuration from database...");
         log.info("=".repeat(80));
 
-        // DB가 비어있는지 확인
-        if (databaseConfigLoader.isDatabaseEmpty()) {
-            log.warn("═".repeat(80));
-            log.warn("DATABASE IS EMPTY!");
-            log.warn("No pipeline configuration found in database.");
-            log.warn("Pipeline will NOT start until configuration is created.");
-            log.warn("");
-            log.warn("To configure pipeline:");
-            log.warn("  1. Open Web UI: http://localhost:8765/");
-            log.warn("  2. Use REST API to create adapters, parsers, and transforms");
-            log.warn("  3. API Documentation: http://localhost:8765/swagger-ui.html");
-            log.warn("");
-            log.warn("Pipeline will auto-reload after configuration changes.");
-            log.warn("═".repeat(80));
-
-            // 빈 설정으로 초기화 (애플리케이션은 시작됨)
-            this.input = new java.util.ArrayList<>();
-            this.output = new java.util.ArrayList<>();
-            this.parser = new java.util.ArrayList<>();
-            this.transform = new java.util.ArrayList<>();
-            this.parserThreads = 4;
-            this.flushInterval = 5000;
-
-            log.info("Application started with EMPTY configuration (pipeline disabled)");
-            log.info("=".repeat(80));
-            return;
-        }
-
         // DB에서 설정 로드 (검증 실패 시 빈 설정으로 초기화)
         try {
             DatabaseConfigLoader.PipelineConfiguration config = databaseConfigLoader.loadConfiguration();

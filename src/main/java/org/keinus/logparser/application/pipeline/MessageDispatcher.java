@@ -69,7 +69,6 @@ public class MessageDispatcher {
     private TransformService transformService = null;
 
     int parserThreads = 1;
-    int transformThreads = 1;
 
     // 큐 모니터링 메트릭
     private final AtomicLong totalMessagesDropped = new AtomicLong(0);
@@ -126,7 +125,6 @@ public class MessageDispatcher {
         this.parseService = parseService;
         this.transformService = transformService;
         this.parserThreads = applicationProperties.getParserThreads();
-        this.transformThreads = applicationProperties.getParserThreads();
 
         // Dead Letter Queue 초기화
         this.deadLetterQueue = new DeadLetterQueue();
@@ -161,7 +159,7 @@ public class MessageDispatcher {
             }
 
             // Start Transform Threads
-            for (int i = 0; i < transformThreads; i++) {
+            for (int i = 0; i < parserThreads; i++) {
                 String threadName = "TransformThread-" + (i + 1);
                 TransformDispatcher transformDispatcher = new TransformDispatcher(
                     transformQueue, outputMessageQueue, transformService, 
@@ -177,7 +175,7 @@ public class MessageDispatcher {
             // DLQ flush 스레드 시작 (5분마다 flush)
             threadManager.executeWithName("DeadLetterQueueFlusher", this::flushDeadLetterQueue);
 
-            log.info("MessageDispatcher started with {} parser threads, {} transformer threads and queue monitoring", parserThreads, transformThreads);
+            log.info("MessageDispatcher started with {} parser/transformer threads and queue monitoring", parserThreads);
         } catch (Exception e) {
             log.error("Failed to initialize input adapters.", e);
             throw new RuntimeException("ETL Pipeline startup failed", e);

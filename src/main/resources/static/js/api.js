@@ -226,6 +226,25 @@ const pipelineAPI = {
     }
 };
 
+// Settings API
+const settingsAPI = {
+    getAll() {
+        return api.get('/settings');
+    },
+
+    get(key) {
+        return api.get(`/settings/${key}`);
+    },
+
+    update(key, value, dataType = 'STRING') {
+        return api.put(`/settings/${key}`, { value, dataType });
+    },
+
+    updateAll(settings) {
+        return api.put('/settings', settings);
+    }
+};
+
 // Metadata API
 const metadataAPI = {
     getInputAdapterTypes() {

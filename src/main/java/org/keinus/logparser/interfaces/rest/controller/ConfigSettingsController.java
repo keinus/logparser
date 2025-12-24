@@ -17,10 +17,15 @@ public class ConfigSettingsController {
     private final ConfigManagementService configManagementService;
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getAllSettings() {
-        log.info("GET /api/v1/settings");
-        Map<String, Object> settings = configManagementService.getAllCommonSettings();
-        return ResponseEntity.ok(settings);
+    public ResponseEntity<?> getAllSettings() {
+        try {
+            log.info("GET /api/v1/settings");
+            Map<String, Object> settings = configManagementService.getAllCommonSettings();
+            return ResponseEntity.ok(settings);
+        } catch (Exception e) {
+            log.error("Error retrieving all settings", e);
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+        }
     }
 
     @PutMapping
@@ -31,20 +36,25 @@ public class ConfigSettingsController {
     }
 
     @GetMapping("/{key}")
-    public ResponseEntity<String> getSettingValue(@PathVariable String key) {
-        log.info("GET /api/v1/settings/{}", key);
-        String value = configManagementService.getConfigValue(key);
-        return ResponseEntity.ok(value);
+    public ResponseEntity<String> getSettingValue(@PathVariable("key") String key) {
+        try {
+            log.info("GET /api/v1/settings/{}", key);
+            String value = configManagementService.getConfigValue(key);
+            return ResponseEntity.ok(value);
+        } catch (Exception e) {
+            log.error("Error retrieving setting for key: " + key, e);
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+        }
     }
 
     @PutMapping("/{key}")
-    public ResponseEntity<Void> updateSettingValue(
-            @PathVariable String key,
+    public ResponseEntity<Map<String, Object>> updateSettingValue(
+            @PathVariable("key") String key,
             @RequestBody Map<String, Object> payload) {
         log.info("PUT /api/v1/settings/{}", key);
         Object value = payload.get("value");
         String dataType = (String) payload.getOrDefault("dataType", "STRING");
         configManagementService.setConfigValue(key, value, dataType);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(payload);
     }
 }

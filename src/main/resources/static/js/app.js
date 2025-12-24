@@ -111,6 +111,9 @@ async function loadDashboard() {
         document.getElementById('parserCount').textContent = parserData.totalElements || 0;
         document.getElementById('transformCount').textContent = transformData.totalElements || 0;
         document.getElementById('outputCount').textContent = outputData.totalElements || 0;
+
+        // Load settings
+        await loadPipelineSettings();
     } catch (error) {
         console.error('Failed to load dashboard:', error);
     }
@@ -882,5 +885,36 @@ window.onclick = function(event) {
     const modal = document.getElementById('configModal');
     if (event.target === modal) {
         closeModal();
+    }
+}
+
+// Pipeline Settings
+async function loadPipelineSettings() {
+    try {
+        const parserThreads = await settingsAPI.get('parser_threads');
+        const input = document.getElementById('parserThreadsInput');
+        if (input) {
+            input.value = parserThreads || 4; // Default to 4 if null
+        }
+    } catch (error) {
+        console.error('Failed to load pipeline settings:', error);
+    }
+}
+
+async function savePipelineSettings(event) {
+    event.preventDefault();
+    const input = document.getElementById('parserThreadsInput');
+    const value = parseInt(input.value, 10);
+
+    if (isNaN(value) || value < 1) {
+        showToast('Please enter a valid number of threads (minimum 1)', 'error');
+        return;
+    }
+
+    try {
+        await settingsAPI.update('parser_threads', value, 'INTEGER');
+        showToast('Settings saved. Restart pipeline to apply changes.', 'success');
+    } catch (error) {
+        showToast('Failed to save settings: ' + error.message, 'error');
     }
 }
