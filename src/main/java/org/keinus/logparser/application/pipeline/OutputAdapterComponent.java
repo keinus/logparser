@@ -157,7 +157,7 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         lock.writeLock().lock();
         try {
             for (OutputAdapterConfig config : outputConfigs) {
-                if (!config.getEnabled().booleanValue()) {
+                if (!Boolean.TRUE.equals(config.getEnabled())) {
                     continue;
                 }
                 try {
@@ -180,6 +180,8 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
                     log.error("Failed to initialize OutputAdapter {}: {}", config.getType(), e.getMessage());
                 }
             }
+            
+            log.info("Registered Output Adapter Keys: {}", outputAdapterMap.getAllKeys());
         } finally {
             lock.writeLock().unlock();
         }

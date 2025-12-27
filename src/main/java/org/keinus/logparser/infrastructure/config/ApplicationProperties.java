@@ -131,7 +131,10 @@ public class ApplicationProperties {
 
         // Input/Output은 필수, Parser는 선택적 (경고만)
         if (CollectionUtils.isEmpty(input)) {
-            throw new IllegalArgumentException("Input configuration cannot be empty.");
+            log.warn("═".repeat(80));
+            log.warn("WARNING: No input adapters configured!");
+            log.warn("Pipeline will be idle until input adapters are added.");
+            log.warn("═".repeat(80));
         }
         if (CollectionUtils.isEmpty(output)) {
             throw new IllegalArgumentException("Output configuration cannot be empty.");

@@ -81,7 +81,7 @@ public class DatabaseConfigLoader {
         for (InputAdapterEntity entity : entities) {
             InputAdapterConfig config = new InputAdapterConfig();
             config.setId(entity.getId());
-            config.setType(normalizeAdapterType(entity.getType(), "InputAdapter"));
+            config.setType(entity.getType());
             config.setMessagetype(entity.getMessagetype());
             config.setHost(entity.getHost());
             config.setPort(entity.getPort());
@@ -111,7 +111,7 @@ public class DatabaseConfigLoader {
         for (OutputAdapterEntity entity : entities) {
             OutputAdapterConfig config = new OutputAdapterConfig();
             config.setId(entity.getId());
-            config.setType(normalizeAdapterType(entity.getType(), "OutputAdapter"));
+            config.setType(entity.getType());
             config.setMessagetype(entity.getMessagetype());
 
             // Network settings
@@ -164,7 +164,7 @@ public class DatabaseConfigLoader {
         for (ParserEntity entity : entities) {
             ParserAdapterConfig config = new ParserAdapterConfig();
             config.setId(entity.getId());
-            config.setType(normalizeAdapterType(entity.getType(), "Parser"));
+            config.setType(entity.getType());
             config.setMessagetype(entity.getMessagetype());
             config.setParam(entity.getParam());
             config.setPriority(entity.getPriority());
@@ -252,57 +252,6 @@ public class DatabaseConfigLoader {
 
         config.setParserThreads(parserThreadsStr != null ? Integer.parseInt(parserThreadsStr) : 4);
         config.setFlushInterval(flushIntervalStr != null ? Long.parseLong(flushIntervalStr) : 5000);
-    }
-
-    /**
-     * DB에 저장된 짧은 형식의 type을 전체 클래스 이름 형식으로 정규화합니다.
-     * 예: "tcp" → "TcpInputAdapter", "http" → "HttpOutputAdapter"
-     */
-    private String normalizeAdapterType(String type, String suffix) {
-        if (type == null || type.trim().isEmpty()) {
-            return type;
-        }
-
-        // 이미 정규화된 형식이면 그대로 반환
-        if (type.endsWith(suffix)) {
-            return type;
-        }
-
-        // 소문자 짧은 형식을 CamelCase로 변환
-        String normalized = type.toLowerCase().trim();
-
-        // 특수 케이스 처리
-        switch (normalized) {
-            case "tcp":
-                return "Tcp" + suffix;
-            case "udp":
-                return "Udp" + suffix;
-            case "http":
-                return "Http" + suffix;
-            case "kafka":
-                return "Kafka" + suffix;
-            case "file":
-                return "File" + suffix;
-            case "fake":
-                return "Fake" + suffix;
-            case "console":
-                return "ConsoleOutput" + suffix;
-            case "opensearch":
-                return "OpenSearch" + suffix;
-            case "rabbitmq":
-                return "RabbitMQ" + suffix;
-            case "benchmark":
-                return "Benchmark" + suffix;
-            case "regex":
-                return "Regex" + suffix;
-            case "grok":
-                return "Grok" + suffix;
-            case "json":
-                return "Json" + suffix;
-            default:
-                // 첫 글자만 대문자로 변환
-                return normalized.substring(0, 1).toUpperCase() + normalized.substring(1) + suffix;
-        }
     }
 
     @Transactional(readOnly = true)

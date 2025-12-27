@@ -59,8 +59,9 @@ public class MergingHashMap<T> {
      */
     public MergingHashMap(int maxSize) {
         this.maxSize = maxSize > 0 ? maxSize : Integer.MAX_VALUE;
-        // LinkedHashMap을 LRU 모드로 사용 (accessOrder = true)
-        this.internalMap = new LinkedHashMap<String, ArrayList<T>>(16, 0.75f, true) {
+        // LinkedHashMap을 LRU 모드로 사용하지 않음 (accessOrder = false)
+        // accessOrder=true일 경우 get() 호출 시에도 구조가 변경되어 멀티스레드 환경에서 안전하지 않음 (ParseService 등에서 문제 발생)
+        this.internalMap = new LinkedHashMap<String, ArrayList<T>>(16, 0.75f, false) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, ArrayList<T>> eldest) {
                 boolean shouldRemove = size() > MergingHashMap.this.maxSize;

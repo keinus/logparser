@@ -70,7 +70,7 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
 
         for (InputAdapterConfig param : inputConfigs) {
             try {
-                if (!param.getEnabled()) {
+                if (!Boolean.TRUE.equals(param.getEnabled())) {
                     log.info("Skipping disabled input adapter: {} (id={})", param.getMessagetype(), param.getId());
                     continue;
                 }

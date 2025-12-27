@@ -51,7 +51,7 @@ public class OutputFactory {
 		if (config.getId() != null) param.put("id", String.valueOf(config.getId()));
 		param.put("type", config.getType());
 		if (config.getMessagetype() != null) param.put("messagetype", config.getMessagetype());
-		if (config.getAddOriginText() != null) param.put("addOriginText", String.valueOf(config.getAddOriginText()));
+		if (config.getAddOriginText() != null) param.put("add_origin_text", String.valueOf(config.getAddOriginText()));
 
 		// Network 관련
 		if (config.getPort() != null) param.put("port", String.valueOf(config.getPort()));
