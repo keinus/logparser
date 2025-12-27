@@ -17,6 +17,7 @@ public class PipelineConfigEventListener {
     private final OutputAdapterComponent outputAdapterComponent;
     private final ParseService parseService;
     private final TransformService transformService;
+    private final MessageDispatcher messageDispatcher;
 
     @EventListener
     public void handleInputAdapterChanged(InputAdapterChangedEvent event) {
@@ -79,5 +80,13 @@ public class PipelineConfigEventListener {
         log.info("Handling TransformChangedEvent: type={}, id={}", event.getChangeType(), event.getTransformId());
         // For simple implementation, reload all transforms
         transformService.reload();
+    }
+
+    @EventListener
+    public void handleParserChanged(ParserTransformThreadsChangedEvent event) {
+        log.info("Handling ParserTransformThreadsChangedEvent: type={}, threads={}", event.getChangeType(), event.getThreads());
+        // For simple implementation, reload all parsers
+        // Ideally, ParseService should support granular updates
+        messageDispatcher.updateWorkerThreadCount();
     }
 }

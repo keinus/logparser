@@ -54,14 +54,11 @@ public class TransformDispatcher implements Runnable {
         log.info("Transform thread started: {}", Thread.currentThread().getName());
         while (running.get()) {
             try {
-                LogEvent logEvent = transformQueue.take();
-                processTransform(logEvent);
-            } catch (InterruptedException e) {
-                if (!running.get()) {
-                    log.info("Transform thread shutting down: {}", Thread.currentThread().getName());
-                    return;
-                }
-                log.debug("Transform thread interrupted but continuing: {}", Thread.currentThread().getName());
+                LogEvent logEvent = transformQueue.poll();
+                if(logEvent != null)
+                    processTransform(logEvent);
+                else
+                    ThreadUtil.sleep(100);
             } catch (Exception e) {
                 log.error("Error in transform loop", e);
                 ThreadUtil.sleep(100);

@@ -243,6 +243,7 @@ header {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
+    height: 100%; /* Ensure cards match height in grid */
 }
 
 .card-header {
@@ -348,7 +349,7 @@ header {
 }
 
 /* ========================================
-   Adapters UI (Updated)
+   Adapters UI
 ======================================== */
 .tab-toolbar {
     display: flex;
@@ -637,7 +638,8 @@ input:checked + .slider:before {
 
 .form-group input,
 .form-group select,
-.form-group textarea {
+.form-group textarea,
+.form-control {
     width: 100%;
     padding: 0.625rem;
     border-radius: var(--radius-md);
@@ -645,12 +647,22 @@ input:checked + .slider:before {
     background: var(--bg-secondary);
     color: var(--text-primary);
     font-size: 0.875rem;
+    font-family: inherit;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-control:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.help-icon {
+    font-size: 1rem;
+    color: var(--text-tertiary);
+    vertical-align: text-bottom;
+    cursor: help;
+    margin-left: 0.25rem;
 }
 
 /* Toast */
@@ -865,4 +877,39 @@ input:checked + .slider:before {
     color: var(--text-tertiary);
     font-size: 1.25rem;
     vertical-align: middle;
+}
+
+/* Reload Progress Bar */
+.reload-progress {
+    margin-top: 1rem;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--primary);
+    width: 0%;
+    transition: width 0.3s;
+    background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+    background-size: 1rem 1rem;
+    animation: progress-stripe 1s linear infinite;
+}
+
+@keyframes progress-stripe {
+    0% { background-position: 1rem 0; }
+    100% { background-position: 0 0; }
+}
+
+.progress-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: center;
 }

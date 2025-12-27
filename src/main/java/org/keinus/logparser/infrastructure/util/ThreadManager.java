@@ -64,16 +64,69 @@ public class ThreadManager extends ThreadPoolExecutor {
     }
 
     /**
-     * 지정된 이름의 스레드를 중지합니다.
+     * 지정된 이름의 스레드를 중지하고 완전히 종료될 때까지 대기합니다.
      */
     public void stopThread(String threadName) {
         Thread thread = threads.get(threadName);
-        if (thread != null && thread.isAlive()) {
-            LOGGER.info("Interrupting thread: {}", threadName);
-            thread.interrupt();
-        } else {
-            throw new IllegalArgumentException("No active thread found: " + threadName);
+        if (thread == null) {
+            LOGGER.debug("Thread not found: {}", threadName);
+            return;
         }
+
+        if (!thread.isAlive()) {
+            LOGGER.debug("Thread already stopped or not active: {}", threadName);
+            return;
+        }
+
+        LOGGER.info("Interrupting thread: {}", threadName);
+        thread.interrupt();
+
+        try {
+            LOGGER.debug("Waiting for thread to finish: {}", threadName);
+
+            // 스레드가 1~9초 사이에 종료되므로 최대 10초 대기하며 1초마다 확인
+            long timeoutMs = 10000;
+            long intervalMs = 1000;
+            long deadline = System.currentTimeMillis() + timeoutMs;
+
+            while (thread.isAlive() && System.currentTimeMillis() < deadline) {
+                thread.join(intervalMs);
+                if (thread.isAlive()) {
+                    LOGGER.debug("Thread {} is still running... waiting", threadName);
+                }
+            }
+
+            if (thread.isAlive()) {
+                LOGGER.warn("Thread {} did not finish within {} ms", threadName, timeoutMs);
+            } else {
+                LOGGER.info("Thread {} has been successfully stopped", threadName);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOGGER.error("Interrupted while waiting for thread {} to finish", threadName, e);
+        }
+    }
+
+    /**
+     * 지정된 접두사로 시작하는 모든 스레드를 중지합니다.
+     *
+     * @param prefix 스레드 이름 접두사
+     * @return 중지 요청된 스레드 수
+     */
+    public int stopThreadsStartingWith(String prefix) {
+        if (prefix == null || prefix.isEmpty()) {
+            return 0;
+        }
+
+        int count = 0;
+        for (String threadName : threads.keySet()) {
+            if (threadName.startsWith(prefix)) {
+                stopThread(threadName);
+                count++;
+            }
+        }
+        LOGGER.info("Stopped {} threads starting with '{}'", count, prefix);
+        return count;
     }
 
     /**

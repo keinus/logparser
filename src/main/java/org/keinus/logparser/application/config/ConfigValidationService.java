@@ -189,14 +189,6 @@ public class ConfigValidationService {
             return new PipelineIntegrityResult(true, errors, warnings);
         }
 
-        // Check minimum requirements (if any configuration exists)
-        if (inputAdapters.isEmpty()) {
-            errors.add("At least one input adapter is required");
-        }
-        if (parsers.isEmpty()) {
-            warnings.add("No parsers configured - messages will pass through without parsing");
-        }
-
         // Collect all message types
         Set<String> inputMessageTypes = new HashSet<>();
         Set<String> parserMessageTypes = new HashSet<>();

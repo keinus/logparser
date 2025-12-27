@@ -64,7 +64,7 @@ function showTab(tabName, event) {
     // Find and activate the clicked tab button
     const tabButtons = document.querySelectorAll('.tab-button');
     tabButtons.forEach((btn, index) => {
-        const tabs = ['dashboard', 'input', 'parser', 'transform', 'output'];
+        const tabs = ['dashboard', 'input', 'parser', 'transform', 'output', 'settings'];
         if (tabs[index] === tabName) {
             btn.classList.add('active');
         }
@@ -93,6 +93,9 @@ function showTab(tabName, event) {
             break;
         case 'output':
             loadOutputAdapters();
+            break;
+        case 'settings':
+            loadPipelineSettings();
             break;
     }
 }
@@ -294,10 +297,12 @@ function renderAdapterList(adapters, containerId, type) {
                         <span class="adapter-subtitle">${adapter.type}</span>
                     </div>
                 </div>
+                ${(type === 'input' || type === 'output') ? `
                 <label class="switch">
                     <input type="checkbox" ${adapter.enabled ? 'checked' : ''} onchange="toggleAdapter('${type}', ${adapter.id}, this.checked)">
                     <span class="slider"></span>
                 </label>
+                ` : ''}
             </div>
             
             <div class="adapter-body">
@@ -395,6 +400,14 @@ function openCreateModal(type) {
     document.getElementById('dynamicFields').innerHTML = '';
     document.getElementById('enabled').checked = true;
 
+    // Hide/Show Enabled field based on type
+    const enabledGroup = document.getElementById('enabledFieldGroup');
+    if (type === 'parser' || type === 'transform') {
+        enabledGroup.style.display = 'none';
+    } else {
+        enabledGroup.style.display = 'block';
+    }
+
     modal.classList.add('active');
 }
 
@@ -412,9 +425,19 @@ async function editAdapter(type, id) {
             Edit ${type.charAt(0).toUpperCase() + type.slice(1)}
         `;
 
+        // Hide/Show Enabled field based on type
+        const enabledGroup = document.getElementById('enabledFieldGroup');
+        if (type === 'parser' || type === 'transform') {
+            enabledGroup.style.display = 'none';
+        } else {
+            enabledGroup.style.display = 'block';
+        }
+
         // Populate form
         document.getElementById('messageType').value = adapter.messagetype;
-        document.getElementById('enabled').checked = adapter.enabled;
+        if (type === 'input' || type === 'output') {
+             document.getElementById('enabled').checked = adapter.enabled;
+        }
 
         // Populate type dropdown
         const typeSelect = document.getElementById('adapterType');
@@ -550,9 +573,13 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
     const formData = new FormData(e.target);
     const data = {
         type: document.getElementById('adapterType').value,
-        messagetype: document.getElementById('messageType').value,
-        enabled: document.getElementById('enabled').checked
+        messagetype: document.getElementById('messageType').value
     };
+
+    // Only add enabled field for supported types
+    if (currentAdapterType === 'input' || currentAdapterType === 'output') {
+        data.enabled = document.getElementById('enabled').checked;
+    }
 
     // Prepare param object for transforms
     if (currentAdapterType === 'transform') {

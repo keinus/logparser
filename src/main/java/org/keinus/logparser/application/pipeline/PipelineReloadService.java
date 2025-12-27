@@ -7,6 +7,7 @@ import org.keinus.logparser.application.config.ConfigManagementService;
 import org.keinus.logparser.application.config.ConfigValidationService;
 import org.keinus.logparser.domain.parsing.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
+import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,8 @@ public class PipelineReloadService {
     private final ConfigValidationService validationService;
     private final ApplicationContext applicationContext;
     private final ConfigManagementService configManagementService;
+    private final ApplicationProperties applicationProperties;
+    private final MessageDispatcher messageDispatcher;
 
     private final AtomicBoolean reloadInProgress = new AtomicBoolean(false);
     private final AtomicInteger reloadProgress = new AtomicInteger(0);
@@ -47,6 +50,11 @@ public class PipelineReloadService {
             // Step 2: 데이터베이스에서 설정 로드 및 검증
             log.info("Loading and validating configuration from database");
             validateConfiguration();
+            
+            // Reload global settings (threads, flush interval)
+            log.info("Refreshing global application properties");
+            applicationProperties.loadConfigurationFromDatabase();
+            
             reloadProgress.set(66);
 
             // Step 3: 새 설정으로 파이프라인 컴포넌트 재시작
@@ -123,6 +131,9 @@ public class PipelineReloadService {
             parseService.reload();
             transformService.reload();
             log.info("Parse and Transform services reloaded successfully");
+            
+            // MessageDispatcher worker 스레드 재설정 (개수 변경 적용)
+            messageDispatcher.updateWorkerThreadCount();
 
             // Input Adapters 재시작
             InputAdapterComponent inputComponent = applicationContext.getBean(InputAdapterComponent.class);

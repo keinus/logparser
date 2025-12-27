@@ -175,7 +175,7 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     private void processInputAdapter(InputAdapter mInputAdapter) {
         log.info("processInputAdapter started for adapter: {}", mInputAdapter.getClass().getSimpleName());
         LogEvent pendingLogEvent = null;
-        while (running.get()) {
+        while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 LogEvent logEvent;
                 // 이전에 실패한 로그 이벤트가 있다면 먼저 처리
@@ -192,19 +192,34 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
                         log.debug("Failed to send message: {}", mInputAdapter.getClass().getSimpleName());
                         // 실패한 이벤트를 저장하고 다음 루프에서 재시도
                         pendingLogEvent = logEvent;
-                        ThreadUtil.sleep(NO_DATA_SLEEP_MS);
+                        Thread.sleep(NO_DATA_SLEEP_MS);
                     } else {
                         // 성공적으로 전송되었으므로 pendingLogEvent 초기화
                         pendingLogEvent = null;
                     }
                 } else {
-                    ThreadUtil.sleep(NO_DATA_SLEEP_MS); // 데이터가 없을 때 대기
+                    Thread.sleep(NO_DATA_SLEEP_MS); // 데이터가 없을 때 대기
                 }
+            } catch (InterruptedException ie) {
+                log.info("Input adapter thread interrupted, stopping: {}", mInputAdapter.getClass().getSimpleName());
+                Thread.currentThread().interrupt(); // Restore interrupted status
+                break;
             } catch (Exception e) {
+                if (e instanceof InterruptedException || (e.getCause() instanceof InterruptedException)) {
+                     log.info("Input adapter thread interrupted (caught in Exception), stopping: {}", mInputAdapter.getClass().getSimpleName());
+                     Thread.currentThread().interrupt();
+                     break;
+                }
                 // 예외 발생 시에도 스레드를 종료하지 않고 계속 실행
                 log.error("Error in input adapter loop for {}, continuing...",
                         mInputAdapter.getClass().getSimpleName(), e);
-                ThreadUtil.sleep(1000); // 짧은 대기 후 재시도
+                try {
+                    Thread.sleep(1000); // 짧은 대기 후 재시도
+                } catch (InterruptedException ie) {
+                    log.info("Input adapter thread interrupted during error sleep, stopping: {}", mInputAdapter.getClass().getSimpleName());
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
 

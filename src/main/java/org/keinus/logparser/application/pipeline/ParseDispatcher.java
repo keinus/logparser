@@ -62,16 +62,13 @@ public class ParseDispatcher implements Runnable {
                     continue;
                 }
 
-                LogEvent logEvent = inputQueue.take();
-                processParse(logEvent);
-                circuitBreaker.recordSuccess();
-
-            } catch (InterruptedException e) {
-                if (!running.get()) {
-                    log.info("Parser thread shutting down: {}", Thread.currentThread().getName());
-                    return;
+                LogEvent logEvent = inputQueue.poll();
+                if(logEvent != null) {
+                    processParse(logEvent);
+                    circuitBreaker.recordSuccess();
+                } else {
+                    ThreadUtil.sleep(100);
                 }
-                log.debug("Parser thread interrupted but continuing: {}", Thread.currentThread().getName());
             } catch (Exception e) {
                 circuitBreaker.recordFailure();
                 log.error("Error processing log event (consecutive failures: {}), continuing...",

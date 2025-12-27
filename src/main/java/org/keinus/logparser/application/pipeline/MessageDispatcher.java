@@ -49,9 +49,14 @@ public class MessageDispatcher {
     private final BlockingQueue<LogEvent> outputMessageQueue;
 
     /**
-     * 스레드 실행 지속 여부
+     * 스레드 실행 지속 여부 (Global shutdown)
      */
     private static final AtomicBoolean running = new AtomicBoolean(true);
+    
+    /**
+     * 워커 스레드 제어 (Restartable)
+     */
+    private AtomicBoolean workerActive;
 
     /**
      * 스레드 관리자
@@ -68,7 +73,10 @@ public class MessageDispatcher {
      */
     private TransformService transformService = null;
 
-    int parserThreads = 1;
+    /**
+     * ApplicationProperties 인스턴스
+     */
+    private final ApplicationProperties applicationProperties;
 
     // 큐 모니터링 메트릭
     private final AtomicLong totalMessagesDropped = new AtomicLong(0);
@@ -124,7 +132,7 @@ public class MessageDispatcher {
 
         this.parseService = parseService;
         this.transformService = transformService;
-        this.parserThreads = applicationProperties.getParserThreads();
+        this.applicationProperties = applicationProperties;
 
         // Dead Letter Queue 초기화
         this.deadLetterQueue = new DeadLetterQueue();
@@ -146,28 +154,7 @@ public class MessageDispatcher {
     public void startPipeline() {
         try {
             running.set(true);
-            
-            // Start Parser Threads
-            for (int i = 0; i < parserThreads; i++) {
-                String threadName = "ParserThread-" + (i + 1);
-                ParseDispatcher parseDispatcher = new ParseDispatcher(
-                    inputMessageQueue, transformQueue, parseService, 
-                    deadLetterQueue, circuitBreaker, running, 
-                    totalMessagesFailed, totalMessagesDropped, queueSize
-                );
-                threadManager.executeWithName(threadName, parseDispatcher);
-            }
-
-            // Start Transform Threads
-            for (int i = 0; i < parserThreads; i++) {
-                String threadName = "TransformThread-" + (i + 1);
-                TransformDispatcher transformDispatcher = new TransformDispatcher(
-                    transformQueue, outputMessageQueue, transformService, 
-                    deadLetterQueue, running, totalMessagesFailed, 
-                    totalMessagesDropped, queueSize
-                );
-                threadManager.executeWithName(threadName, transformDispatcher);
-            }
+            startWorkers();
 
             // 큐 모니터링 스레드 시작
             threadManager.executeWithName("QueueMonitor", this::monitorQueues);
@@ -175,11 +162,63 @@ public class MessageDispatcher {
             // DLQ flush 스레드 시작 (5분마다 flush)
             threadManager.executeWithName("DeadLetterQueueFlusher", this::flushDeadLetterQueue);
 
-            log.info("MessageDispatcher started with {} parser/transformer threads and queue monitoring", parserThreads);
+            log.info("MessageDispatcher started");
         } catch (Exception e) {
             log.error("Failed to initialize input adapters.", e);
             throw new RuntimeException("ETL Pipeline startup failed", e);
         }
+    }
+
+    private synchronized void startWorkers() {
+        if (workerActive != null && workerActive.get()) {
+            log.warn("Workers are already running. Stop them first.");
+            return;
+        }
+
+        int parserThreads = applicationProperties.getParserThreads();
+        
+        this.workerActive = new AtomicBoolean(true);
+
+        // Start Parser Threads
+        for (int i = 0; i < parserThreads; i++) {
+            String threadName = "ParserThread-" + (i + 1);
+            ParseDispatcher parseDispatcher = new ParseDispatcher(
+                    inputMessageQueue, transformQueue, parseService,
+                    deadLetterQueue, circuitBreaker, workerActive,
+                    totalMessagesFailed, totalMessagesDropped, queueSize
+            );
+            threadManager.executeWithName(threadName, parseDispatcher);
+        }
+
+        // Start Transform Threads
+        for (int i = 0; i < parserThreads; i++) {
+            String threadName = "TransformThread-" + (i + 1);
+            TransformDispatcher transformDispatcher = new TransformDispatcher(
+                    transformQueue, outputMessageQueue, transformService,
+                    deadLetterQueue, workerActive, totalMessagesFailed,
+                    totalMessagesDropped, queueSize
+            );
+            threadManager.executeWithName(threadName, transformDispatcher);
+        }
+        log.info("Started {} parser threads and transform threads", parserThreads);
+    }
+
+    private synchronized void stopWorkers() {
+        if (workerActive != null) {
+            log.info("Stopping worker threads...");
+            workerActive.set(false);
+
+            threadManager.stopThreadsStartingWith("ParserThread-");
+            threadManager.stopThreadsStartingWith("TransformThread-");
+            log.info("Stopped all threads.");
+        }
+    }
+
+    public void updateWorkerThreadCount() {
+        log.info("Updating worker threads");
+        stopWorkers();
+        applicationProperties.loadConfigurationFromDatabase();
+        startWorkers();
     }
 
     @PreDestroy
@@ -202,6 +241,7 @@ public class MessageDispatcher {
     public void close() throws IOException {
         // 먼저 running 플래그를 false로 설정하여 루프들이 종료되도록 함
         running.set(false);
+        if (workerActive != null) workerActive.set(false);
 
         inputMessageQueue.clear();
         transformQueue.clear();

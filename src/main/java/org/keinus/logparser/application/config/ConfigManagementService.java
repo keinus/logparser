@@ -335,7 +335,11 @@ public class ConfigManagementService {
 
         entity.setConfigValue(value != null ? value.toString() : null);
         entity.setDataType(dataType);
-        configSettingsRepository.save(entity);
+        entity = configSettingsRepository.save(entity);
+
+        if(key.equals("parser_threads")) {
+            eventPublisher.publishEvent(new ParserTransformThreadsChangedEvent(this, ParserTransformThreadsChangedEvent.ChangeType.UPDATED, Integer.valueOf(entity.getConfigValue())));
+        }
     }
 
     // ==================== Helper Methods ====================
