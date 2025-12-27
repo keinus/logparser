@@ -3,7 +3,6 @@ package org.keinus.logparser.application.pipeline;
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -88,13 +87,10 @@ public class MessageDispatcher {
     private long lastOutputMessageCount = 0;
     private long lastMonitorTime = System.currentTimeMillis();
 
-    // 큐 크기 및 임계값 설정
+    // 큐 크기 설정
     private final int queueSize;
-    private static final double QUEUE_WARNING_THRESHOLD = 0.8; // 80% 이상 시 경고
-    private static final double QUEUE_CRITICAL_THRESHOLD = 0.95; // 95% 이상 시 위험
 
     // 타임아웃 및 대기 시간 상수
-    private static final long QUEUE_OFFER_TIMEOUT_MS = 50_000;  // 큐 삽입 시 최대 대기 시간 (50초)
     private static final long QUEUE_MONITORING_INTERVAL_MS = 30_000;  // 30초
     private static final long DLQ_FLUSH_INTERVAL_MS = 300_000;  // 5분
 
@@ -103,10 +99,6 @@ public class MessageDispatcher {
 
     // Circuit Breaker 관련
     private final CircuitBreaker circuitBreaker = new CircuitBreaker();
-
-    // Backpressure 로그 제한을 위한 변수
-    private long backpressureLastLogTime = 0;
-    private static final long BACKPRESSURE_LOG_INTERVAL_MS = 5000; // 5초
 
     /**
      * MessageDispatcher 생성자.
@@ -250,48 +242,14 @@ public class MessageDispatcher {
     }
 
     public boolean putInputMsg(LogEvent logEvent) {
-        // 백프레셔 메커니즘: 어느 큐라도 임계값을 초과하면 즉시 거부 (Global Backpressure)
-        int inputSize = inputMessageQueue.size();
-        int transformSize = transformQueue.size();
-        int outputSize = outputMessageQueue.size();
-        
-        double inputRate = (double) inputSize / queueSize;
-        double transformRate = (double) transformSize / queueSize;
-        double outputRate = (double) outputSize / queueSize;
-
-        if (inputRate >= QUEUE_CRITICAL_THRESHOLD || 
-            transformRate >= QUEUE_CRITICAL_THRESHOLD || 
-            outputRate >= QUEUE_CRITICAL_THRESHOLD) {
-            
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - backpressureLastLogTime >= BACKPRESSURE_LOG_INTERVAL_MS) {
-                log.warn("Backpressure triggered! Queue status - Input: {} ({}%), Transform: {} ({}%), Output: {} ({}%). Rejecting input message.",
-                        inputSize, String.format("%.1f", inputRate * 100),
-                        transformSize, String.format("%.1f", transformRate * 100),
-                        outputSize, String.format("%.1f", outputRate * 100));
-                backpressureLastLogTime = currentTime;
-            }
-
-            // 임계치 초과 시 즉시 거부 (input adapter가 백프레셔를 적용하도록)
-            totalMessagesDropped.incrementAndGet();
+        try {
+            // 큐가 가득 차면 공간이 생길 때까지 무한 대기 (Blocking Backpressure)
+            inputMessageQueue.put(logEvent);
+            return true;
+        } catch (InterruptedException e) {
+            log.debug("Interrupted while putting message to input queue - this is expected during shutdown");
+            Thread.currentThread().interrupt();
             return false;
-        } else {
-            try {
-                // offer(timeout)를 사용하여 무한 블로킹 방지
-                boolean offered = inputMessageQueue.offer(logEvent, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-                if (!offered) {
-                    // 타임아웃 발생 시 메시지 드롭
-                    totalMessagesDropped.incrementAndGet();
-                    log.warn("Message dropped due to queue insertion timeout. Queue size: {}/{}", inputSize,
-                            queueSize);
-                    return false;
-                }
-                return true;
-            } catch (InterruptedException e) {
-                log.debug("Interrupted while offering message to queue - this is expected during shutdown");
-                Thread.currentThread().interrupt();
-                return false;
-            }
         }
     }
 
@@ -334,25 +292,13 @@ public class MessageDispatcher {
                 }
                 lastOutputMessageCount = currentCount;
                 lastMonitorTime = currentTime;
-
-                // 경고 레벨 체크
-                if (inputUtilization >= QUEUE_WARNING_THRESHOLD || transformUtilization >= QUEUE_WARNING_THRESHOLD || outputUtilization >= QUEUE_WARNING_THRESHOLD) {
-                    log.warn(
-                            "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {} | Throughput: {:.1f}/s",
-                            inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
-                            transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
-                            outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
-                            totalMessagesDropped.get(), totalMessagesFailed.get(),
-                            deadLetterQueue.getStats(), currentOutputThroughput);
-                } else {
-                    log.info(
-                            "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {} | Throughput: {:.1f}/s",
-                            inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
-                            transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
-                            outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
-                            totalMessagesDropped.get(), totalMessagesFailed.get(),
-                            deadLetterQueue.getStats(), currentOutputThroughput);
-                }
+                log.info(
+                        "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {} | Throughput: {:.1f}/s",
+                        inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
+                        transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
+                        outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
+                        totalMessagesDropped.get(), totalMessagesFailed.get(),
+                        deadLetterQueue.getStats(), currentOutputThroughput);
             } catch (Exception e) {
                 log.error("Error in queue monitoring thread", e);
             }

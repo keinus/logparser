@@ -1,7 +1,6 @@
 package org.keinus.logparser.application.pipeline;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -10,7 +9,6 @@ import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.ingestion.service.InputFactory;
 import org.keinus.logparser.domain.ingestion.model.InputAdapter;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
-import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.keinus.logparser.domain.model.LogEvent;
 
 import org.springframework.stereotype.Component;
@@ -126,7 +124,7 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     }
 
     public void addAdapter(InputAdapterConfig config) {
-        if (!config.getEnabled()) {
+        if (!config.getEnabled().booleanValue()) {
             log.info("Adapter is disabled, skipping start: {}", config.getMessagetype());
             return;
         }

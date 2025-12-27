@@ -57,6 +57,9 @@ public class ConfigValidationService {
                     errors.add("Path is required for File");
                 }
             }
+            default -> {
+                break;
+            }
         }
 
         return new ValidationResult(errors.isEmpty(), errors);

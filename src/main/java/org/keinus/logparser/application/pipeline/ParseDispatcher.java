@@ -103,31 +103,12 @@ public class ParseDispatcher implements Runnable {
     }
 
     private boolean putTransformMsg(LogEvent logEvent) {
-        int currentSize = transformQueue.size();
-        double utilizationRate = (double) currentSize / maxQueueSize;
-
-        if (utilizationRate >= QUEUE_CRITICAL_THRESHOLD) {
-            long now = System.currentTimeMillis();
-            if (now - lastCriticalLogTime >= LOG_INTERVAL_MS) {
-                log.warn("Transform queue critical! Size: {}/{} ({}%), rejecting message",
-                        currentSize, maxQueueSize, String.format("%.1f", utilizationRate * 100));
-                lastCriticalLogTime = now;
-            }
-            totalMessagesDropped.incrementAndGet();
-            return false;
-        }
-
         try {
-            boolean offered = transformQueue.offer(logEvent, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            if (!offered) {
-                totalMessagesDropped.incrementAndGet();
-                log.warn("Transform message dropped due to queue insertion timeout. Queue size: {}/{}",
-                        currentSize, maxQueueSize);
-                return false;
-            }
+            // 큐가 가득 차면 공간이 생길 때까지 무한 대기
+            transformQueue.put(logEvent);
             return true;
         } catch (InterruptedException e) {
-            log.debug("Interrupted while offering message to transform queue");
+            log.debug("Interrupted while putting message to transform queue");
             Thread.currentThread().interrupt();
             return false;
         }

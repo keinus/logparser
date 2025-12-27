@@ -86,31 +86,12 @@ public class TransformDispatcher implements Runnable {
     }
 
     private boolean putOutputMsg(LogEvent logEvent) {
-        int currentSize = outputQueue.size();
-        double utilizationRate = (double) currentSize / maxQueueSize;
-
-        if (utilizationRate >= QUEUE_CRITICAL_THRESHOLD) {
-            long now = System.currentTimeMillis();
-            if (now - lastCriticalLogTime >= LOG_INTERVAL_MS) {
-                log.warn("Output queue critical! Size: {}/{} ({}%), rejecting message",
-                        currentSize, maxQueueSize, String.format("%.1f", utilizationRate * 100));
-                lastCriticalLogTime = now;
-            }
-            totalMessagesDropped.incrementAndGet();
-            return false;
-        }
-
         try {
-            boolean offered = outputQueue.offer(logEvent, QUEUE_OFFER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            if (!offered) {
-                totalMessagesDropped.incrementAndGet();
-                log.warn("Output message dropped due to queue insertion timeout. Queue size: {}/{}",
-                        currentSize, maxQueueSize);
-                return false;
-            }
+            // 큐가 가득 차면 공간이 생길 때까지 무한 대기
+            outputQueue.put(logEvent);
             return true;
         } catch (InterruptedException e) {
-            log.debug("Interrupted while offering message to output queue");
+            log.debug("Interrupted while putting message to output queue");
             Thread.currentThread().interrupt();
             return false;
         }

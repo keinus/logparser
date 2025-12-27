@@ -51,7 +51,6 @@ public class InputAdapterController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteInputAdapter(@PathVariable("id") Long id) {
-
         configManagementService.deleteInputAdapter(id);
         return ResponseEntity.noContent().build();
     }
