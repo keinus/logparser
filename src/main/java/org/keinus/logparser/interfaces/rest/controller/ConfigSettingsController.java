@@ -19,7 +19,7 @@ public class ConfigSettingsController {
     @GetMapping
     public ResponseEntity<?> getAllSettings() {
         try {
-            log.info("GET /api/v1/settings");
+
             Map<String, Object> settings = configManagementService.getAllCommonSettings();
             return ResponseEntity.ok(settings);
         } catch (Exception e) {
@@ -30,7 +30,7 @@ public class ConfigSettingsController {
 
     @PutMapping
     public ResponseEntity<Void> updateSettings(@RequestBody Map<String, Object> settings) {
-        log.info("PUT /api/v1/settings - count: {}", settings.size());
+
         configManagementService.updateCommonSettings(settings);
         return ResponseEntity.ok().build();
     }
@@ -38,7 +38,7 @@ public class ConfigSettingsController {
     @GetMapping("/{key}")
     public ResponseEntity<String> getSettingValue(@PathVariable("key") String key) {
         try {
-            log.info("GET /api/v1/settings/{}", key);
+
             String value = configManagementService.getConfigValue(key);
             return ResponseEntity.ok(value);
         } catch (Exception e) {
@@ -51,7 +51,7 @@ public class ConfigSettingsController {
     public ResponseEntity<Map<String, Object>> updateSettingValue(
             @PathVariable("key") String key,
             @RequestBody Map<String, Object> payload) {
-        log.info("PUT /api/v1/settings/{}", key);
+
         Object value = payload.get("value");
         String dataType = (String) payload.getOrDefault("dataType", "STRING");
         configManagementService.setConfigValue(key, value, dataType);

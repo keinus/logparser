@@ -21,21 +21,21 @@ public class TransformController {
 
     @GetMapping
     public ResponseEntity<Page<TransformEntity>> getAllTransforms(Pageable pageable) {
-        log.info("GET /api/v1/transforms - pageable: {}", pageable);
+
         Page<TransformEntity> result = configManagementService.getAllTransforms(pageable);
         return ResponseEntity.ok(result);
     }
 
     @PostMapping
     public ResponseEntity<TransformEntity> createTransform(@RequestBody TransformEntity entity) {
-        log.info("POST /api/v1/transforms - type: {}, messagetype: {}", entity.getType(), entity.getMessagetype());
+
         TransformEntity created = configManagementService.createTransform(entity);
         return ResponseEntity.ok(created);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<TransformEntity> getTransform(@PathVariable Long id) {
-        log.info("GET /api/v1/transforms/{}", id);
+
         TransformEntity entity = configManagementService.getTransform(id);
         return ResponseEntity.ok(entity);
     }
@@ -44,28 +44,28 @@ public class TransformController {
     public ResponseEntity<TransformEntity> updateTransform(
             @PathVariable Long id,
             @RequestBody TransformEntity entity) {
-        log.info("PUT /api/v1/transforms/{}", id);
+
         TransformEntity updated = configManagementService.updateTransform(id, entity);
         return ResponseEntity.ok(updated);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTransform(@PathVariable Long id) {
-        log.info("DELETE /api/v1/transforms/{}", id);
+
         configManagementService.deleteTransform(id);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/type/{type}")
     public ResponseEntity<List<TransformEntity>> getTransformsByType(@PathVariable String type) {
-        log.info("GET /api/v1/transforms/type/{}", type);
+
         List<TransformEntity> result = configManagementService.getTransformsByType(type);
         return ResponseEntity.ok(result);
     }
 
     @GetMapping("/messagetype/{messageType}")
     public ResponseEntity<List<TransformEntity>> getTransformsByMessageType(@PathVariable String messageType) {
-        log.info("GET /api/v1/transforms/messagetype/{}", messageType);
+
         List<TransformEntity> result = configManagementService.getTransformsByMessageType(messageType);
         return ResponseEntity.ok(result);
     }
@@ -74,7 +74,7 @@ public class TransformController {
     public ResponseEntity<TransformEntity> updateTransformPriority(
             @PathVariable Long id,
             @RequestParam Integer priority) {
-        log.info("PATCH /api/v1/transforms/{}/priority?priority={}", id, priority);
+
         TransformEntity entity = configManagementService.updateTransformPriority(id, priority);
         return ResponseEntity.ok(entity);
     }

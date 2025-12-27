@@ -47,7 +47,7 @@ public class PipelineController {
 
     @PostMapping("/validate-and-reload")
     public ResponseEntity<Map<String, String>> validateAndReload() {
-        log.info("POST /api/v1/pipeline/validate-and-reload");
+
         try {
             pipelineReloadService.validateAndReload();
             return ResponseEntity.ok(Map.of(
@@ -65,7 +65,7 @@ public class PipelineController {
 
     @PostMapping("/restart")
     public ResponseEntity<Map<String, String>> restartPipeline() {
-        log.info("POST /api/v1/pipeline/restart");
+
         try {
             pipelineReloadService.restartPipeline();
             return ResponseEntity.ok(Map.of(
@@ -83,14 +83,14 @@ public class PipelineController {
 
     @GetMapping("/reload-progress")
     public ResponseEntity<PipelineReloadService.ReloadProgress> getReloadProgress() {
-        log.info("GET /api/v1/pipeline/reload-progress");
+
         PipelineReloadService.ReloadProgress progress = pipelineReloadService.getReloadProgress();
         return ResponseEntity.ok(progress);
     }
 
     @PostMapping("/cancel-reload")
     public ResponseEntity<Map<String, String>> cancelReload() {
-        log.info("POST /api/v1/pipeline/cancel-reload");
+
         try {
             pipelineReloadService.cancelReload();
             return ResponseEntity.ok(Map.of(
@@ -108,7 +108,7 @@ public class PipelineController {
 
     @GetMapping("/threads")
     public ResponseEntity<List<ThreadDetailDto>> getAllThreads() {
-        log.info("GET /api/v1/pipeline/threads");
+
         List<ThreadDetailDto> threads = threadMonitoringService.getAllThreadDetails();
         return ResponseEntity.ok(threads);
     }
