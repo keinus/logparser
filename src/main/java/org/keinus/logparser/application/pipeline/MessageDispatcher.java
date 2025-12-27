@@ -18,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.keinus.logparser.domain.parsing.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
-import org.keinus.logparser.infrastructure.util.DeadLetterQueue;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.keinus.logparser.domain.model.LogEvent;
@@ -92,10 +91,6 @@ public class MessageDispatcher {
 
     // 타임아웃 및 대기 시간 상수
     private static final long QUEUE_MONITORING_INTERVAL_MS = 30_000;  // 30초
-    private static final long DLQ_FLUSH_INTERVAL_MS = 300_000;  // 5분
-
-    // Dead Letter Queue
-    private DeadLetterQueue deadLetterQueue;
 
     // Circuit Breaker 관련
     private final CircuitBreaker circuitBreaker = new CircuitBreaker();
@@ -126,9 +121,6 @@ public class MessageDispatcher {
         this.transformService = transformService;
         this.applicationProperties = applicationProperties;
 
-        // Dead Letter Queue 초기화
-        this.deadLetterQueue = new DeadLetterQueue();
-
         log.info("MessageDispatcher initialized with queue size: {}", queueSize);
     }
 
@@ -151,9 +143,6 @@ public class MessageDispatcher {
             // 큐 모니터링 스레드 시작
             threadManager.executeWithName("QueueMonitor", this::monitorQueues);
 
-            // DLQ flush 스레드 시작 (5분마다 flush)
-            threadManager.executeWithName("DeadLetterQueueFlusher", this::flushDeadLetterQueue);
-
             log.info("MessageDispatcher started");
         } catch (Exception e) {
             log.error("Failed to initialize input adapters.", e);
@@ -175,9 +164,9 @@ public class MessageDispatcher {
         for (int i = 0; i < parserThreads; i++) {
             String threadName = "ParserThread-" + (i + 1);
             ParseDispatcher parseDispatcher = new ParseDispatcher(
-                    inputMessageQueue, transformQueue, parseService,
-                    deadLetterQueue, circuitBreaker, workerActive,
-                    totalMessagesFailed, totalMessagesDropped, queueSize
+                inputMessageQueue, transformQueue, parseService,
+                circuitBreaker, workerActive,
+                totalMessagesFailed
             );
             threadManager.executeWithName(threadName, parseDispatcher);
         }
@@ -186,9 +175,8 @@ public class MessageDispatcher {
         for (int i = 0; i < parserThreads; i++) {
             String threadName = "TransformThread-" + (i + 1);
             TransformDispatcher transformDispatcher = new TransformDispatcher(
-                    transformQueue, outputMessageQueue, transformService,
-                    deadLetterQueue, workerActive, totalMessagesFailed,
-                    totalMessagesDropped, queueSize
+                transformQueue, outputMessageQueue, transformService,
+                workerActive, totalMessagesFailed
             );
             threadManager.executeWithName(threadName, transformDispatcher);
         }
@@ -293,36 +281,14 @@ public class MessageDispatcher {
                 lastOutputMessageCount = currentCount;
                 lastMonitorTime = currentTime;
                 log.info(
-                        "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | DLQ: {} | Throughput: {:.1f}/s",
+                        "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | Throughput: {:.1f}/s",
                         inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
                         transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
                         outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
                         totalMessagesDropped.get(), totalMessagesFailed.get(),
-                        deadLetterQueue.getStats(), currentOutputThroughput);
+                        currentOutputThroughput);
             } catch (Exception e) {
                 log.error("Error in queue monitoring thread", e);
-            }
-        }
-    }
-
-    /**
-     * Dead Letter Queue flush 스레드
-     * 주기적으로 DLQ를 파일에 저장합니다.
-     */
-    private void flushDeadLetterQueue() {
-        while (running.get()) {
-            try {
-                ThreadUtil.sleep(DLQ_FLUSH_INTERVAL_MS);
-
-                if (!deadLetterQueue.isEmpty()) {
-                    int flushed = deadLetterQueue.flush();
-                    if (flushed > 0) {
-                        log.info("Flushed {} messages from Dead Letter Queue", flushed);
-                    }
-                }
-
-            } catch (Exception e) {
-                log.error("Error in DLQ flush thread", e);
             }
         }
     }

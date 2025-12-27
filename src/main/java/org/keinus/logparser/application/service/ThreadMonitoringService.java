@@ -164,9 +164,6 @@ public class ThreadMonitoringService {
             case "QueueMonitor" -> builder
                     .componentType("MONITOR")
                     .componentName("Queue Monitor");
-            case "DeadLetterQueueFlusher" -> builder
-                    .componentType("MONITOR")
-                    .componentName("Dead Letter Queue Flusher");
             default -> builder.componentType("UNKNOWN");
         }
     }

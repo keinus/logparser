@@ -209,11 +209,11 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     }
 
     /**
-     * Dead Letter Queue에 메시지를 저장합니다.
+     * 실패한 메시지를 로그에 남깁니다.
      */
-    private void sendToDeadLetterQueue(String index, RetryableItem item) {
+    private void logFailedItem(String index, RetryableItem item) {
         deadLetterCount.incrementAndGet();
-        LOGGER.error("Item sent to Dead Letter Queue [index: {}, retryCount: {}]: {}",
+        LOGGER.error("Item failed permanently [index: {}, retryCount: {}]: {}",
                 index,
                 item.retryCount,
                 item.data.length() > 200 ? item.data.substring(0, 200) + "..." : item.data);
@@ -237,7 +237,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                 List<RetryableItem> items = entry.getValue();
                 while (!items.isEmpty() && removed < itemsToRemove) {
                     RetryableItem removedItem = items.remove(0);
-                    sendToDeadLetterQueue(entry.getKey(), removedItem);
+                    logFailedItem(entry.getKey(), removedItem);
                     removed++;
                     totalDocumentCount.decrementAndGet();
                 }
@@ -337,7 +337,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             }
         }
 
-        LOGGER.info("OpenSearch Output Adapter closed. DLQ count: {}", deadLetterCount.get());
+        LOGGER.info("OpenSearch Output Adapter closed. Failed items count: {}", deadLetterCount.get());
     }
 
     private static StringBuilder formatBulkRequestForIndex(String index, List<RetryableItem> list) {
@@ -357,7 +357,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     public void flush() {
         synchronized (flushLock) {
             if (Thread.currentThread().isInterrupted()) {
-                LOGGER.warn("Flush interrupted, moving {} pending items to DLQ", totalDocumentCount.get());
+                LOGGER.warn("Flush interrupted, moving {} pending items to failed log", totalDocumentCount.get());
                 handleInterrupt();
                 return;
             }
@@ -403,14 +403,14 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                     LOGGER.error("Failed to send data for index '{}' after {} retries: {}",
                             indexTarget, MAX_RETRIES, e.getMessage());
 
-                    // 모든 항목 재시도 또는 DLQ로 이동
+                    // 모든 항목 재시도 또는 실패 로그로 이동
                     for (RetryableItem item : documents) {
                         item.incrementRetry();
                         if (item.shouldRetry()) {
                             addRetryableItem(indexTarget, item);
                             failedCount++;
                         } else {
-                            sendToDeadLetterQueue(indexTarget, item);
+                            logFailedItem(indexTarget, item);
                         }
                     }
                 }
@@ -419,7 +419,7 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             lastFlushTime = currentTime;
 
             if (successCount > 0 || failedCount > 0) {
-                LOGGER.info("Flush completed - success: {}, retry queued: {}, total DLQ: {}",
+                LOGGER.info("Flush completed - success: {}, retry queued: {}, total failed: {}",
                         successCount, failedCount, deadLetterCount.get());
             }
         }
@@ -430,13 +430,13 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             for (Map.Entry<String, List<RetryableItem>> entry : dataMap.entrySet()) {
                 String indexTarget = entry.getKey();
                 for (RetryableItem item : entry.getValue()) {
-                    sendToDeadLetterQueue(indexTarget, item);
+                    logFailedItem(indexTarget, item);
                 }
             }
             int movedCount = totalDocumentCount.get();
             dataMap.clear();
             totalDocumentCount.set(0);
-            LOGGER.info("Moved {} items to DLQ due to interrupt", movedCount);
+            LOGGER.info("Moved {} items to failed log due to interrupt", movedCount);
         }
         Thread.currentThread().interrupt();
     }
@@ -535,9 +535,9 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                             LOGGER.debug("Item {} failed (status: {}, reason: {}), will retry (attempt {}/{})",
                                     i, status, errorReason, failedItem.retryCount, MAX_RETRIES);
                         } else {
-                            // DLQ로 이동
-                            sendToDeadLetterQueue(indexTarget, failedItem);
-                            LOGGER.warn("Item {} failed after max retries (status: {}, reason: {}), moved to DLQ",
+                            // 실패 로그로 이동
+                            logFailedItem(indexTarget, failedItem);
+                            LOGGER.warn("Item {} failed after max retries (status: {}, reason: {}), logged failure",
                                     i, status, errorReason);
                         }
                     }
