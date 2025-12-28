@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.keinus.logparser.domain.parsing.model.IParser;
 import org.keinus.logparser.domain.model.LogEvent;
 
 import lombok.extern.slf4j.Slf4j;

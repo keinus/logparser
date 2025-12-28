@@ -3,7 +3,6 @@ package org.keinus.logparser.domain.parsing.model;
 import java.lang.reflect.Type;
 import java.util.Map;
 
-import org.keinus.logparser.domain.parsing.model.IParser;
 import org.keinus.logparser.domain.model.LogEvent;
 
 import com.google.gson.Gson;

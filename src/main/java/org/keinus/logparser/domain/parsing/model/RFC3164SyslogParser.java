@@ -4,7 +4,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import org.keinus.logparser.domain.parsing.model.IParser;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.infrastructure.util.PatternCache;
 

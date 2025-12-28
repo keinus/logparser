@@ -8,8 +8,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
-import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +36,7 @@ public class TcpOutputAdapter extends OutputAdapter {
 	private int retry = 3;
 	private static final int SOCKET_TIMEOUT_MS = 5000;
 	private final AtomicBoolean closed = new AtomicBoolean(false);
+	private final ReentrantLock lock = new ReentrantLock();
 
 	public TcpOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -87,7 +88,8 @@ public class TcpOutputAdapter extends OutputAdapter {
 	}
 
 	public void send(Map<String, Object> json, String jsonString) {
-		synchronized (this) {
+		lock.lock();
+		try {
 			ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(jsonString);
 
 			try {
@@ -116,6 +118,8 @@ public class TcpOutputAdapter extends OutputAdapter {
 					socket = null;
 				}
 			}
+		} finally {
+			lock.unlock();
 		}
 	}
 
@@ -127,7 +131,8 @@ public class TcpOutputAdapter extends OutputAdapter {
 			return;
 		}
 
-		synchronized (this) {
+		lock.lock();
+		try {
 			if (socket != null) {
 				try {
 					if (!socket.isClosed()) {
@@ -141,6 +146,8 @@ public class TcpOutputAdapter extends OutputAdapter {
 					socket = null;
 				}
 			}
+		} finally {
+			lock.unlock();
 		}
 	}
 }

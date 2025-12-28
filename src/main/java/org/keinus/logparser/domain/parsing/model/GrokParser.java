@@ -2,7 +2,6 @@ package org.keinus.logparser.domain.parsing.model;
 
 import java.util.Map;
 
-import org.keinus.logparser.domain.parsing.model.IParser;
 import org.keinus.logparser.domain.model.LogEvent;
 
 import io.krakens.grok.api.Grok;

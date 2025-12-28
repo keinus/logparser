@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
-import org.keinus.logparser.domain.transformation.model.ITransform;
 import org.keinus.logparser.domain.model.LogEvent;
 
 /**

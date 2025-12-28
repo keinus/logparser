@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -113,7 +114,8 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     // 내부 flush 타이머
     private final ScheduledExecutorService flushScheduler;
     private ScheduledFuture<?> flushTask;
-    private final Object flushLock = new Object();
+    private final ReentrantLock flushLock = new ReentrantLock();
+    private final ReentrantLock dataLock = new ReentrantLock();
 
     // 처리량 측정
     private long lastFlushTime = System.currentTimeMillis();
@@ -231,7 +233,8 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         LOGGER.warn("Queue overflow detected. Current size: {}, max: {}. Dropping oldest {} items.",
                 totalDocumentCount.get(), MAX_TOTAL_ITEMS, itemsToRemove);
 
-        synchronized (dataMap) {
+        dataLock.lock();
+        try {
             int removed = 0;
             for (Map.Entry<String, List<RetryableItem>> entry : dataMap.entrySet()) {
                 List<RetryableItem> items = entry.getValue();
@@ -245,6 +248,8 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                     break;
                 }
             }
+        } finally {
+            dataLock.unlock();
         }
     }
 
@@ -355,7 +360,8 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     }
 
     public void flush() {
-        synchronized (flushLock) {
+        flushLock.lock();
+        try {
             if (Thread.currentThread().isInterrupted()) {
                 LOGGER.warn("Flush interrupted, moving {} pending items to failed log", totalDocumentCount.get());
                 handleInterrupt();
@@ -363,10 +369,13 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             }
 
             ConcurrentHashMap<String, List<RetryableItem>> itemsToFlush = new ConcurrentHashMap<>();
-            synchronized (dataMap) {
+            dataLock.lock();
+            try {
                 itemsToFlush.putAll(dataMap);
                 dataMap.clear();
                 totalDocumentCount.set(0);
+            } finally {
+                dataLock.unlock();
             }
 
             if (itemsToFlush.isEmpty()) {
@@ -422,11 +431,14 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                 LOGGER.info("Flush completed - success: {}, retry queued: {}, total failed: {}",
                         successCount, failedCount, deadLetterCount.get());
             }
+        } finally {
+            flushLock.unlock();
         }
     }
 
     private void handleInterrupt() {
-        synchronized (dataMap) {
+        dataLock.lock();
+        try {
             for (Map.Entry<String, List<RetryableItem>> entry : dataMap.entrySet()) {
                 String indexTarget = entry.getKey();
                 for (RetryableItem item : entry.getValue()) {
@@ -437,6 +449,8 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             dataMap.clear();
             totalDocumentCount.set(0);
             LOGGER.info("Moved {} items to failed log due to interrupt", movedCount);
+        } finally {
+            dataLock.unlock();
         }
         Thread.currentThread().interrupt();
     }

@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.keinus.logparser.domain.parsing.model.IParser;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.springframework.util.Assert;
 

@@ -8,8 +8,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.keinus.logparser.domain.delivery.model.OutputAdapter;
+import java.util.concurrent.locks.ReentrantLock;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,6 +45,7 @@ public class HttpOutputAdapter extends OutputAdapter {
 	private static final long CONNECTION_TIMEOUT = 30000; // 30초 유휴 타임아웃
 	private static final long MAX_CONNECTION_AGE = 300000; // 5분 최대 연결 수명
 	private final AtomicBoolean closed = new AtomicBoolean(false);
+	private final ReentrantLock lock = new ReentrantLock();
 
 	public HttpOutputAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -226,44 +226,45 @@ public class HttpOutputAdapter extends OutputAdapter {
 			return;
 		}
 
-		synchronized(this) {
-			try {
-				ensureConnection();
+		lock.lock();
+		try {
+			ensureConnection();
 
-				byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
-				StringBuilder sb = new StringBuilder();
-				sb.append("POST ").append(path).append(" HTTP/1.1\r\n");
-				sb.append("Host: ").append(host).append(":").append(port).append("\r\n");
-				sb.append("Content-Length: ").append(jsonBytes.length).append("\r\n");
-				sb.append("Content-Type: application/json\r\n");
-				sb.append("User-Agent: LogParser/1.0\r\n");
-				if (KEEP_ALIVE) {
-					sb.append("Connection: keep-alive\r\n");
-				} else {
-					sb.append("Connection: close\r\n");
-				}
-				sb.append("\r\n");
+			byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
+			StringBuilder sb = new StringBuilder();
+			sb.append("POST ").append(path).append(" HTTP/1.1\r\n");
+			sb.append("Host: ").append(host).append(":").append(port).append("\r\n");
+			sb.append("Content-Length: ").append(jsonBytes.length).append("\r\n");
+			sb.append("Content-Type: application/json\r\n");
+			sb.append("User-Agent: LogParser/1.0\r\n");
+			if (KEEP_ALIVE) {
+				sb.append("Connection: keep-alive\r\n");
+			} else {
+				sb.append("Connection: close\r\n");
+			}
+			sb.append("\r\n");
 
-				// 헤더와 바디를 전송 (재사용 가능한 outputStream 사용)
-				outputStream.write(sb.toString().getBytes(StandardCharsets.UTF_8));
-				outputStream.write(jsonBytes);
-				outputStream.flush();
+			// 헤더와 바디를 전송 (재사용 가능한 outputStream 사용)
+			outputStream.write(sb.toString().getBytes(StandardCharsets.UTF_8));
+			outputStream.write(jsonBytes);
+			outputStream.flush();
 
-				// HTTP 응답 읽기
-				readHttpResponse();
+			// HTTP 응답 읽기
+			readHttpResponse();
 
-				// Keep-Alive가 아닌 경우에만 연결 닫기
-				if (!KEEP_ALIVE) {
-					closeConnection();
-				}
-
-			} catch (IOException e) {
-				log.error("Send failed: {}", e.getMessage());
-				closeConnection();
-			} catch (Exception e) {
-				log.error("Unexpected error during send: {}", e.getMessage());
+			// Keep-Alive가 아닌 경우에만 연결 닫기
+			if (!KEEP_ALIVE) {
 				closeConnection();
 			}
+
+		} catch (IOException e) {
+			log.error("Send failed: {}", e.getMessage());
+			closeConnection();
+		} catch (Exception e) {
+			log.error("Unexpected error during send: {}", e.getMessage());
+			closeConnection();
+		} finally {
+			lock.unlock();
 		}
 	}
 

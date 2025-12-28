@@ -17,13 +17,11 @@ public class CustomThreadFactory implements ThreadFactory {
 
 	@Override
 	public Thread newThread(Runnable r) {
-		Thread thread = new Thread(r, String.format("%s-%d",
-				this.namePrefix,
-				this.threadNum.getAndIncrement()
-				));
-		thread.setDaemon(false);
-		thread.setPriority(Thread.NORM_PRIORITY);
-		LOGGER.info("Thread created: {}", thread.getName());
+		Thread thread = Thread.ofVirtual()
+				.name(String.format("%s-%d", this.namePrefix, this.threadNum.getAndIncrement()))
+				.unstarted(r);
+		
+		LOGGER.info("Virtual Thread created: {}", thread.getName());
 		return thread;
 	}
 }

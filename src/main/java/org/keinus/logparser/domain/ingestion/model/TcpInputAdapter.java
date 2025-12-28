@@ -60,7 +60,7 @@ public class TcpInputAdapter extends InputAdapter {
             clientHandlerPool = Executors.newFixedThreadPool(MAX_CLIENTS,
                 r -> {
                     Thread t = new Thread(r);
-                    t.setName("TcpClient-" + port + "-" + t.getId());
+                    t.setName("TcpClient-" + port + "-" + t.threadId());
                     t.setDaemon(true);
                     return t;
                 });

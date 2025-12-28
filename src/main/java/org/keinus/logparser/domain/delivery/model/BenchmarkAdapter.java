@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +28,7 @@ public class BenchmarkAdapter extends OutputAdapter {
 	private final AtomicInteger totalCounter = new AtomicInteger(0);
 	private long lastLogTime = System.currentTimeMillis();
 	private final AtomicBoolean closed = new AtomicBoolean(false);
+	private final ReentrantLock lock = new ReentrantLock();
 	
 	public BenchmarkAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -44,11 +46,14 @@ public class BenchmarkAdapter extends OutputAdapter {
 		long now = System.currentTimeMillis();
 		long elapsed = now - lastLogTime;
 		if (elapsed >= 1000) {
-			synchronized (this) {
+			lock.lock();
+			try {
 				int count = intervalCounter.getAndSet(0);
 				double tps = (double) count * 1000 / elapsed;
 				LOGGER.info("Benchmark [{}]: {} msg/s (Total: {})", getMessageType(), String.format("%.1f", tps), totalCounter.get());
 				lastLogTime = now;
+			} finally {
+				lock.unlock();
 			}
 		}
 	}

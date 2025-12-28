@@ -33,7 +33,7 @@ public class ThreadMonitoringService {
     private final ParserRepository parserRepository;
     private final TransformRepository transformRepository;
 
-    private static final Pattern INPUT_ADAPTER_PATTERN = Pattern.compile("(.+InputAdapter)-(\\d+)");
+    private static final Pattern INPUT_ADAPTER_PATTERN = Pattern.compile("InputAdapter-(\\d+)-(.+)");
     private static final Pattern PARSER_PATTERN = Pattern.compile("ParserThread-(\\d+)");
     private static final Pattern TRANSFORM_PATTERN = Pattern.compile("TransformThread-(\\d+)");
 
@@ -95,20 +95,19 @@ public class ThreadMonitoringService {
     ) {
         builder.componentType("INPUT");
 
-        String adapterTypeName = matcher.group(1);
-        String threadNumber = matcher.group(2);
-        String adapterType = adapterTypeName.replace("InputAdapter", "").toUpperCase();
+        String adapterIdStr = matcher.group(1);
+        String messageType = matcher.group(2);
+        Long adapterId = Long.parseLong(adapterIdStr);
 
-        builder.componentName(adapterTypeName + " #" + threadNumber);
-
-        InputAdapterEntity matchedAdapter = findAdapterByType(inputAdaptersById, adapterType);
+        InputAdapterEntity matchedAdapter = inputAdaptersById.get(adapterId);
         if (matchedAdapter != null) {
             builder.componentId(matchedAdapter.getId())
                    .componentName(matchedAdapter.getMessagetype() + 
-                                  " (" + matchedAdapter.getType() + ") #" + threadNumber)
+                                  " (" + matchedAdapter.getType() + ")")
                    .componentConfig(buildInputAdapterConfig(matchedAdapter));
         } else {
-            builder.componentConfig(Map.of("type", adapterType, "threadNumber", threadNumber));
+            builder.componentName("InputAdapter #" + adapterId + " [" + messageType + "]")
+                   .componentConfig(Map.of("id", adapterId, "messageType", messageType));
         }
     }
 
@@ -149,6 +148,12 @@ public class ThreadMonitoringService {
             String threadName,
             Map<Long, OutputAdapterEntity> outputAdaptersById
     ) {
+        if (threadName.startsWith("AdapterWorker-")) {
+            builder.componentType("OUTPUT")
+                   .componentName(threadName);
+            return;
+        }
+
         switch (threadName) {
             case "processOutputAdapter" -> builder
                     .componentType("OUTPUT")

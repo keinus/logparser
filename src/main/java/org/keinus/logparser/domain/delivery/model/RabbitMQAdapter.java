@@ -5,8 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.keinus.logparser.domain.delivery.model.OutputAdapter;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.rabbitmq.client.ConnectionFactory;
 
@@ -37,7 +36,7 @@ import com.rabbitmq.client.Channel;
 public class RabbitMQAdapter extends OutputAdapter {
 	private String routingkey = null;
 	private String exchange = null;
-	private final Object lock = new Object();
+	private final ReentrantLock lock = new ReentrantLock();
 	private Channel channel = null;
 	private Connection connection = null;
 	private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -68,7 +67,8 @@ public class RabbitMQAdapter extends OutputAdapter {
 	}
 
 	private void closeResources() {
-		synchronized (lock) {
+		lock.lock();
+		try {
 			if (channel != null) {
 				try {
 					// 먼저 graceful close 시도 (타임아웃 5초)
@@ -104,6 +104,8 @@ public class RabbitMQAdapter extends OutputAdapter {
 					connection = null;
 				}
 			}
+		} finally {
+			lock.unlock();
 		}
 	}
 
@@ -120,7 +122,8 @@ public class RabbitMQAdapter extends OutputAdapter {
 
 	@Override
 	public void send(Map<String, Object> json, String jsonString) {
-		synchronized (lock) {
+		lock.lock();
+		try {
 			if (channel != null) {
 				try {
 					channel.basicPublish(exchange, routingkey, null, jsonString.getBytes(StandardCharsets.UTF_8));
@@ -130,6 +133,8 @@ public class RabbitMQAdapter extends OutputAdapter {
 			} else {
 				log.warn("Cannot send message: RabbitMQ channel is not initialized");
 			}
+		} finally {
+			lock.unlock();
 		}
 	}
 }
