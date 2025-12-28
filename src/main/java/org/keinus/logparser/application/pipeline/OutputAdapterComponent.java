@@ -212,19 +212,12 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
                 return;
             }
 
-            sendToAdapters(adapters, logEvent);
+            for (OutputAdapter adapter : adapters) {
+                sendToAdapter(adapter, logEvent);
+            }
             log.debug("Sent log event for message type: {}", messageType);
         } finally {
             lock.readLock().unlock();
-        }
-    }
-
-    /**
-     * 어댑터들에게 로그 이벤트를 즉시 전송
-     */
-    private void sendToAdapters(Iterable<OutputAdapter> adapters, LogEvent event) {
-        for (OutputAdapter adapter : adapters) {
-            sendToAdapter(adapter, event);
         }
     }
 

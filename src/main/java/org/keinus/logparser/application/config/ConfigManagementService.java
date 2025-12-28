@@ -374,8 +374,8 @@ public class ConfigManagementService {
 
         try {
             return switch (dataType.toUpperCase()) {
-                case "INTEGER" -> Integer.parseInt(value.trim());
-                case "LONG" -> Long.parseLong(value.trim());
+                case "INTEGER" -> (int) Double.parseDouble(value.trim());
+                case "LONG" -> (long) Double.parseDouble(value.trim());
                 case "BOOLEAN" -> Boolean.parseBoolean(value.trim());
                 case "DOUBLE" -> Double.parseDouble(value.trim());
                 default -> value;

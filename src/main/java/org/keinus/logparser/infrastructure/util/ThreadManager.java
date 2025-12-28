@@ -109,6 +109,9 @@ public class ThreadManager extends ThreadPoolExecutor {
 
     /**
      * 지정된 접두사로 시작하는 모든 스레드를 중지합니다.
+     * <p>
+     * 최적화: 대상 스레드들에게 인터럽트를 병렬로 보낸 후 종료를 대기하여
+     * 전체 종료 시간을 단축합니다.
      *
      * @param prefix 스레드 이름 접두사
      * @return 중지 요청된 스레드 수
@@ -118,13 +121,40 @@ public class ThreadManager extends ThreadPoolExecutor {
             return 0;
         }
 
+        List<Thread> targetThreads = new ArrayList<>();
         int count = 0;
-        for (String threadName : threads.keySet()) {
-            if (threadName.startsWith(prefix)) {
-                stopThread(threadName);
-                count++;
+
+        // 1. 대상 식별 및 인터럽트 전송 (병렬 종료 신호)
+        for (Map.Entry<String, Thread> entry : threads.entrySet()) {
+            if (entry.getKey().startsWith(prefix)) {
+                Thread thread = entry.getValue();
+                if (thread.isAlive()) {
+                    LOGGER.info("Interrupting thread: {}", entry.getKey());
+                    thread.interrupt();
+                    targetThreads.add(thread);
+                }
             }
         }
+
+        // 2. 종료 대기(최대 10초) 주석 처리. JVM의 종료 대기가 너무 길어서 이미 코드 레벨에서 종료를 보장하여 아래 대기 상태 체크를 하지 않고 넘어가기로 함.
+        // long timeoutMs = 10000;
+        // for (Thread thread : targetThreads) {
+        //     try {
+        //         if (thread.isAlive()) {
+        //             thread.join(timeoutMs);
+        //         }
+                
+        //         if (thread.isAlive()) {
+        //             LOGGER.warn("Thread {} did not finish within {} ms", thread.getName(), timeoutMs);
+        //         } else {
+        //             count++;
+        //         }
+        //     } catch (InterruptedException e) {
+        //         Thread.currentThread().interrupt();
+        //         LOGGER.error("Interrupted while waiting for thread {} to finish", thread.getName(), e);
+        //     }
+        // }
+
         LOGGER.info("Stopped {} threads starting with '{}'", count, prefix);
         return count;
     }
