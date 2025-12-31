@@ -162,7 +162,7 @@ public class LogEvent implements Serializable {
      * JSON 직렬화를 위한 출력 맵을 생성합니다.
      * 출력 설정에 따라 원본 텍스트 포함 여부를 결정할 수 있습니다.
      */
-    public Map<String, Object> toOutputMap(boolean includeOriginalText) {
+    public Map<String, Object> toOutputMap() {
         Map<String, Object> output = new HashMap<>();
 
         // 메타데이터 추가
@@ -173,11 +173,6 @@ public class LogEvent implements Serializable {
         // 파싱된 필드 추가
         if (hasFields()) {
             output.putAll(fields);
-        }
-
-        // 원본 텍스트 포함 (옵션)
-        if (includeOriginalText && originalText != null) {
-            output.put("original_text", originalText);
         }
 
         return output;

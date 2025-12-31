@@ -55,12 +55,14 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
     private final Map<Long, AdapterRunner> adapterIdMap = new ConcurrentHashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    public record DataTuple(Map<String, Object> dataMap, String jsonString) {}
+
     /**
      * 각 어댑터의 전송 작업을 독립적으로 수행하는 내부 클래스
      */
     private class AdapterRunner {
         private final OutputAdapter adapter;
-        private final BlockingQueue<LogEvent> queue;
+        private final BlockingQueue<DataTuple> queue;
         private final AtomicBoolean active = new AtomicBoolean(true);
         private final String threadName;
 
@@ -76,9 +78,9 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             log.info("Worker thread started for adapter: {}", threadName);
             while (active.get() && !Thread.currentThread().isInterrupted()) {
                 try {
-                    LogEvent event = queue.poll(1, TimeUnit.SECONDS);
+                    DataTuple event = queue.poll(1, TimeUnit.SECONDS);
                     if (event != null) {
-                        sendToAdapter(adapter, event);
+                        adapter.send(event.dataMap(), event.jsonString());
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -90,8 +92,8 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             log.info("Worker thread finished for adapter: {}", threadName);
         }
 
-        public void put(LogEvent event) throws InterruptedException {
-            queue.put(event);
+        public void put(Map<String, Object> dataMap, String jsonString) throws InterruptedException {
+            queue.put(new DataTuple(dataMap, jsonString));
         }
 
         public void stop() {
@@ -102,10 +104,6 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             } catch (Exception e) {
                 log.error("Error closing adapter {}: {}", threadName, e.getMessage());
             }
-        }
-
-        public OutputAdapter getAdapter() {
-            return adapter;
         }
     }
 
@@ -172,7 +170,29 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
                 continue;
             }
 
-            processLogEvent(logEvent);
+            String messageType = logEvent.getMessageType();
+            lock.readLock().lock();
+            try {
+                var runners = outputAdapterMap.get(messageType);
+                if (runners.isEmpty()) {
+                    return;
+                }
+
+                Map<String, Object> outputMap = logEvent.toOutputMap();
+                String jsonString = gson.toJson(outputMap);
+
+                for (AdapterRunner runner : runners) {
+                    try {
+                        runner.put(outputMap, jsonString);
+                    } catch (InterruptedException e) {
+                        log.debug("Interrupted while putting message to adapter queue");
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            } finally {
+                lock.readLock().unlock();
+            }
         }
     }
 
@@ -234,50 +254,6 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         if (adapter instanceof BatchingOutputService.BatchableOutputAdapter batchableAdapter) {
             batchingOutputService.registerAdapter(batchableAdapter);
             log.info("Registered {} with BatchingOutputService", adapter.getClass().getSimpleName());
-        }
-    }
-
-    private long lastNoAdapterLogTime = 0;
-
-    private void processLogEvent(LogEvent logEvent) {
-        String messageType = logEvent.getMessageType();
-        
-        lock.readLock().lock();
-        try {
-            var runners = outputAdapterMap.get(messageType);
-
-            if (runners.isEmpty()) {
-                long now = System.currentTimeMillis();
-                if (now - lastNoAdapterLogTime > 5000) {
-                    log.warn("No output adapters found for message type: {}. Message dropped.", messageType);
-                    lastNoAdapterLogTime = now;
-                }
-                return;
-            }
-
-            for (AdapterRunner runner : runners) {
-                try {
-                    runner.put(logEvent);
-                } catch (InterruptedException e) {
-                    log.debug("Interrupted while putting message to adapter queue");
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    private void sendToAdapter(OutputAdapter adapter, LogEvent event) {
-        try {
-            boolean addOriginText = adapter.isAddOriginText();
-            Map<String, Object> outputMap = event.toOutputMap(addOriginText);
-            String jsonString = gson.toJson(outputMap);
-            adapter.send(outputMap, jsonString);
-        } catch (Exception e) {
-            log.error("Error sending to adapter {} for message type {}: {}",
-                    adapter.getClass().getSimpleName(), event.getMessageType(), e.getMessage());
         }
     }
 

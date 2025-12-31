@@ -105,20 +105,6 @@ class HttpOutputAdapterTest {
     }
 
     @Test
-    @DisplayName("getAddOriginText() 테스트 - 원본 텍스트 포함 여부")
-    void testGetAddOriginText() throws IOException {
-        // Given
-        validConfig.put("add_origin_text", "true");
-        adapter = new HttpOutputAdapter(validConfig);
-
-        // When
-        boolean addOriginText = adapter.isAddOriginText();
-
-        // Then
-        assertTrue(addOriginText);
-    }
-
-    @Test
     @DisplayName("close() 테스트 - 리소스 정리")
     void testClose() throws IOException {
         // Given

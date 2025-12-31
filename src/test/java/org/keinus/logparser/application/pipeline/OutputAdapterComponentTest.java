@@ -101,4 +101,75 @@ class OutputAdapterComponentTest {
             outputAdapterComponent.close();
         }
     }
+
+    @Test
+    void testSerializationCaching() throws Exception {
+        // Arrange
+        OutputAdapterConfig config1 = new OutputAdapterConfig();
+        config1.setId(1L);
+        config1.setType("MockAdapter1");
+        config1.setMessagetype("test");
+        config1.setEnabled(true);
+        config1.setAddOriginText(true);
+
+        OutputAdapterConfig config2 = new OutputAdapterConfig();
+        config2.setId(2L);
+        config2.setType("MockAdapter2");
+        config2.setMessagetype("test"); // Same message type
+        config2.setEnabled(true);
+        config2.setAddOriginText(true); // Same setting
+
+        when(appProp.getOutput()).thenReturn(List.of(config1, config2));
+
+        LogEvent logEvent = spy(new LogEvent("test message", "localhost", "test"));
+        
+        CountDownLatch latch = new CountDownLatch(2);
+
+        OutputAdapter mockAdapter1 = new OutputAdapter(Map.of("messagetype", "test", "add_origin_text", "true", "id", "1")) {
+            @Override
+            public void send(Map<String, Object> json, String jsonString) {
+                latch.countDown();
+            }
+            @Override
+            public void close() {}
+        };
+        OutputAdapter mockAdapter2 = new OutputAdapter(Map.of("messagetype", "test", "add_origin_text", "true", "id", "2")) {
+            @Override
+            public void send(Map<String, Object> json, String jsonString) {
+                latch.countDown();
+            }
+            @Override
+            public void close() {}
+        };
+
+        try (MockedStatic<OutputFactory> mockedFactory = mockStatic(OutputFactory.class)) {
+            mockedFactory.when(() -> OutputFactory.getOutputAdapter(any())).thenAnswer(inv -> {
+                OutputAdapterConfig c = inv.getArgument(0);
+                if (c.getId() == 1L) return mockAdapter1;
+                return mockAdapter2;
+            });
+
+            // Dispatcher returns event then null
+            when(dispatcher.getOutputMsg()).thenReturn(logEvent).thenAnswer(inv -> null);
+
+             // Trigger threads manually
+            doAnswer(invocation -> {
+                Runnable task = invocation.getArgument(1);
+                Thread.ofVirtual().start(task);
+                return null;
+            }).when(threadManager).executeWithName(anyString(), any(Runnable.class));
+
+            // Act
+            outputAdapterComponent.startPipeline();
+
+            // Wait
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
+
+            // Assert
+            // toOutputMap(true) should be called exactly once because of caching
+            verify(logEvent, times(1)).toOutputMap();
+            
+            outputAdapterComponent.close();
+        }
+    }
 }

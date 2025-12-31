@@ -27,9 +27,6 @@ public abstract class OutputAdapter implements Closeable {
 	@Getter
 	private String type = "";
 
-	@Getter
-	private boolean addOriginText = false;
-
 	protected OutputAdapter(Map<String, String> obj) throws IOException {
 		if (obj == null) {
 			throw new IOException("Property not found.");
@@ -40,7 +37,6 @@ public abstract class OutputAdapter implements Closeable {
 			this.id = Long.parseLong(obj.get("id"));
 		}
 		this.type = obj.getOrDefault("messagetype", null);
-		this.addOriginText = Boolean.parseBoolean(obj.get("add_origin_text"));
 		this.name = getClass().getSimpleName() + ":" + obj.toString();
 	}
 

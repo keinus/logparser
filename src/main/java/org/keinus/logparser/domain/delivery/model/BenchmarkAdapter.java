@@ -28,7 +28,6 @@ public class BenchmarkAdapter extends OutputAdapter {
 	private final AtomicInteger totalCounter = new AtomicInteger(0);
 	private long lastLogTime = System.currentTimeMillis();
 	private final AtomicBoolean closed = new AtomicBoolean(false);
-	private final ReentrantLock lock = new ReentrantLock();
 	
 	public BenchmarkAdapter(Map<String, String> obj) throws IOException {
 		super(obj);
@@ -39,22 +38,14 @@ public class BenchmarkAdapter extends OutputAdapter {
 	@Override
 	public void send(Map<String, Object> json, String jsonString) {
 		intervalCounter.incrementAndGet();
-		if (totalCounter.incrementAndGet() == 1) {
-			LOGGER.info("Benchmark [{}]: Received first message!", getMessageType());
-		}
 		
 		long now = System.currentTimeMillis();
 		long elapsed = now - lastLogTime;
 		if (elapsed >= 1000) {
-			lock.lock();
-			try {
-				int count = intervalCounter.getAndSet(0);
-				double tps = (double) count * 1000 / elapsed;
-				LOGGER.info("Benchmark [{}]: {} msg/s (Total: {})", getMessageType(), String.format("%.1f", tps), totalCounter.get());
-				lastLogTime = now;
-			} finally {
-				lock.unlock();
-			}
+			int count = intervalCounter.getAndSet(0);
+			double tps = (double) count * 1000 / elapsed;
+			LOGGER.info("Benchmark [{}]: {} msg/s (Total: {})", getMessageType(), String.format("%.1f", tps), totalCounter.get());
+			lastLogTime = now;
 		}
 	}
 
