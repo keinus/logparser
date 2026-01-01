@@ -1,14 +1,14 @@
 # 1. Transform 구현 사항
 
-들어오는 데이터를 정형화된 schema로 변환하여 추후 내부 데이터 분석에서 자동으로 데이터 분석 후 사용자에게 제공할 수 있는 기능을 제공하기 위한 기본 구조를 구현  
-모든 이벤트는 공통 이벤트인 event 스키마를 base로 가지고 있고, 세부 타입에 따라 'event_*'를 가짐  
-parse 된 데이터를 지정된 타입에 따라 공통 base 타입과 세부 타입으로 매핑/변환하는 transform 클래스를 구현하고 UI에 연결해야 함.  
-sql은 데이터 구조를 표현하기 위함.  
+수집된 로그 데이터를 정형화된 **Logical Schema**로 변환하여, 추후 다양한 분석 및 저장소(RDB, NoSQL, SIEM 등)에서 활용할 수 있는 표준 구조를 정의합니다.
+*   **Internal Representation:** 내부적으로는 유연한 `Map<String, Object>` 구조를 유지하며, 엄격한 RDB 테이블 구조에 얽매이지 않습니다.
+*   **Output Agnostic:** 변환된 데이터는 Output Adapter의 구현에 따라 RDB에 저장될 수도, Elasticsearch에 인덱싱될 수도 있습니다.
+*   **Schema Definition:** 아래 SQL 구문은 데이터의 **논리적 구조(Type & Structure)**를 설명하기 위한 예시이며, 실제 물리적 저장소 스키마와는 다를 수 있습니다.
 
-## 2. 핵심 테이블 구조 개요
+## 2. 핵심 논리적 데이터 모델 (Logical Data Model)
 
 ```
-event (공통 이벤트)
+event (공통 필드)
  ├─ event_network
  ├─ event_auth
  ├─ event_web
@@ -24,11 +24,11 @@ event (공통 이벤트)
 
 ---
 
-### 공통 이벤트 테이블 (CORE)
+### 공통 이벤트 모델 (CORE)
 
 #### `event`
 
-> **모든 SIEM 이벤트의 기준 테이블**
+> **모든 이벤트가 공유하는 공통 필드 집합**
 
 ```sql
 CREATE TABLE event (
@@ -42,7 +42,6 @@ CREATE TABLE event (
     event_result        VARCHAR(20),
 
     severity            SMALLINT,
-    confidence          SMALLINT,
 
     src_ip              INET,
     src_port            INTEGER,
@@ -56,10 +55,6 @@ CREATE TABLE event (
     user_name           VARCHAR(255),
     user_id             VARCHAR(255),
 
-    device_vendor       VARCHAR(100),
-    device_product      VARCHAR(100),
-    device_version      VARCHAR(50),
-
     log_source          VARCHAR(255),
     raw_log             TEXT
 );
@@ -71,22 +66,22 @@ CREATE TABLE event (
 | --------------- | ----------------------------------------- |
 | event_id        | 내부 고유 이벤트 ID                              |
 | event_time      | 실제 발생 시각                                  |
-| ingest_time     | SIEM 수집 시각                                |
+| ingest_time     | 시스템 수집 시각                                |
 | event_category  | high-level 분류 (auth, network, endpoint 등) |
 | event_type      | 세부 유형 (login, flow, dns_query 등)          |
 | event_action    | allow, deny, create, delete               |
 | event_result    | success / failure / unknown               |
 | severity        | 1~10 또는 1~100                             |
-| confidence      | 탐지 신뢰도                                    |
-| src_ip / dst_ip | 통신 주체                                     |
+| src_ip / dst_ip | 통신 주체 IP                                  |
+| src_port/dst_port| 통신 포트                                    |
 | protocol        | tcp, udp, icmp                            |
-| user_name       | 사용자                                       |
-| device_*        | 로그 생성 장비                                  |
-| raw_log         | 원본 로그                                     |
+| user_name       | 사용자 계정명                                  |
+| log_source      | 로그 발생 소스                                 |
+| raw_log         | 원본 로그 텍스트                               |
 
 ---
 
-### 세부 타입
+### 세부 도메인 모델
 
 #### 4. 네트워크 도메인 `event_network`
 
@@ -140,7 +135,7 @@ CREATE TABLE event_auth (
 CREATE TABLE event_web (
     event_id        BIGINT PRIMARY KEY,
     http_method     VARCHAR(10),
-    client_ip       TEXT,
+    url             TEXT,
     uri_path        TEXT,
     http_status     INTEGER,
     user_agent      TEXT,
