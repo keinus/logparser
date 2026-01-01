@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 import lombok.extern.slf4j.Slf4j;
+import org.keinus.logparser.domain.model.LogEvent;
 
 
 /**
@@ -220,7 +221,9 @@ public class HttpOutputAdapter extends OutputAdapter {
 		socket = null;
 	}
 
-	public void send(Map<String, Object> json, String jsonString) {
+	@Override
+	public void send(LogEvent logEvent) {
+		String jsonString = toJson(logEvent.toOutputMap());
 		if (jsonString == null || jsonString.isEmpty()) {
 			log.warn("Empty or null JSON string, skipping send");
 			return;

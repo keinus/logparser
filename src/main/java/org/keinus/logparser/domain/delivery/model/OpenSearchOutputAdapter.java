@@ -48,6 +48,8 @@ import org.keinus.logparser.infrastructure.util.PatternCache;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.keinus.logparser.domain.model.LogEvent;
+
 /**
  * 처리된 메시지를 OpenSearch 또는 Elasticsearch 클러스터로 전송하는 출력 어댑터입니다.
  * <p>
@@ -269,13 +271,16 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
     }
 
     @Override
-    public void send(Map<String, Object> json, String jsonString) {
+    public void send(LogEvent logEvent) {
         if (closed.get()) {
             LOGGER.warn("Adapter is closed, ignoring send request");
             return;
         }
 
         lastSendTime.set(System.currentTimeMillis());
+
+        Map<String, Object> json = logEvent.toOutputMap();
+        String jsonString = toJson(json);
 
         String targetIndex = indexTemplate;
 

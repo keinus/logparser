@@ -22,8 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,7 +62,7 @@ class OutputAdapterComponentTest {
 
         OutputAdapter mockAdapter = new OutputAdapter(Map.of("messagetype", "test")) {
             @Override
-            public void send(Map<String, Object> json, String jsonString) {
+            public void send(LogEvent logEvent) {
                 wasVirtual.set(Thread.currentThread().isVirtual());
                 latch.countDown();
             }
@@ -103,7 +102,7 @@ class OutputAdapterComponentTest {
     }
 
     @Test
-    void testSerializationCaching() throws Exception {
+    void testBroadcastToMultipleAdapters() throws Exception {
         // Arrange
         OutputAdapterConfig config1 = new OutputAdapterConfig();
         config1.setId(1L);
@@ -127,7 +126,7 @@ class OutputAdapterComponentTest {
 
         OutputAdapter mockAdapter1 = new OutputAdapter(Map.of("messagetype", "test", "add_origin_text", "true", "id", "1")) {
             @Override
-            public void send(Map<String, Object> json, String jsonString) {
+            public void send(LogEvent logEvent) {
                 latch.countDown();
             }
             @Override
@@ -135,7 +134,7 @@ class OutputAdapterComponentTest {
         };
         OutputAdapter mockAdapter2 = new OutputAdapter(Map.of("messagetype", "test", "add_origin_text", "true", "id", "2")) {
             @Override
-            public void send(Map<String, Object> json, String jsonString) {
+            public void send(LogEvent logEvent) {
                 latch.countDown();
             }
             @Override
@@ -163,11 +162,7 @@ class OutputAdapterComponentTest {
             outputAdapterComponent.startPipeline();
 
             // Wait
-            assertTrue(latch.await(5, TimeUnit.SECONDS));
-
-            // Assert
-            // toOutputMap(true) should be called exactly once because of caching
-            verify(logEvent, times(1)).toOutputMap();
+            assertTrue(latch.await(5, TimeUnit.SECONDS), "Message should be delivered to both adapters");
             
             outputAdapterComponent.close();
         }

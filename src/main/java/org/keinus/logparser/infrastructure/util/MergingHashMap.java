@@ -1,6 +1,7 @@
 package org.keinus.logparser.infrastructure.util;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -103,10 +104,17 @@ public class MergingHashMap<T> {
      *         지정된 키와 null 키 모두에 값이 없으면 빈 리스트를 반환합니다.
      */
     public List<T> get(String key) {
-        ArrayList<T> mergedList = new ArrayList<>();
-
+        List<T> specificList = null;
         if (key != null) {
-            List<T> specificList = this.internalMap.getOrDefault(key, new ArrayList<>());
+            specificList = this.internalMap.get(key);
+        }
+
+        if (specificList == null && this.nullKeyValueList.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        ArrayList<T> mergedList = new ArrayList<>();
+        if (specificList != null) {
             mergedList.addAll(specificList);
         }
         mergedList.addAll(this.nullKeyValueList);

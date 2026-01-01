@@ -14,6 +14,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
+import org.keinus.logparser.domain.model.LogEvent;
 
 
 /**
@@ -77,7 +78,9 @@ public class KafkaOutputAdapter extends OutputAdapter {
 				server, topic);
 	}
 
-	public void send(Map<String, Object> json, String jsonString) {
+	@Override
+	public void send(LogEvent logEvent) {
+		String jsonString = toJson(logEvent.toOutputMap());
 		// KafkaProducer는 이미 스레드 안전하므로 synchronized 불필요
 		ProducerRecord<String, String> record = new ProducerRecord<>(topic, jsonString);
 

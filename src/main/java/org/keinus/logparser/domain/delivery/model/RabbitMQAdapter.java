@@ -10,6 +10,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import com.rabbitmq.client.ConnectionFactory;
 
 import lombok.extern.slf4j.Slf4j;
+import org.keinus.logparser.domain.model.LogEvent;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.BuiltinExchangeType;
@@ -121,7 +122,8 @@ public class RabbitMQAdapter extends OutputAdapter {
 	}
 
 	@Override
-	public void send(Map<String, Object> json, String jsonString) {
+	public void send(LogEvent logEvent) {
+		String jsonString = toJson(logEvent.toOutputMap());
 		lock.lock();
 		try {
 			if (channel != null) {

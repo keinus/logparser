@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.AfterEach;
 import org.keinus.logparser.domain.delivery.model.HttpOutputAdapter;
+import org.keinus.logparser.domain.model.LogEvent;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -17,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * 테스트 대상 함수들:
  * - HttpOutputAdapter(Map<String, String>) : 생성자 테스트
- * - send(Map<String, Object>, String) : 기본 전송 기능 테스트
+ * - send(LogEvent) : 기본 전송 기능 테스트
  * - close() : 리소스 정리 테스트
  */
 class HttpOutputAdapterTest {
@@ -120,15 +121,12 @@ class HttpOutputAdapterTest {
         // Given
         adapter = new HttpOutputAdapter(validConfig);
 
-        Map<String, Object> jsonData = new HashMap<>();
-        jsonData.put("message", "test log");
-        jsonData.put("level", "INFO");
-
-        String jsonString = "{\"message\":\"test log\",\"level\":\"INFO\"}";
+        LogEvent logEvent = new LogEvent("test log", "localhost", "test");
+        logEvent.setField("level", "INFO");
 
         // When & Then
         // send() 메서드는 네트워크 연결이 필요하므로 예외가 발생하지 않는지만 확인
-        assertDoesNotThrow(() -> adapter.send(jsonData, jsonString));
+        assertDoesNotThrow(() -> adapter.send(logEvent));
     }
 
     @Test
@@ -138,12 +136,10 @@ class HttpOutputAdapterTest {
         validConfig.put("url", "http://localhost:19999/api/logs"); // 존재하지 않는 포트
         adapter = new HttpOutputAdapter(validConfig);
 
-        Map<String, Object> jsonData = new HashMap<>();
-        jsonData.put("message", "test log");
-        String jsonString = "{\"message\":\"test log\"}";
+        LogEvent logEvent = new LogEvent("test log", "localhost", "test");
 
         // When & Then
-        assertDoesNotThrow(() -> adapter.send(jsonData, jsonString));
+        assertDoesNotThrow(() -> adapter.send(logEvent));
         // 연결 실패 시에도 예외가 발생하지 않아야 함 (내부에서 처리)
     }
 }

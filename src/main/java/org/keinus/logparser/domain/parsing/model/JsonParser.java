@@ -1,12 +1,13 @@
 package org.keinus.logparser.domain.parsing.model;
 
-import java.lang.reflect.Type;
 import java.util.Map;
 
 import org.keinus.logparser.domain.model.LogEvent;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,10 +15,16 @@ import lombok.extern.slf4j.Slf4j;
 public class JsonParser implements IParser {
 	/**
 	 * Parser that converts JSON-formatted log messages into a map of key-value pairs.
-	 * Uses Gson for deserialization.
+	 * Uses Jackson for deserialization.
 	 */
-    Gson gson = new Gson();
-    Type type = new TypeToken<Map<String, Object>>() {}.getType();
+    private final ObjectMapper objectMapper;
+    private final TypeReference<Map<String, Object>> typeReference = new TypeReference<>() {};
+
+    public JsonParser() {
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    }
 
     @Override
 	public void init(Object param) {
@@ -27,7 +34,7 @@ public class JsonParser implements IParser {
 	@Override
 	public boolean parse(LogEvent logEvent) {
 		try {
-			Map<String, Object> parsed = gson.fromJson(logEvent.getOriginalText(), type);
+			Map<String, Object> parsed = objectMapper.readValue(logEvent.getOriginalText(), typeReference);
 			if (parsed != null && !parsed.isEmpty()) {
 				logEvent.setFields(parsed);
 				return true;

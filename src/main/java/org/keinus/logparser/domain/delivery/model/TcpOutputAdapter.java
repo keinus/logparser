@@ -13,6 +13,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
 
 import lombok.extern.slf4j.Slf4j;
+import org.keinus.logparser.domain.model.LogEvent;
 
 /**
  * 처리된 메시지를 지정된 TCP 서버로 전송하는 출력 어댑터입니다.
@@ -87,7 +88,9 @@ public class TcpOutputAdapter extends OutputAdapter {
 		throw new IOException("Failed to connect after " + retry + " attempts", lastException);
 	}
 
-	public void send(Map<String, Object> json, String jsonString) {
+	@Override
+	public void send(LogEvent logEvent) {
+		String jsonString = toJson(logEvent.toOutputMap());
 		lock.lock();
 		try {
 			ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(jsonString);

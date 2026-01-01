@@ -106,6 +106,10 @@ public class ParseService {
         String messageType = logEvent.getMessageType();
         List<IParser> parserList = parsers.get(messageType);
 
+        if (parserList.isEmpty()) {
+            return true;
+        }
+
         for(IParser parser : parserList) {
             if(parser.parse(logEvent)) {
                 return true;

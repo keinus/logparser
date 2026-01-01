@@ -9,6 +9,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.keinus.logparser.domain.model.LogEvent;
+
 /**
  * 파이프라인의 처리 성능(throughput)을 측정하기 위한 벤치마크용 출력 어댑터입니다.
  * <p>
@@ -35,7 +37,7 @@ public class BenchmarkAdapter extends OutputAdapter {
 	}
 
 	@Override
-	public void send(Map<String, Object> json, String jsonString) {
+	public void send(LogEvent logEvent) {
 		intervalCounter++;
 		
 		long now = System.currentTimeMillis();

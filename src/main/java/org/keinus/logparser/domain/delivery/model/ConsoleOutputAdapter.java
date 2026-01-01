@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.keinus.logparser.domain.model.LogEvent;
+
 /**
  * 처리된 메시지를 콘솔(로그)에 출력하는 간단한 출력 어댑터입니다.
  * <p>
@@ -27,10 +29,11 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 		LOGGER.info("Console Output Adapter created");
 	}
 
-	public void send(Map<String, Object> json, String jsonString) {
+	@Override
+	public void send(LogEvent logEvent) {
 		try {
 			// SLF4J Logger는 이미 스레드 안전하므로 synchronized 불필요
-			LOGGER.info(jsonString);
+			LOGGER.info(toJson(logEvent.toOutputMap()));
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage());
 		}

@@ -6,6 +6,11 @@ import java.util.Map;
 
 import org.keinus.logparser.domain.model.LogEvent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 import lombok.Getter;
 
 /**
@@ -29,6 +34,8 @@ public abstract class OutputAdapter implements Closeable {
 	@Getter
 	private String type = "";
 
+	protected final ObjectMapper objectMapper;
+
 	protected OutputAdapter(Map<String, String> obj) throws IOException {
 		if (obj == null) {
 			throw new IOException("Property not found.");
@@ -40,6 +47,10 @@ public abstract class OutputAdapter implements Closeable {
 		}
 		this.type = obj.getOrDefault("messagetype", null);
 		this.name = getClass().getSimpleName() + ":" + obj.toString();
+
+		this.objectMapper = new ObjectMapper();
+		this.objectMapper.registerModule(new JavaTimeModule());
+		this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 	}
 
 	public String getMessageType() {
@@ -47,6 +58,14 @@ public abstract class OutputAdapter implements Closeable {
 	}
 
 	public abstract void send(LogEvent logEvent);
+	
+	protected String toJson(Object value) {
+		try {
+			return objectMapper.writeValueAsString(value);
+		} catch (JsonProcessingException e) {
+			return "{}";
+		}
+	}
 
 	@Override
 	public String toString() {
