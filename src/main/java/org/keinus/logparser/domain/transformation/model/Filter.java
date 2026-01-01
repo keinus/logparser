@@ -1,10 +1,11 @@
 package org.keinus.logparser.domain.transformation.model;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
 import org.keinus.logparser.domain.model.LogEvent;
@@ -25,17 +26,19 @@ import org.keinus.logparser.domain.model.LogEvent;
  * @see org.keinus.logparser.config.TransformParamConfig
  */
 public class Filter implements ITransform {
-    private Map<String, List<String>> pass = new HashMap<>();
-    private Map<String, List<String>> drop = new HashMap<>();
+    private Map<String, Set<String>> pass = new HashMap<>();
+    private Map<String, Set<String>> drop = new HashMap<>();
 
-    private void parseParam(Map<String, List<String>> paramMap, Map<String, String> param) {
+    private void parseParam(Map<String, Set<String>> paramMap, Map<String, String> param) {
 		if(param != null) {
 			param.forEach((key, value) -> {
-				List<String> values = new ArrayList<>();
-                for (String v : value.split(",")) {
-                    String trimmed = v.trim();
-                    if (!trimmed.isEmpty()) {
-                        values.add(trimmed);
+				Set<String> values = new HashSet<>();
+                if (value != null) {
+                    for (String v : value.split(",")) {
+                        String trimmed = v.trim();
+                        if (!trimmed.isEmpty()) {
+                            values.add(trimmed);
+                        }
                     }
                 }
                 paramMap.put(key, values);
@@ -45,6 +48,8 @@ public class Filter implements ITransform {
 
 	@Override
 	public void init(TransformParamConfig param) {
+		// 기존 파라미터 구조: Map<String, List<String>>
+		// 이를 내부적으로 Map<String, Set<String>>으로 변환하여 저장
         parseParam(this.pass, param.getPass());
         parseParam(this.drop, param.getDrop());
 	}
@@ -53,8 +58,8 @@ public class Filter implements ITransform {
 	public boolean transform(LogEvent logEvent) {
 		Map<String, Object> fields = logEvent.getFields();
 
-		// Drop 조건 검사
-		for(Entry<String, List<String>> entry : drop.entrySet()) {
+		// Drop 조건 검사 (O(1) Lookup)
+		for(Entry<String, Set<String>> entry : drop.entrySet()) {
 			String prop = entry.getKey();
 			Object targetPropObj = fields.get(prop);
 			if (targetPropObj == null) continue;
@@ -63,8 +68,8 @@ public class Filter implements ITransform {
 				return false; // 필터링됨
 		}
 
-		// Pass 조건 검사
-		for(Entry<String, List<String>> entry : pass.entrySet()) {
+		// Pass 조건 검사 (O(1) Lookup)
+		for(Entry<String, Set<String>> entry : pass.entrySet()) {
 			String prop = entry.getKey();
 			Object targetPropObj = fields.get(prop);
 			if (targetPropObj == null) return false; // null이면 pass 실패

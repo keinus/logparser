@@ -109,14 +109,27 @@ public class MergingHashMap<T> {
             specificList = this.internalMap.get(key);
         }
 
-        if (specificList == null && this.nullKeyValueList.isEmpty()) {
+        boolean hasSpecific = (specificList != null && !specificList.isEmpty());
+        boolean hasGlobal = !this.nullKeyValueList.isEmpty();
+
+        // 1. 둘 다 없는 경우
+        if (!hasSpecific && !hasGlobal) {
             return Collections.emptyList();
         }
 
-        ArrayList<T> mergedList = new ArrayList<>();
-        if (specificList != null) {
-            mergedList.addAll(specificList);
+        // 2. Specific만 있는 경우 (복사 없이 반환)
+        if (hasSpecific && !hasGlobal) {
+            return specificList;
         }
+
+        // 3. Global만 있는 경우 (복사 없이 반환)
+        if (!hasSpecific && hasGlobal) {
+            return this.nullKeyValueList;
+        }
+
+        // 4. 둘 다 있는 경우 (병합 복사 발생)
+        ArrayList<T> mergedList = new ArrayList<>(specificList.size() + this.nullKeyValueList.size());
+        mergedList.addAll(specificList);
         mergedList.addAll(this.nullKeyValueList);
         return mergedList;
     }

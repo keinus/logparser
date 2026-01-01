@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -14,7 +15,6 @@ import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
 import org.keinus.logparser.domain.delivery.service.OutputFactory;
 import org.keinus.logparser.domain.delivery.model.OutputAdapter;
 import org.keinus.logparser.application.service.BatchingOutputService;
-import org.keinus.logparser.infrastructure.util.MergingHashMap;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.springframework.stereotype.Component;
@@ -43,8 +43,10 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
     private final BatchingOutputService batchingOutputService;
     private final ApplicationProperties appProp;
 
-    // 출력 어댑터 및 관련 러너 관리
-    private final MergingHashMap<AdapterRunner> outputAdapterMap = new MergingHashMap<>();
+    // 출력 어댑터 및 관련 러너 관리 (이중 구조 최적화)
+    private final Map<String, CopyOnWriteArrayList<AdapterRunner>> specificAdapterMap = new ConcurrentHashMap<>();
+    private final CopyOnWriteArrayList<AdapterRunner> globalAdapterList = new CopyOnWriteArrayList<>();
+
     private final Map<Long, AdapterRunner> adapterIdMap = new ConcurrentHashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
@@ -117,7 +119,7 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
 
         initializeOutputAdapters();
 
-        int adapterCount = outputAdapterMap.getAllKeys().size();
+        int adapterCount = adapterIdMap.size();
         log.info("Output Adapter Component initialized with {} adapters", adapterCount);
 
         running.set(true);
@@ -138,6 +140,7 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
 
     /**
      * 메시지 처리 메인 루프 - 디스패처로부터 메시지를 가져와 각 어댑터 큐에 배분
+     * 최적화: MergingHashMap 대신 Specific Map과 Global List를 각각 순회 (Zero Allocation)
      */
     private void processOutputMessages() {
         while (running.get()) {
@@ -152,22 +155,30 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             }
 
             String messageType = logEvent.getMessageType();
-            try {
-                var runners = outputAdapterMap.get(messageType);
-                if (runners.isEmpty()) {
-                    return;
-                }
-
-                for (AdapterRunner runner : runners) {
+            
+            // 1. Specific Adapters 순회
+            List<AdapterRunner> specificRunners = specificAdapterMap.get(messageType);
+            if (specificRunners != null) {
+                for (AdapterRunner runner : specificRunners) {
                     try {
                         runner.put(logEvent);
                     } catch (InterruptedException e) {
-                        log.debug("Interrupted while putting message to adapter queue");
+                        log.debug("Interrupted while putting message to specific adapter queue");
                         Thread.currentThread().interrupt();
                         break;
                     }
                 }
-            } finally {
+            }
+
+            // 2. Global Adapters 순회
+            for (AdapterRunner runner : globalAdapterList) {
+                try {
+                    runner.put(logEvent);
+                } catch (InterruptedException e) {
+                    log.debug("Interrupted while putting message to global adapter queue");
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
     }
@@ -205,15 +216,7 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
                             config.getType(), config.getMessagetype());
 
                     OutputAdapter adapter = OutputFactory.getOutputAdapter(config);
-                    String msgType = adapter.getType();
-
-                    AdapterRunner runner = new AdapterRunner(adapter);
-                    outputAdapterMap.put(msgType, runner);
-                    if (adapter.getId() != null) {
-                        adapterIdMap.put(adapter.getId(), runner);
-                    }
-                    log.info("OutputAdapter {} registered with worker thread for message type: {}",
-                            adapter.getClass().getSimpleName(), getDisplayMessageType(msgType));
+                    addAdapterInternal(adapter);
 
                     registerToBatchingServiceIfApplicable(adapter);
 
@@ -224,6 +227,27 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    private void addAdapterInternal(OutputAdapter adapter) {
+        AdapterRunner runner = new AdapterRunner(adapter);
+        String msgType = adapter.getType();
+
+        if (isGlobalType(msgType)) {
+            globalAdapterList.add(runner);
+            log.info("OutputAdapter {} registered as GLOBAL adapter", adapter.getClass().getSimpleName());
+        } else {
+            specificAdapterMap.computeIfAbsent(msgType, k -> new CopyOnWriteArrayList<>()).add(runner);
+            log.info("OutputAdapter {} registered for message type: {}", adapter.getClass().getSimpleName(), msgType);
+        }
+
+        if (adapter.getId() != null) {
+            adapterIdMap.put(adapter.getId(), runner);
+        }
+    }
+
+    private boolean isGlobalType(String type) {
+        return type == null || type.isEmpty() || "all".equalsIgnoreCase(type);
     }
 
     private void registerToBatchingServiceIfApplicable(OutputAdapter adapter) {
@@ -239,7 +263,8 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             for (AdapterRunner runner : adapterIdMap.values()) {
                 runner.stop();
             }
-            outputAdapterMap.clear();
+            specificAdapterMap.clear();
+            globalAdapterList.clear();
             adapterIdMap.clear();
         } finally {
             lock.writeLock().unlock();
@@ -253,13 +278,8 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         lock.writeLock().lock();
         try {
             OutputAdapter adapter = OutputFactory.getOutputAdapter(config);
-            String msgType = adapter.getType();
-
-            AdapterRunner runner = new AdapterRunner(adapter);
-            outputAdapterMap.put(msgType, runner);
-            if (adapter.getId() != null) {
-                adapterIdMap.put(adapter.getId(), runner);
-            }
+            addAdapterInternal(adapter);
+            
             log.info("Added output adapter with worker: id={}, type={}", adapter.getId(), adapter.getClass().getSimpleName());
             
             registerToBatchingServiceIfApplicable(adapter);
@@ -275,7 +295,20 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         try {
             AdapterRunner runner = adapterIdMap.remove(id);
             if (runner != null) {
-                outputAdapterMap.removeValue(runner);
+                // Remove from lists
+                String msgType = runner.adapter.getType();
+                if (isGlobalType(msgType)) {
+                    globalAdapterList.remove(runner);
+                } else {
+                    List<AdapterRunner> runners = specificAdapterMap.get(msgType);
+                    if (runners != null) {
+                        runners.remove(runner);
+                        if (runners.isEmpty()) {
+                            specificAdapterMap.remove(msgType);
+                        }
+                    }
+                }
+
                 runner.stop();
                 log.info("Removed output adapter and stopped worker: id={}", id);
             }
