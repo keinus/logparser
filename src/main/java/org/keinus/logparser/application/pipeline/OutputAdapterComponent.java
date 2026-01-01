@@ -1,6 +1,5 @@
 package org.keinus.logparser.application.pipeline;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -25,11 +24,6 @@ import org.springframework.context.ApplicationListener;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSerializer;
-import com.google.gson.JsonPrimitive;
-
 
 /**
  * 출력 어댑터들을 관리하고 각 어댑터별 전용 스레드를 통해 비동기 전송을 처리하는 통합 컴포넌트입니다.
@@ -44,7 +38,6 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    private final Gson gson;
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
     private final BatchingOutputService batchingOutputService;
@@ -55,14 +48,12 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
     private final Map<Long, AdapterRunner> adapterIdMap = new ConcurrentHashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    public record DataTuple(Map<String, Object> dataMap, String jsonString) {}
-
     /**
      * 각 어댑터의 전송 작업을 독립적으로 수행하는 내부 클래스
      */
     private class AdapterRunner {
         private final OutputAdapter adapter;
-        private final BlockingQueue<DataTuple> queue;
+        private final BlockingQueue<LogEvent> queue;
         private final AtomicBoolean active = new AtomicBoolean(true);
         private final String threadName;
 
@@ -78,9 +69,9 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             log.info("Worker thread started for adapter: {}", threadName);
             while (active.get() && !Thread.currentThread().isInterrupted()) {
                 try {
-                    DataTuple event = queue.poll(1, TimeUnit.SECONDS);
+                    LogEvent event = queue.poll(1, TimeUnit.SECONDS);
                     if (event != null) {
-                        adapter.send(event.dataMap(), event.jsonString());
+                        adapter.send(event);
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -92,8 +83,8 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             log.info("Worker thread finished for adapter: {}", threadName);
         }
 
-        public void put(Map<String, Object> dataMap, String jsonString) throws InterruptedException {
-            queue.put(new DataTuple(dataMap, jsonString));
+        public void put(LogEvent logEvent) throws InterruptedException {
+            queue.put(logEvent);
         }
 
         public void stop() {
@@ -107,22 +98,12 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
         }
     }
 
-    /**
-     * Instant를 ISO-8601 문자열로 직렬화하는 JsonSerializer
-     */
-    private static final JsonSerializer<Instant> INSTANT_SERIALIZER = (src, typeOfSrc, context) ->
-            new JsonPrimitive(src.toString());
-
     public OutputAdapterComponent(ApplicationProperties appProp, ThreadManager threadManager,
                                   MessageDispatcher dispatcher, BatchingOutputService batchingOutputService) {
         this.appProp = appProp;
         this.threadManager = threadManager;
         this.dispatcher = dispatcher;
         this.batchingOutputService = batchingOutputService;
-
-        this.gson = new GsonBuilder()
-                .registerTypeAdapter(Instant.class, INSTANT_SERIALIZER)
-                .create();
     }
 
     @Override
@@ -171,19 +152,15 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
             }
 
             String messageType = logEvent.getMessageType();
-            lock.readLock().lock();
             try {
                 var runners = outputAdapterMap.get(messageType);
                 if (runners.isEmpty()) {
                     return;
                 }
 
-                Map<String, Object> outputMap = logEvent.toOutputMap();
-                String jsonString = gson.toJson(outputMap);
-
                 for (AdapterRunner runner : runners) {
                     try {
-                        runner.put(outputMap, jsonString);
+                        runner.put(logEvent);
                     } catch (InterruptedException e) {
                         log.debug("Interrupted while putting message to adapter queue");
                         Thread.currentThread().interrupt();
@@ -191,7 +168,6 @@ public class OutputAdapterComponent implements ApplicationListener<ApplicationRe
                     }
                 }
             } finally {
-                lock.readLock().unlock();
             }
         }
     }

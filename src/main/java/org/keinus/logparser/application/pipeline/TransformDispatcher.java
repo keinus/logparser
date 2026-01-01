@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.transformation.service.TransformService;
-import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

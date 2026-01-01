@@ -4,6 +4,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 
+import org.keinus.logparser.domain.model.LogEvent;
+
 import lombok.Getter;
 
 /**
@@ -44,7 +46,7 @@ public abstract class OutputAdapter implements Closeable {
 		return type;
 	}
 
-	public abstract void send(Map<String, Object> json, String jsonString);
+	public abstract void send(LogEvent logEvent);
 
 	@Override
 	public String toString() {

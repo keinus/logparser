@@ -24,8 +24,7 @@ import org.slf4j.LoggerFactory;
 public class BenchmarkAdapter extends OutputAdapter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(BenchmarkAdapter.class);
 	
-	private final AtomicInteger intervalCounter = new AtomicInteger(0);
-	private final AtomicInteger totalCounter = new AtomicInteger(0);
+	private int intervalCounter = 0;
 	private long lastLogTime = System.currentTimeMillis();
 	private final AtomicBoolean closed = new AtomicBoolean(false);
 	
@@ -37,15 +36,16 @@ public class BenchmarkAdapter extends OutputAdapter {
 
 	@Override
 	public void send(Map<String, Object> json, String jsonString) {
-		intervalCounter.incrementAndGet();
+		intervalCounter++;
 		
 		long now = System.currentTimeMillis();
 		long elapsed = now - lastLogTime;
 		if (elapsed >= 1000) {
-			int count = intervalCounter.getAndSet(0);
+			int count = intervalCounter;
 			double tps = (double) count * 1000 / elapsed;
-			LOGGER.info("Benchmark [{}]: {} msg/s (Total: {})", getMessageType(), String.format("%.1f", tps), totalCounter.get());
+			LOGGER.info("Benchmark [{}]: {} msg/s", getMessageType(), String.format("%.1f", tps));
 			lastLogTime = now;
+			intervalCounter = 0;
 		}
 	}
 
@@ -56,7 +56,7 @@ public class BenchmarkAdapter extends OutputAdapter {
 			LOGGER.debug("Benchmark Adapter already closed, skipping");
 			return;
 		}
-
-		LOGGER.info("Benchmark Adapter closed. Final Total: {}", totalCounter.get());
+		closed.set(true);
+		LOGGER.info("Benchmark Adapter closed.");
 	}
 }

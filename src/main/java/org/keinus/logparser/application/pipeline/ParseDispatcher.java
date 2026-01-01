@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.parsing.service.ParseService;
-import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,7 +15,6 @@ public class ParseDispatcher implements Runnable {
     private final BlockingQueue<LogEvent> inputQueue;
     private final BlockingQueue<LogEvent> transformQueue;
     private final ParseService parseService;
-    private final CircuitBreaker circuitBreaker;
     private final AtomicBoolean running;
     private final AtomicLong totalMessagesFailed;
 
@@ -24,13 +22,11 @@ public class ParseDispatcher implements Runnable {
             BlockingQueue<LogEvent> inputQueue,
             BlockingQueue<LogEvent> transformQueue,
             ParseService parseService,
-            CircuitBreaker circuitBreaker,
             AtomicBoolean running,
             AtomicLong totalMessagesFailed) {
         this.inputQueue = inputQueue;
         this.transformQueue = transformQueue;
         this.parseService = parseService;
-        this.circuitBreaker = circuitBreaker;
         this.running = running;
         this.totalMessagesFailed = totalMessagesFailed;
     }
@@ -40,22 +36,15 @@ public class ParseDispatcher implements Runnable {
         log.info("Parser thread started: {}", Thread.currentThread().getName());
         while (running.get()) {
             try {
-                if (!circuitBreaker.check()) {
-                    ThreadUtil.sleep(1000);
-                    continue;
-                }
-
                 LogEvent logEvent = inputQueue.take();
                 processParse(logEvent);
-                circuitBreaker.recordSuccess();
             } catch (InterruptedException e) {
                 log.info("Parser thread interrupted: {}", Thread.currentThread().getName());
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                circuitBreaker.recordFailure();
-                log.error("Error processing log event (consecutive failures: {}), continuing...",
-                        circuitBreaker.getConsecutiveFailures(), e);
+                totalMessagesFailed.incrementAndGet();
+                log.error("Unexpected error in parser thread", e);
             }
         }
         log.info("Parser thread finished: {}", Thread.currentThread().getName());

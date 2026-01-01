@@ -92,9 +92,6 @@ public class MessageDispatcher {
     // 타임아웃 및 대기 시간 상수
     private static final long QUEUE_MONITORING_INTERVAL_MS = 30_000;  // 30초
 
-    // Circuit Breaker 관련
-    private final CircuitBreaker circuitBreaker = new CircuitBreaker();
-
     /**
      * MessageDispatcher 생성자.
      * threadManager와 ApplicationProperties를 주입받아 초기화합니다.
@@ -165,7 +162,7 @@ public class MessageDispatcher {
             String threadName = "ParserThread-" + (i + 1);
             ParseDispatcher parseDispatcher = new ParseDispatcher(
                 inputMessageQueue, transformQueue, parseService,
-                circuitBreaker, workerActive,
+                workerActive,
                 totalMessagesFailed
             );
             threadManager.executeWithName(threadName, parseDispatcher);
@@ -281,11 +278,12 @@ public class MessageDispatcher {
                 lastOutputMessageCount = currentCount;
                 lastMonitorTime = currentTime;
                 log.info(
-                        "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | Throughput: {:.1f}/s",
+                        "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | Throughput: {}/s",
                         inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
                         transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
                         outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
-                        totalMessagesDropped.get(), totalMessagesFailed.get(),
+                        totalMessagesDropped.get(), 
+                        totalMessagesFailed.get(),
                         currentOutputThroughput);
             } catch (Exception e) {
                 log.error("Error in queue monitoring thread", e);
@@ -304,7 +302,6 @@ public class MessageDispatcher {
                 queueSize,
                 totalMessagesDropped.get(),
                 totalMessagesFailed.get(),
-                circuitBreaker.getState(),
                 currentOutputThroughput);
     }
 
@@ -319,7 +316,6 @@ public class MessageDispatcher {
         public final int maxQueueSize;
         public final long totalDropped;
         public final long totalFailed;
-        public final String circuitBreakerState;
         public final double outputThroughput;
 
         public double getGlobalUtilization() {
@@ -337,12 +333,11 @@ public class MessageDispatcher {
         @Override
         public String toString() {
             return String.format(
-                    "DispatcherMetrics{input=%d/%d (%.1f%%), transform=%d/%d (%.1f%%), output=%d/%d (%.1f%%), dropped=%d, failed=%d, circuit=%s, throughput=%.1f/s}",
+                    "DispatcherMetrics{input=%d/%d (%.1f%%), transform=%d/%d (%.1f%%), output=%d/%d (%.1f%%), dropped=%d, failed=%d, throughput=%.1f/s}",
                     globalQueueSize, maxQueueSize, getGlobalUtilization() * 100,
                     transformQueueSize, maxQueueSize, getTransformUtilization() * 100,
                     outputQueueSize, maxQueueSize, getOutputUtilization() * 100,
                     totalDropped, totalFailed,
-                    circuitBreakerState,
                     outputThroughput);
         }
     }
