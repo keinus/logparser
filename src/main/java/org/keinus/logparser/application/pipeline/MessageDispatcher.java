@@ -72,6 +72,11 @@ public class MessageDispatcher {
     private TransformService transformService = null;
 
     /**
+     * StructuredTransformService 인스턴스 (Phase 2 Transformation Engine)
+     */
+    private org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService;
+
+    /**
      * ApplicationProperties 인스턴스
      */
     private final ApplicationProperties applicationProperties;
@@ -105,6 +110,7 @@ public class MessageDispatcher {
             ThreadManager threadManager,
             ParseService parseService,
             TransformService transformService,
+            org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService,
             ApplicationProperties applicationProperties,
             @Value("${log.message.queue-size:10000}") int queueSize) {
 
@@ -116,6 +122,7 @@ public class MessageDispatcher {
 
         this.parseService = parseService;
         this.transformService = transformService;
+        this.structuredTransformService = structuredTransformService;
         this.applicationProperties = applicationProperties;
 
         log.info("MessageDispatcher initialized with queue size: {}", queueSize);
@@ -173,6 +180,7 @@ public class MessageDispatcher {
             String threadName = "TransformThread-" + (i + 1);
             TransformDispatcher transformDispatcher = new TransformDispatcher(
                 transformQueue, outputMessageQueue, transformService,
+                structuredTransformService,
                 workerActive, totalMessagesFailed
             );
             threadManager.executeWithName(threadName, transformDispatcher);

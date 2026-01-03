@@ -15,6 +15,7 @@ public class TransformDispatcher implements Runnable {
     private final BlockingQueue<LogEvent> transformQueue;
     private final BlockingQueue<LogEvent> outputQueue;
     private final TransformService transformService;
+    private final org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService;
     private final AtomicBoolean running;
     private final AtomicLong totalMessagesFailed;
 
@@ -22,11 +23,13 @@ public class TransformDispatcher implements Runnable {
             BlockingQueue<LogEvent> transformQueue,
             BlockingQueue<LogEvent> outputQueue,
             TransformService transformService,
+            org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService,
             AtomicBoolean running,
             AtomicLong totalMessagesFailed) {
         this.transformQueue = transformQueue;
         this.outputQueue = outputQueue;
         this.transformService = transformService;
+        this.structuredTransformService = structuredTransformService;
         this.running = running;
         this.totalMessagesFailed = totalMessagesFailed;
     }
@@ -51,14 +54,24 @@ public class TransformDispatcher implements Runnable {
 
     private void processTransform(LogEvent logEvent) {
         try {
+            // 1. Apply Legacy/Basic Transforms (Filtering, etc.)
             boolean transformResult = transformService.transform(logEvent);
-            if (transformResult) {
+            if (!transformResult) {
+                log.debug("Log event filtered out by transform service");
+                return;
+            }
+
+            // 2. Apply Structured Transformation (Schema Mapping)
+            boolean structureResult = structuredTransformService.applyToLogEvent(logEvent);
+            if (structureResult) {
                 logEvent.markAsTransformed();
                 boolean queued = putOutputMsg(logEvent);
-                log.debug("Log event transformed and queued for output: {}, queue size: {}", queued, outputQueue.size());
+                log.debug("Log event structured and queued for output: {}, queue size: {}", queued, outputQueue.size());
             } else {
-                log.debug("Log event filtered out by transform service");
+                log.warn("Log event failed structured transformation: {}", logEvent.getProcessingError());
+                totalMessagesFailed.incrementAndGet();
             }
+
         } catch (Exception e) {
             log.error("Error transforming log event: {}", logEvent, e);
             logEvent.markAsError("Transform error: " + e.getMessage());
