@@ -50,7 +50,8 @@ public class ConfigMetadataService {
         return Arrays.asList(
                 new TransformTypeInfo("Filter", "Filter Transform", "Filter messages based on conditions"),
                 new TransformTypeInfo("AddProperty", "Add Property", "Add fields to messages"),
-                new TransformTypeInfo("RemoveProperty", "Remove Property", "Remove fields from messages")
+                new TransformTypeInfo("RemoveProperty", "Remove Property", "Remove fields from messages"),
+                new TransformTypeInfo("Structure", "Structure (Logical Schema)", "Map raw fields to structured domain schema")
         );
     }
 

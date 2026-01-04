@@ -9,6 +9,13 @@ const API_BASE = '/api/transform';
 
 async function init() {
     try {
+        // Check for message type in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlType = urlParams.get('type');
+        if (urlType) {
+            document.getElementById('message-type').value = urlType;
+        }
+
         const res = await fetch(`${API_BASE}/schema`);
         schemaMetadata = await res.json();
         
@@ -20,6 +27,11 @@ async function init() {
         addSourceField('src_ip');
         addSourceField('dst_ip');
         addSourceField('timestamp');
+
+        // If type was provided in URL, load its configuration immediately
+        if (urlType) {
+            await loadMapping();
+        }
     } catch (e) {
         console.error("Failed to init", e);
         alert("Failed to load schema metadata");

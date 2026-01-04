@@ -532,7 +532,25 @@ function renderDynamicFields(schema) {
         return;
     }
 
-    container.innerHTML = '<h4>Configuration</h4>' + schema.fields.map(field => {
+    let html = '<h4>Configuration</h4>';
+
+    // Special handling for Structure Transform
+    if (schema.type === 'Structure') {
+        html += `
+            <div class="form-group" style="background: var(--bg-secondary); padding: 1.5rem; border-radius: var(--radius-md); border: 1px dashed var(--border-color); text-align: center; margin-bottom: 1.5rem;">
+                <span class="material-icons" style="font-size: 3rem; color: var(--primary); margin-bottom: 1rem;">schema</span>
+                <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
+                    Use the Schema Mapper to define complex mappings between raw log fields and the logical domain schema.
+                </p>
+                <button type="button" class="btn btn-primary" onclick="openSchemaMapper()">
+                    <span class="material-icons" style="font-size: 18px; margin-right: 8px;">open_in_new</span>
+                    <span>Open Schema Mapper</span>
+                </button>
+            </div>
+        `;
+    }
+
+    html += schema.fields.map(field => {
         const inputType = getInputType(field.type);
         const required = field.required ? 'required' : '';
 
@@ -552,6 +570,18 @@ function renderDynamicFields(schema) {
             </div>
         `;
     }).join('');
+
+    container.innerHTML = html;
+}
+
+function openSchemaMapper() {
+    const messageType = document.getElementById('messageType').value;
+    if (!messageType) {
+        showToast('Please enter a Message Type first', 'warning');
+        document.getElementById('messageType').focus();
+        return;
+    }
+    window.open(`/transform.html?type=${encodeURIComponent(messageType)}`, '_blank');
 }
 
 function getInputType(fieldType) {

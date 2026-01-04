@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.keinus.logparser.domain.parsing.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
+import org.keinus.logparser.domain.service.transform.StructuredTransformService;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.keinus.logparser.domain.model.LogEvent;
@@ -72,9 +73,9 @@ public class MessageDispatcher {
     private TransformService transformService = null;
 
     /**
-     * StructuredTransformService 인스턴스 (Phase 2 Transformation Engine)
+     * StructuredTransformService 인스턴스
      */
-    private org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService;
+    private StructuredTransformService structuredTransformService = null;
 
     /**
      * ApplicationProperties 인스턴스
@@ -110,7 +111,7 @@ public class MessageDispatcher {
             ThreadManager threadManager,
             ParseService parseService,
             TransformService transformService,
-            org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService,
+            StructuredTransformService structuredTransformService,
             ApplicationProperties applicationProperties,
             @Value("${log.message.queue-size:10000}") int queueSize) {
 

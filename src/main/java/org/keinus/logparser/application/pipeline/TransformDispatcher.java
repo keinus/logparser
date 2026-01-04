@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.transformation.service.TransformService;
+import org.keinus.logparser.domain.service.transform.StructuredTransformService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,7 +16,7 @@ public class TransformDispatcher implements Runnable {
     private final BlockingQueue<LogEvent> transformQueue;
     private final BlockingQueue<LogEvent> outputQueue;
     private final TransformService transformService;
-    private final org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService;
+    private final StructuredTransformService structuredTransformService;
     private final AtomicBoolean running;
     private final AtomicLong totalMessagesFailed;
 
@@ -23,7 +24,7 @@ public class TransformDispatcher implements Runnable {
             BlockingQueue<LogEvent> transformQueue,
             BlockingQueue<LogEvent> outputQueue,
             TransformService transformService,
-            org.keinus.logparser.domain.service.transform.StructuredTransformService structuredTransformService,
+            StructuredTransformService structuredTransformService,
             AtomicBoolean running,
             AtomicLong totalMessagesFailed) {
         this.transformQueue = transformQueue;
@@ -54,23 +55,27 @@ public class TransformDispatcher implements Runnable {
 
     private void processTransform(LogEvent logEvent) {
         try {
-            // 1. Apply Legacy/Basic Transforms (Filtering, etc.)
+            // 1. Apply Legacy Transforms (Filtering, AddProperty, RemoveProperty, etc.)
             boolean transformResult = transformService.transform(logEvent);
             if (!transformResult) {
                 log.debug("Log event filtered out by transform service");
                 return;
             }
 
-            // 2. Apply Structured Transformation (Schema Mapping)
-            boolean structureResult = structuredTransformService.applyToLogEvent(logEvent);
-            if (structureResult) {
-                logEvent.markAsTransformed();
-                boolean queued = putOutputMsg(logEvent);
-                log.debug("Log event structured and queued for output: {}, queue size: {}", queued, outputQueue.size());
-            } else {
-                log.warn("Log event failed structured transformation: {}", logEvent.getProcessingError());
-                totalMessagesFailed.incrementAndGet();
+            // 2. Apply Structured Transformation (Mapping to Logical Schema)
+            if (structuredTransformService != null) {
+                boolean structuredResult = structuredTransformService.applyToLogEvent(logEvent);
+                if (!structuredResult) {
+                    log.warn("Structured transformation failed for event: {}", logEvent);
+                    // Decide whether to continue or drop. 
+                    // For now, we continue since legacy transform succeeded.
+                }
             }
+
+            // 3. Queue for output
+            logEvent.markAsTransformed();
+            boolean queued = putOutputMsg(logEvent);
+            log.debug("Log event transformed and queued for output: {}, queue size: {}", queued, outputQueue.size());
 
         } catch (Exception e) {
             log.error("Error transforming log event: {}", logEvent, e);
