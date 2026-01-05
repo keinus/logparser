@@ -487,7 +487,9 @@ function setInputValue(input, value) {
 }
 
 function closeModal() {
-    document.getElementById('configModal').classList.remove('active');
+    const modal = document.getElementById('configModal');
+    modal.classList.remove('active');
+    modal.classList.remove('modal-xl');
     currentEditingId = null;
 }
 
@@ -495,6 +497,11 @@ function closeModal() {
 async function loadAdapterSchema() {
     const typeSelect = document.getElementById('adapterType');
     const selectedType = typeSelect.value;
+    const modal = document.getElementById('configModal');
+    
+    // Reset modal width
+    modal.classList.remove('modal-xl');
+
     if (!selectedType) {
         document.getElementById('dynamicFields').innerHTML = '';
         return;
@@ -517,6 +524,28 @@ async function loadAdapterSchema() {
                 break;
         }
 
+        // Special handling for Structure/Mapping Transform
+        if (currentAdapterType === 'transform' && (schema.type === 'Structure' || selectedType === 'Structure')) {
+            modal.classList.add('modal-xl');
+            
+            const container = document.getElementById('dynamicFields');
+            // Initialize Mapper
+            MapperUI.render(container);
+            
+            // Load Data
+            const messageType = document.getElementById('messageType').value;
+            let existingConfig = null;
+            if (currentEditingId) {
+                // We need the full adapter object. We can fetch it or use cached if available.
+                // For simplicity, fetch fresh.
+                const adapter = await getAdapterById('transform', currentEditingId);
+                existingConfig = adapter;
+            }
+            
+            await MapperUI.loadData(messageType, existingConfig);
+            return; // Skip standard field rendering
+        }
+
         renderDynamicFields(schema);
     } catch (error) {
         console.error('Failed to load schema:', error);
@@ -533,22 +562,6 @@ function renderDynamicFields(schema) {
     }
 
     let html = '<h4>Configuration</h4>';
-
-    // Special handling for Structure Transform
-    if (schema.type === 'Structure') {
-        html += `
-            <div class="form-group" style="background: var(--bg-secondary); padding: 1.5rem; border-radius: var(--radius-md); border: 1px dashed var(--border-color); text-align: center; margin-bottom: 1.5rem;">
-                <span class="material-icons" style="font-size: 3rem; color: var(--primary); margin-bottom: 1rem;">schema</span>
-                <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">
-                    Use the Schema Mapper to define complex mappings between raw log fields and the logical domain schema.
-                </p>
-                <button type="button" class="btn btn-primary" onclick="openSchemaMapper()">
-                    <span class="material-icons" style="font-size: 18px; margin-right: 8px;">open_in_new</span>
-                    <span>Open Schema Mapper</span>
-                </button>
-            </div>
-        `;
-    }
 
     html += schema.fields.map(field => {
         const inputType = getInputType(field.type);
@@ -574,15 +587,8 @@ function renderDynamicFields(schema) {
     container.innerHTML = html;
 }
 
-function openSchemaMapper() {
-    const messageType = document.getElementById('messageType').value;
-    if (!messageType) {
-        showToast('Please enter a Message Type first', 'warning');
-        document.getElementById('messageType').focus();
-        return;
-    }
-    window.open(`/transform.html?type=${encodeURIComponent(messageType)}`, '_blank');
-}
+// Removed openSchemaMapper since it is now integrated
+
 
 function getInputType(fieldType) {
     const typeMap = {
@@ -613,11 +619,22 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
 
     // Prepare param object for transforms
     if (currentAdapterType === 'transform') {
-        data.param = {};
+        const typeSelect = document.getElementById('adapterType');
+        if (typeSelect.value === 'Structure') {
+             // Get data from MapperUI
+             data.param = MapperUI.getData();
+        } else {
+             data.param = {};
+        }
     }
 
     // Add dynamic fields
     formData.forEach((value, key) => {
+        // Skip if MapperUI handled it (Structure)
+        if (currentAdapterType === 'transform' && document.getElementById('adapterType').value === 'Structure') {
+            return;
+        }
+
         if (key !== 'type' && key !== 'messagetype' && key !== 'enabled') {
             let parsedValue = value;
             // Try to parse JSON for Map/List fields
