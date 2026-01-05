@@ -19,7 +19,6 @@ import org.keinus.logparser.domain.model.mapping.FieldMapping;
 import org.keinus.logparser.domain.model.mapping.MappingConfiguration;
 import org.keinus.logparser.domain.model.mapping.SubTableRule;
 import org.keinus.logparser.domain.repository.MappingRepository;
-import org.keinus.logparser.infrastructure.util.id.SnowflakeIdGenerator;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -39,10 +38,9 @@ public class StructuredTransformIntegrationTest {
     void setUp() {
         objectMapper.registerModule(new JavaTimeModule());
         ConditionEvaluator evaluator = new ConditionEvaluator();
-        SnowflakeIdGenerator idGenerator = new SnowflakeIdGenerator();
         StructuredEventSerializer serializer = new StructuredEventSerializer(objectMapper);
         
-        transformService = new StructuredTransformService(mappingRepository, evaluator, idGenerator, serializer);
+        transformService = new StructuredTransformService(mappingRepository, evaluator, serializer);
     }
 
     @Test
@@ -104,5 +102,39 @@ public class StructuredTransformIntegrationTest {
         assertEquals("foo", additional.get("extra"));
         
         assertTrue(additional.containsKey("dst_port"), "additionalAttributes should contain 'dst_port'. Actual keys: " + additional.keySet());
+    }
+
+    @Test
+    void testCachingBehavior() {
+        // 1. Setup Mock Config
+        MappingConfiguration config = new MappingConfiguration();
+        config.setMessageType("cache_test");
+        config.setCommonMappings(Arrays.asList());
+        config.setSubTableRules(Arrays.asList());
+
+        when(mappingRepository.findByMessageType("cache_test")).thenReturn(Optional.of(config));
+
+        // 2. Create LogEvent
+        LogEvent event1 = new LogEvent("log1", "localhost", "cache_test");
+        LogEvent event2 = new LogEvent("log2", "localhost", "cache_test");
+
+        // 3. Execute First Time
+        transformService.applyToLogEvent(event1);
+
+        // 4. Execute Second Time
+        transformService.applyToLogEvent(event2);
+
+        // 5. Verify Repository was called ONLY ONCE
+        org.mockito.Mockito.verify(mappingRepository, org.mockito.Mockito.times(1)).findByMessageType("cache_test");
+
+        // 6. Reload
+        transformService.reload();
+
+        // 7. Execute Third Time
+        LogEvent event3 = new LogEvent("log3", "localhost", "cache_test");
+        transformService.applyToLogEvent(event3);
+
+        // 8. Verify Repository was called TWICE (1 initial + 1 after reload)
+        org.mockito.Mockito.verify(mappingRepository, org.mockito.Mockito.times(2)).findByMessageType("cache_test");
     }
 }

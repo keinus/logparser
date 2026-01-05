@@ -34,8 +34,7 @@ public class ThreadMonitoringService {
     private final TransformRepository transformRepository;
 
     private static final Pattern INPUT_ADAPTER_PATTERN = Pattern.compile("InputAdapter-(\\d+)-(.+)");
-    private static final Pattern PARSER_PATTERN = Pattern.compile("ParserThread-(\\d+)");
-    private static final Pattern TRANSFORM_PATTERN = Pattern.compile("TransformThread-(\\d+)");
+    private static final Pattern PROCESSING_PATTERN = Pattern.compile("ProcessingThread-(\\d+)");
 
     /**
      * 모든 활성 스레드의 상세 정보를 반환합니다.
@@ -72,15 +71,12 @@ public class ThreadMonitoringService {
 
         // 스레드 이름을 기반으로 컴포넌트 타입 결정
         Matcher inputMatcher = INPUT_ADAPTER_PATTERN.matcher(threadName);
-        Matcher parserMatcher = PARSER_PATTERN.matcher(threadName);
-        Matcher transformMatcher = TRANSFORM_PATTERN.matcher(threadName);
+        Matcher processingMatcher = PROCESSING_PATTERN.matcher(threadName);
 
         if (inputMatcher.matches()) {
             mapInputAdapterThread(builder, inputMatcher, inputAdaptersById);
-        } else if (parserMatcher.matches()) {
-            mapParserThread(builder, parserMatcher, parsers);
-        } else if (transformMatcher.matches()) {
-            mapTransformThread(builder, transformMatcher, transforms);
+        } else if (processingMatcher.matches()) {
+            mapProcessingThread(builder, processingMatcher, parsers, transforms);
         } else {
             mapSpecialThread(builder, threadName, outputAdaptersById);
         }
@@ -121,26 +117,20 @@ public class ThreadMonitoringService {
                 .orElse(null);
     }
 
-    private void mapParserThread(
+    private void mapProcessingThread(
             ThreadDetailDto.ThreadDetailDtoBuilder builder,
             Matcher matcher,
-            List<ParserEntity> parsers
-    ) {
-        String threadNumber = matcher.group(1);
-        builder.componentType("PARSER")
-               .componentName("Parser Worker #" + threadNumber)
-               .metadata(Map.of("threadNumber", threadNumber, "totalParsers", parsers.size()));
-    }
-
-    private void mapTransformThread(
-            ThreadDetailDto.ThreadDetailDtoBuilder builder,
-            Matcher matcher,
+            List<ParserEntity> parsers,
             List<TransformEntity> transforms
     ) {
         String threadNumber = matcher.group(1);
-        builder.componentType("TRANSFORM")
-               .componentName("Transform Worker #" + threadNumber)
-               .metadata(Map.of("threadNumber", threadNumber, "totalTransforms", transforms.size()));
+        builder.componentType("PARSER") // Keeping generic PARSER/TRANSFORM or new PROCESSING? UI expects existing types likely.
+               .componentName("Processing Worker #" + threadNumber)
+               .metadata(Map.of(
+                   "threadNumber", threadNumber, 
+                   "totalParsers", parsers.size(),
+                   "totalTransforms", transforms.size()
+               ));
     }
 
     private void mapSpecialThread(

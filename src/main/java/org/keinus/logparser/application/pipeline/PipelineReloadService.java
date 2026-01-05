@@ -7,6 +7,7 @@ import org.keinus.logparser.application.config.ConfigManagementService;
 import org.keinus.logparser.application.config.ConfigValidationService;
 import org.keinus.logparser.domain.parsing.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
+import org.keinus.logparser.domain.service.transform.StructuredTransformService;
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
@@ -125,12 +126,14 @@ public class PipelineReloadService {
             // Parse Service와 Transform Service 리로드
             ParseService parseService = applicationContext.getBean(ParseService.class);
             TransformService transformService = applicationContext.getBean(TransformService.class);
+            StructuredTransformService structuredTransformService = applicationContext.getBean(StructuredTransformService.class);
 
             // 데이터베이스에서 설정을 다시 로드
-            log.info("Reloading Parse and Transform services from database");
+            log.info("Reloading Parse, Transform and StructuredTransform services from database");
             parseService.reload();
             transformService.reload();
-            log.info("Parse and Transform services reloaded successfully");
+            structuredTransformService.reload();
+            log.info("Services reloaded successfully");
             
             // MessageDispatcher worker 스레드 재설정 (개수 변경 적용)
             messageDispatcher.updateWorkerThreadCount();
@@ -246,7 +249,7 @@ public class PipelineReloadService {
             try {
                 MessageDispatcher dispatcher = applicationContext.getBean(MessageDispatcher.class);
                 var metrics = dispatcher.getDispatcherMetrics();
-                queueSize = metrics.globalQueueSize + metrics.transformQueueSize + metrics.outputQueueSize;
+                queueSize = metrics.globalQueueSize + metrics.outputQueueSize;
                 throughput = metrics.outputThroughput;
             } catch (Exception e) {
                 log.debug("Could not retrieve queue metrics: {}", e.getMessage());
@@ -308,3 +311,4 @@ public class PipelineReloadService {
             double throughput
     ) {}
 }
+

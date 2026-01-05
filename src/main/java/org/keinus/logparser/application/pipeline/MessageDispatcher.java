@@ -38,11 +38,6 @@ public class MessageDispatcher {
     private final BlockingQueue<LogEvent> inputMessageQueue;
 
     /**
-     * 변환 대기 메시지를 저장하는 BlockingQueue.
-     */
-    private final BlockingQueue<LogEvent> transformQueue;
-
-    /**
      * 출력 메시지를 저장하는 BlockingQueue의 HashMap. 큐 크기는 10000으로 제한됩니다.
      */
     private final BlockingQueue<LogEvent> outputMessageQueue;
@@ -118,7 +113,7 @@ public class MessageDispatcher {
         this.threadManager = threadManager;
         this.queueSize = queueSize;
         this.inputMessageQueue = new LinkedBlockingQueue<>(queueSize);
-        this.transformQueue = new LinkedBlockingQueue<>(queueSize);
+        // Transform Queue removed
         this.outputMessageQueue = new LinkedBlockingQueue<>(queueSize);
 
         this.parseService = parseService;
@@ -161,32 +156,23 @@ public class MessageDispatcher {
             return;
         }
 
-        int parserThreads = applicationProperties.getParserThreads();
+        int processingThreads = applicationProperties.getParserThreads(); // Reusing config key for general processing threads
         
         this.workerActive = new AtomicBoolean(true);
 
-        // Start Parser Threads
-        for (int i = 0; i < parserThreads; i++) {
-            String threadName = "ParserThread-" + (i + 1);
-            ParseDispatcher parseDispatcher = new ParseDispatcher(
-                inputMessageQueue, transformQueue, parseService,
+        // Start Processing Threads (Combined Parse + Transform)
+        for (int i = 0; i < processingThreads; i++) {
+            String threadName = "ProcessingThread-" + (i + 1);
+            ProcessingDispatcher processingDispatcher = new ProcessingDispatcher(
+                inputMessageQueue, outputMessageQueue,
+                parseService, transformService, structuredTransformService,
                 workerActive,
                 totalMessagesFailed
             );
-            threadManager.executeWithName(threadName, parseDispatcher);
+            threadManager.executeWithName(threadName, processingDispatcher);
         }
 
-        // Start Transform Threads
-        for (int i = 0; i < parserThreads; i++) {
-            String threadName = "TransformThread-" + (i + 1);
-            TransformDispatcher transformDispatcher = new TransformDispatcher(
-                transformQueue, outputMessageQueue, transformService,
-                structuredTransformService,
-                workerActive, totalMessagesFailed
-            );
-            threadManager.executeWithName(threadName, transformDispatcher);
-        }
-        log.info("Started {} parser threads and transform threads", parserThreads);
+        log.info("Started {} processing threads", processingThreads);
     }
 
     private synchronized void stopWorkers() {
@@ -194,8 +180,7 @@ public class MessageDispatcher {
             log.info("Stopping worker threads...");
             workerActive.set(false);
 
-            threadManager.stopThreadsStartingWith("ParserThread-");
-            threadManager.stopThreadsStartingWith("TransformThread-");
+            threadManager.stopThreadsStartingWith("ProcessingThread-");
             log.info("Stopped all threads.");
         }
     }
@@ -230,7 +215,6 @@ public class MessageDispatcher {
         if (workerActive != null) workerActive.set(false);
 
         inputMessageQueue.clear();
-        transformQueue.clear();
         this.threadManager.shutdownAllThreads();
         log.info("Message Dispatcher closed");
     }
@@ -270,11 +254,9 @@ public class MessageDispatcher {
                 ThreadUtil.sleep(QUEUE_MONITORING_INTERVAL_MS);
 
                 int inputQueueSize = inputMessageQueue.size();
-                int transformQueueSize = transformQueue.size();
                 int outputQueueSize = outputMessageQueue.size();
 
                 double inputUtilization = (double) inputQueueSize / queueSize;
-                double transformUtilization = (double) transformQueueSize / queueSize;
                 double outputUtilization = (double) outputQueueSize / queueSize;
 
                 // Calculate throughput
@@ -287,9 +269,8 @@ public class MessageDispatcher {
                 lastOutputMessageCount = currentCount;
                 lastMonitorTime = currentTime;
                 log.info(
-                        "Queue Status - Input: {}/{} ({}%), Transform: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | Throughput: {}/s",
+                        "Queue Status - Input: {}/{} ({}%), Output: {}/{} ({}%) | Dropped: {}, Failed: {} | Throughput: {}/s",
                         inputQueueSize, queueSize, String.format("%.1f", inputUtilization * 100),
-                        transformQueueSize, queueSize, String.format("%.1f", transformUtilization * 100),
                         outputQueueSize, queueSize, String.format("%.1f", outputUtilization * 100),
                         totalMessagesDropped.get(), 
                         totalMessagesFailed.get(),
@@ -306,7 +287,6 @@ public class MessageDispatcher {
     public DispatcherMetrics getDispatcherMetrics() {
         return new DispatcherMetrics(
                 inputMessageQueue.size(),
-                transformQueue.size(),
                 outputMessageQueue.size(),
                 queueSize,
                 totalMessagesDropped.get(),
@@ -320,7 +300,6 @@ public class MessageDispatcher {
     @AllArgsConstructor
     public static class DispatcherMetrics {
         public final int globalQueueSize;
-        public final int transformQueueSize;
         public final int outputQueueSize;
         public final int maxQueueSize;
         public final long totalDropped;
@@ -331,10 +310,6 @@ public class MessageDispatcher {
             return (double) globalQueueSize / maxQueueSize;
         }
 
-        public double getTransformUtilization() {
-            return (double) transformQueueSize / maxQueueSize;
-        }
-
         public double getOutputUtilization() {
             return (double) outputQueueSize / maxQueueSize;
         }
@@ -342,9 +317,8 @@ public class MessageDispatcher {
         @Override
         public String toString() {
             return String.format(
-                    "DispatcherMetrics{input=%d/%d (%.1f%%), transform=%d/%d (%.1f%%), output=%d/%d (%.1f%%), dropped=%d, failed=%d, throughput=%.1f/s}",
+                    "DispatcherMetrics{input=%d/%d (%.1f%%), output=%d/%d (%.1f%%), dropped=%d, failed=%d, throughput=%.1f/s}",
                     globalQueueSize, maxQueueSize, getGlobalUtilization() * 100,
-                    transformQueueSize, maxQueueSize, getTransformUtilization() * 100,
                     outputQueueSize, maxQueueSize, getOutputUtilization() * 100,
                     totalDropped, totalFailed,
                     outputThroughput);

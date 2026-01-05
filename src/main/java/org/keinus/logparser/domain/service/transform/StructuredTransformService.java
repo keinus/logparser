@@ -16,7 +16,6 @@ import org.keinus.logparser.domain.repository.MappingRepository;
 import org.keinus.logparser.infrastructure.util.converter.IpValidator;
 import org.keinus.logparser.infrastructure.util.converter.NumberParser;
 import org.keinus.logparser.infrastructure.util.converter.TimestampParser;
-import org.keinus.logparser.infrastructure.util.id.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -27,17 +26,23 @@ public class StructuredTransformService {
 
     private final MappingRepository mappingRepository;
     private final ConditionEvaluator conditionEvaluator;
-    private final SnowflakeIdGenerator idGenerator;
     private final StructuredEventSerializer serializer;
+    private final Map<String, MappingConfiguration> configCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public StructuredTransformService(MappingRepository mappingRepository, 
                                       ConditionEvaluator conditionEvaluator,
-                                      SnowflakeIdGenerator idGenerator,
                                       StructuredEventSerializer serializer) {
         this.mappingRepository = mappingRepository;
         this.conditionEvaluator = conditionEvaluator;
-        this.idGenerator = idGenerator;
         this.serializer = serializer;
+    }
+
+    /**
+     * Clears the internal configuration cache to force reloading from the repository.
+     */
+    public void reload() {
+        log.info("Reloading StructuredTransformService configuration cache");
+        configCache.clear();
     }
 
     /**
@@ -66,9 +71,10 @@ public class StructuredTransformService {
 
     public StructuredEvent transform(LogEvent logEvent) {
         String messageType = logEvent.getMessageType();
-        // 1. Load Configuration
-        MappingConfiguration config = mappingRepository.findByMessageType(messageType)
-                .orElse(null);
+        // 1. Load Configuration (Cached)
+        MappingConfiguration config = configCache.computeIfAbsent(messageType, key -> 
+            mappingRepository.findByMessageType(key).orElse(null)
+        );
         return transform(logEvent, config);
     }
 
@@ -81,15 +87,11 @@ public class StructuredTransformService {
             return createDefaultEvent(logEvent);
         }
 
-        // 2. Generate ID
-        long eventId = idGenerator.nextId();
-        
         // Track mapped source fields to handle unmapped later
         Set<String> mappedSourceKeys = new HashSet<>();
 
         // 3. Process Common Fields
         CommonFields.CommonFieldsBuilder commonBuilder = CommonFields.builder();
-        commonBuilder.eventId(eventId);
         commonBuilder.ingestTime(Instant.now());
         
         // Raw Log and Source are always present
@@ -117,14 +119,14 @@ public class StructuredTransformService {
 
         for (SubTableRule rule : config.getSubTableRules()) {
             boolean matched = conditionEvaluator.evaluate(rule.getConditionExpression(), sourceData);
-            System.out.println("Checking Rule: " + rule.getConditionExpression() + " Matched: " + matched);
+            // System.out.println("Checking Rule: " + rule.getConditionExpression() + " Matched: " + matched);
             if (matched) {
                 subDomainType = rule.getTargetSubTable();
                 
                 for (FieldMapping mapping : rule.getMappings()) {
                     String srcKey = mapping.getSourceField();
                     Object value = sourceData.get(srcKey);
-                    System.out.println("Mapping " + srcKey + " (" + value + ") to " + mapping.getTargetField());
+                    // System.out.println("Mapping " + srcKey + " (" + value + ") to " + mapping.getTargetField());
                     
                     if (value == null && mapping.getDefaultValue() != null) {
                         value = mapping.getDefaultValue();
@@ -162,7 +164,6 @@ public class StructuredTransformService {
 
     private StructuredEvent createDefaultEvent(LogEvent logEvent) {
          CommonFields common = CommonFields.builder()
-                 .eventId(idGenerator.nextId())
                  .ingestTime(Instant.now())
                  .rawLog(logEvent.getOriginalText())
                  .logSource(logEvent.getMessageType())

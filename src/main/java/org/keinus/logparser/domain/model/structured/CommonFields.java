@@ -9,7 +9,6 @@ import lombok.Data;
 @Builder
 public class CommonFields {
     // Mandatory
-    private Long eventId;
     private Instant eventTime;
     private Instant ingestTime;
 
