@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,9 @@ public class MergingHashMap<T> {
 
     // null 키에 해당하는 값(ArrayList)을 저장하는 리스트
     private final ArrayList<T> nullKeyValueList;
+    
+    // 조회 성능 최적화를 위한 캐시 (변경 시 초기화)
+    private final Map<String, List<T>> queryCache = new ConcurrentHashMap<>();
 
     // 최대 크기 제한
     private final int maxSize;
@@ -68,6 +72,8 @@ public class MergingHashMap<T> {
                 boolean shouldRemove = size() > MergingHashMap.this.maxSize;
                 if (shouldRemove) {
                     evictedEntries++;
+                    // LRU로 제거 시 캐시 전체 초기화 (보수적 접근)
+                    queryCache.clear();
                     LOGGER.debug("Evicting eldest entry: {} (total evictions: {})",
                                 eldest.getKey(), evictedEntries);
                 }
@@ -87,6 +93,9 @@ public class MergingHashMap<T> {
      * @param value 추가할 값
      */
     public void put(String key, T value) {
+        // 변경 발생 시 캐시 초기화
+        queryCache.clear();
+        
         if (key == null) {
             this.nullKeyValueList.add(value);
         } else {
@@ -104,34 +113,38 @@ public class MergingHashMap<T> {
      *         지정된 키와 null 키 모두에 값이 없으면 빈 리스트를 반환합니다.
      */
     public List<T> get(String key) {
-        List<T> specificList = null;
-        if (key != null) {
-            specificList = this.internalMap.get(key);
-        }
+        String cacheKey = (key == null) ? "NULL_KEY_MARKER" : key;
+        
+        return queryCache.computeIfAbsent(cacheKey, k -> {
+            List<T> specificList = null;
+            if (key != null) {
+                specificList = this.internalMap.get(key);
+            }
 
-        boolean hasSpecific = (specificList != null && !specificList.isEmpty());
-        boolean hasGlobal = !this.nullKeyValueList.isEmpty();
+            boolean hasSpecific = (specificList != null && !specificList.isEmpty());
+            boolean hasGlobal = !this.nullKeyValueList.isEmpty();
 
-        // 1. 둘 다 없는 경우
-        if (!hasSpecific && !hasGlobal) {
-            return Collections.emptyList();
-        }
+            // 1. 둘 다 없는 경우
+            if (!hasSpecific && !hasGlobal) {
+                return Collections.emptyList();
+            }
 
-        // 2. Specific만 있는 경우 (복사 없이 반환)
-        if (hasSpecific && !hasGlobal) {
-            return specificList;
-        }
+            // 2. Specific만 있는 경우 (복사 없이 반환)
+            if (hasSpecific && !hasGlobal) {
+                return specificList;
+            }
 
-        // 3. Global만 있는 경우 (복사 없이 반환)
-        if (!hasSpecific && hasGlobal) {
-            return this.nullKeyValueList;
-        }
+            // 3. Global만 있는 경우 (복사 없이 반환)
+            if (!hasSpecific && hasGlobal) {
+                return this.nullKeyValueList;
+            }
 
-        // 4. 둘 다 있는 경우 (병합 복사 발생)
-        ArrayList<T> mergedList = new ArrayList<>(specificList.size() + this.nullKeyValueList.size());
-        mergedList.addAll(specificList);
-        mergedList.addAll(this.nullKeyValueList);
-        return mergedList;
+            // 4. 둘 다 있는 경우 (병합 복사 발생)
+            ArrayList<T> mergedList = new ArrayList<>(specificList.size() + this.nullKeyValueList.size());
+            mergedList.addAll(specificList);
+            mergedList.addAll(this.nullKeyValueList);
+            return mergedList;
+        });
     }
 
     /**
@@ -143,6 +156,9 @@ public class MergingHashMap<T> {
      *         키가 없었으면 null을 반환합니다.
      */
     public List<T> remove(String key) {
+        // 변경 발생 시 캐시 초기화
+        queryCache.clear();
+        
         if (key == null) {
             if (nullKeyValueList.isEmpty()) {
                 return nullKeyValueList;
@@ -179,6 +195,11 @@ public class MergingHashMap<T> {
                 removed = true; // 하나라도 제거되면 true로 설정
             }
         }
+        
+        if (removed) {
+            queryCache.clear();
+        }
+        
         return removed;
     }
 
@@ -200,6 +221,7 @@ public class MergingHashMap<T> {
      * 맵의 모든 매핑을 제거합니다.
      */
     public void clear() {
+        queryCache.clear();
         this.internalMap.clear();
         this.nullKeyValueList.clear();
     }
