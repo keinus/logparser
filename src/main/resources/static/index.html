@@ -1,481 +1,550 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LogParser - Configuration Management</title>
-    <link rel="stylesheet" href="/css/style.css">
-    <!-- Material Icons -->
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body>
-    <!-- Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-        <span class="material-icons">brightness_6</span>
-    </button>
+    <title>LogParser - Data Pipeline Console</title>
+    
+    <!-- Tailwind CSS & DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <div class="container">
-        <header>
-            <div class="header-content">
-                <div class="logo-section">
-                    <span class="material-icons logo-icon">analytics</span>
-                    <div>
-                        <h1>LogParser</h1>
-                        <p class="subtitle">Configuration Management Console</p>
-                    </div>
+    <style>
+        :root {
+            --sidebar-width: 280px;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .sidebar-active {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: #60a5fa;
+            border-right: 3px solid #60a5fa;
+        }
+        .pipeline-connector {
+            flex-grow: 1;
+            height: 2px;
+            background: #334155;
+            position: relative;
+            margin: 0 1rem;
+        }
+        .pipeline-connector::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: -4px;
+            width: 8px;
+            height: 8px;
+            border-top: 2px solid #334155;
+            border-right: 2px solid #334155;
+            transform: rotate(45deg);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+        
+        .metric-value {
+             font-variant-numeric: tabular-nums;
+        }
+
+        /* Mapper UI Overrides for Dark Mode Compatibility */
+        .mapper-container { color: #cbd5e1; }
+        .mapper-section { background: #1e293b !important; border-color: #334155 !important; }
+        .mapper-section h3, .mapper-section h4, .mapper-section label { color: #e2e8f0 !important; }
+        .form-control, .combo-select { 
+            background-color: #0f172a !important; 
+            border-color: #334155 !important; 
+            color: #f1f5f9 !important; 
+        }
+        .field-item, .schema-row { background: #0f172a !important; border-color: #334155 !important; color: #cbd5e1 !important; }
+    </style>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#151f32',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-300">
+
+    <!-- Sidebar -->
+    <aside class="w-[280px] bg-slate-900 border-r border-slate-800 flex flex-col flex-shrink-0 z-20">
+        <!-- Logo -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-900">
+            <span class="material-icons-round text-blue-500 mr-3 text-2xl">hub</span>
+            <div>
+                <h1 class="font-bold text-white text-lg tracking-tight">LogParser</h1>
+                <p class="text-xs text-slate-500 font-mono">v0.2.3-stable</p>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto py-4">
+            <div class="px-4 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Observability</div>
+            <ul class="space-y-1 mb-6">
+                <li>
+                    <a href="#" onclick="App.switchView('overview')" id="nav-overview" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors sidebar-active">
+                        <span class="material-icons-round text-lg mr-3">dashboard</span>
+                        Overview
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="App.switchView('live-tail')" id="nav-live-tail" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <span class="material-icons-round text-lg mr-3">terminal</span>
+                        Live Tail
+                    </a>
+                </li>
+            </ul>
+
+            <div class="px-4 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pipeline Config</div>
+            <ul class="space-y-1 mb-6">
+                <li>
+                    <a href="#" onclick="App.switchView('pipeline-visual')" id="nav-pipeline-visual" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <span class="material-icons-round text-lg mr-3">account_tree</span>
+                        Pipeline View
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="App.switchView('inputs')" id="nav-input" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <span class="material-icons-round text-lg mr-3">input</span>
+                        Sources (Inputs)
+                        <span class="ml-auto bg-slate-800 text-slate-400 py-0.5 px-2 rounded-full text-xs" id="badge-input">0</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="App.switchView('parser')" id="nav-parser" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <span class="material-icons-round text-lg mr-3">code</span>
+                        Parsers
+                        <span class="ml-auto bg-slate-800 text-slate-400 py-0.5 px-2 rounded-full text-xs" id="badge-parser">0</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="App.switchView('transform')" id="nav-transform" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <span class="material-icons-round text-lg mr-3">memory</span>
+                        Transforms
+                        <span class="ml-auto bg-slate-800 text-slate-400 py-0.5 px-2 rounded-full text-xs" id="badge-transform">0</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="App.switchView('outputs')" id="nav-output" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <span class="material-icons-round text-lg mr-3">output</span>
+                        Destinations
+                        <span class="ml-auto bg-slate-800 text-slate-400 py-0.5 px-2 rounded-full text-xs" id="badge-output">0</span>
+                    </a>
+                </li>
+            </ul>
+
+            <div class="px-4 mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</div>
+            <ul class="space-y-1">
+                <li>
+                    <a href="#" onclick="App.switchView('settings')" id="nav-settings" class="flex items-center px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <span class="material-icons-round text-lg mr-3">settings</span>
+                        Configuration
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Status Footer -->
+        <div class="p-4 border-t border-slate-800 bg-slate-900">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium text-slate-400">System Status</span>
+                <span class="flex h-2 w-2 relative">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 mb-1">
+                <div class="bg-blue-500 h-1.5 rounded-full" id="cpu-bar" style="width: 45%"></div>
+            </div>
+            <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                <span id="threads-count">Threads: -</span>
+                <span id="mem-usage">MEM: -</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-950 relative">
+        
+        <!-- Top Header -->
+        <header class="h-16 flex items-center justify-between px-8 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm z-10">
+            <div class="flex items-center">
+                <h2 id="page-title" class="text-xl font-semibold text-white mr-4">Overview</h2>
+                <div class="h-6 w-px bg-slate-700 mx-2"></div>
+                <div id="status-pill" class="badge badge-success badge-outline gap-2 ml-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-current"></div>
+                    <span id="pipeline-status-text">Running</span>
                 </div>
-                <div class="pipeline-status" id="pipelineStatus">
-                    <div class="status-indicator">
-                        <span class="material-icons status-icon">circle</span>
-                        <div class="status-info">
-                            <span class="status-label">Pipeline Status</span>
-                            <span class="status-value" id="statusValue">Loading...</span>
-                        </div>
-                    </div>
-                    <button onclick="refreshPipelineStatus()" class="btn-icon" title="Refresh">
-                        <span class="material-icons">refresh</span>
-                    </button>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                        <span class="material-icons-round text-slate-500 text-lg">search</span>
+                    </span>
+                    <input type="text" id="global-search" onkeyup="App.handleSearch(this.value)" placeholder="Search config..." class="input input-sm input-bordered bg-slate-800 border-slate-700 w-64 pl-10 focus:outline-none focus:border-blue-500 transition-colors text-slate-200">
                 </div>
+                
+                <button class="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-white">
+                    <span class="material-icons-round">notifications</span>
+                </button>
+                <button class="btn btn-sm btn-primary gap-2" onclick="App.openControlModal()">
+                    <span class="material-icons-round text-sm">play_circle</span>
+                    Actions
+                </button>
             </div>
         </header>
 
-        <nav class="tabs">
-            <button class="tab-button active" onclick="showTab('dashboard')">
-                <span class="material-icons">dashboard</span>
-                <span>Dashboard</span>
-            </button>
-            <button class="tab-button" onclick="showTab('input')">
-                <span class="material-icons">input</span>
-                <span>Input Adapters</span>
-            </button>
-            <button class="tab-button" onclick="showTab('parser')">
-                <span class="material-icons">code</span>
-                <span>Parsers</span>
-            </button>
-            <button class="tab-button" onclick="showTab('transform')">
-                <span class="material-icons">transform</span>
-                <span>Transforms</span>
-            </button>
-            <button class="tab-button" onclick="showTab('output')">
-                <span class="material-icons">output</span>
-                <span>Output Adapters</span>
-            </button>
-            <button class="tab-button" onclick="showTab('settings')">
-                <span class="material-icons">settings</span>
-                <span>Settings</span>
-            </button>
-        </nav>
-
-        <main class="content">
-            <!-- Dashboard Tab -->
-            <div id="dashboard-tab" class="tab-content active">
-                <!-- Monitoring Section (Merged) -->
-                <div class="card" style="margin-bottom: var(--spacing-lg);">
-                    <div class="card-header">
-                        <h2>
-                            <span class="material-icons">monitoring</span>
-                            Pipeline Monitoring
-                        </h2>
+        <!-- Scrollable Content Area -->
+        <div id="content-area" class="flex-1 overflow-y-auto p-8 relative scroll-smooth">
+            
+            <!-- OVERVIEW VIEW -->
+            <div id="view-overview" class="space-y-6">
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="card bg-slate-900 border border-slate-800 shadow-xl">
+                        <div class="card-body p-6">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Components</p>
+                                    <h3 class="text-2xl font-bold text-white mt-1 metric-value" id="stat-components">0</h3>
+                                </div>
+                                <span class="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+                                    <span class="material-icons-round">extension</span>
+                                </span>
+                            </div>
+                            <div class="mt-4 flex items-center text-xs text-slate-400 font-medium">
+                                Total active adapters
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <!-- Key Metrics -->
-                        <div class="metrics-grid">
-                            <div class="metric-card">
-                                <div class="metric-icon status">
-                                    <span class="material-icons">health_and_safety</span>
+
+                    <div class="card bg-slate-900 border border-slate-800 shadow-xl">
+                        <div class="card-body p-6">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Throughput</p>
+                                    <h3 class="text-2xl font-bold text-white mt-1 metric-value" id="stat-throughput">0/s</h3>
                                 </div>
-                                <div class="metric-info">
-                                    <span class="metric-label">Pipeline Status</span>
-                                    <span class="metric-value" id="monitorStatus">-</span>
-                                </div>
+                                <span class="p-2 bg-purple-500/10 rounded-lg text-purple-500">
+                                    <span class="material-icons-round">speed</span>
+                                </span>
                             </div>
-                            <div class="metric-card">
-                                <div class="metric-icon throughput">
-                                    <span class="material-icons">speed</span>
-                                </div>
-                                <div class="metric-info">
-                                    <span class="metric-label">Throughput</span>
-                                    <span class="metric-value" id="monitorThroughput">0/s</span>
-                                </div>
-                            </div>
-                            <div class="metric-card">
-                                <div class="metric-icon queue">
-                                    <span class="material-icons">layers</span>
-                                </div>
-                                <div class="metric-info">
-                                    <span class="metric-label">Queue Size</span>
-                                    <span class="metric-value" id="monitorQueueSize">0</span>
-                                </div>
-                            </div>
-                             <div class="metric-card">
-                                <div class="metric-icon active-threads">
-                                    <span class="material-icons">memory</span>
-                                </div>
-                                <div class="metric-info">
-                                    <span class="metric-label">Active Threads</span>
-                                    <span class="metric-value" id="monitorThreadCount">0</span>
-                                </div>
+                             <div class="mt-4 flex items-center text-xs text-slate-500 font-medium">
+                                <span class="material-icons-round text-sm mr-1">access_time</span>
+                                Real-time
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Detailed Stats -->
-                        <div class="monitoring-details-grid">
-                            <div class="monitoring-panel">
-                                <h3>
-                                    <span class="material-icons">settings_input_component</span>
-                                    Component Status
-                                </h3>
-                                <div id="componentStatusList" class="status-list"></div>
+                    <div class="card bg-slate-900 border border-slate-800 shadow-xl">
+                        <div class="card-body p-6">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Queue Depth</p>
+                                    <h3 class="text-2xl font-bold text-white mt-1 metric-value" id="stat-queue">0</h3>
+                                </div>
+                                <span class="p-2 bg-amber-500/10 rounded-lg text-amber-500">
+                                    <span class="material-icons-round">layers</span>
+                                </span>
                             </div>
-                            <div class="monitoring-panel">
-                                <h3>
-                                    <span class="material-icons">pending</span>
-                                    Reload Progress
-                                </h3>
-                                <div id="reloadProgressDetail"></div>
-                            </div>
+                            <progress id="queue-progress" class="progress progress-warning w-full mt-4" value="0" max="1000"></progress>
                         </div>
+                    </div>
 
-                        <!-- Active Threads Section -->
-                        <div class="monitoring-section">
-                            <h3>
-                                <span class="material-icons">settings_applications</span>
-                                Active Threads Detail
-                            </h3>
-                            <div id="threadsContainer" class="threads-container"></div>
+                    <div class="card bg-slate-900 border border-slate-800 shadow-xl">
+                        <div class="card-body p-6">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Active Threads</p>
+                                    <h3 class="text-2xl font-bold text-white mt-1 metric-value" id="stat-threads">0</h3>
+                                </div>
+                                <span class="p-2 bg-emerald-500/10 rounded-lg text-emerald-500">
+                                    <span class="material-icons-round">memory</span>
+                                </span>
+                            </div>
+                             <div class="mt-4 flex items-center text-xs text-emerald-400 font-medium">
+                                Processing Workers
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="grid-2">
-                    <section class="card">
-                        <div class="card-header">
-                            <h2>
-                                <span class="material-icons">build</span>
-                                System Operations
-                            </h2>
-                        </div>
-                        <div class="card-body">
-                            <div class="control-buttons">
-                                <button onclick="reloadPipeline()" class="btn btn-primary">
-                                    <span class="material-icons">refresh</span>
-                                    <span>Reload Configuration</span>
-                                </button>
-                                <button onclick="validateAndReload()" class="btn btn-success">
-                                    <span class="material-icons">check_circle</span>
-                                    <span>Validate & Reload</span>
-                                </button>
-                                <button onclick="restartPipeline()" class="btn btn-danger">
-                                    <span class="material-icons">restart_alt</span>
-                                    <span>Restart Pipeline</span>
-                                </button>
+                <!-- Charts Row -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Main Chart -->
+                    <div class="col-span-2 card bg-slate-900 border border-slate-800 shadow-xl">
+                        <div class="card-body p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="font-semibold text-white">Traffic Volume (Throughput)</h3>
                             </div>
-                            
-                            <div id="reloadProgress" class="reload-progress" style="display: none; margin-top: 1.5rem;">
-                                <div class="progress-bar">
-                                    <div class="progress-fill" id="progressFill"></div>
-                                </div>
-                                <p id="progressText" class="progress-text"></p>
+                            <div class="h-64 w-full">
+                                <canvas id="trafficChart"></canvas>
                             </div>
                         </div>
-                    </section>
+                    </div>
 
-                    <section class="card">
-                        <div class="card-header">
-                            <h2>
-                                <span class="material-icons">info</span>
-                                Quick Stats
-                            </h2>
-                        </div>
-                        <div class="card-body">
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <span class="material-icons stat-icon">login</span>
-                                    <div>
-                                        <p class="stat-label">Input Adapters</p>
-                                        <p class="stat-value" id="inputCount">-</p>
-                                    </div>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="material-icons stat-icon">code</span>
-                                    <div>
-                                        <p class="stat-label">Parsers</p>
-                                        <p class="stat-value" id="parserCount">-</p>
-                                    </div>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="material-icons stat-icon">transform</span>
-                                    <div>
-                                        <p class="stat-label">Transforms</p>
-                                        <p class="stat-value" id="transformCount">-</p>
-                                    </div>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="material-icons stat-icon">logout</span>
-                                    <div>
-                                        <p class="stat-label">Output Adapters</p>
-                                        <p class="stat-value" id="outputCount">-</p>
-                                    </div>
-                                </div>
+                    <!-- Component Status -->
+                    <div class="card bg-slate-900 border border-slate-800 shadow-xl">
+                        <div class="card-body p-6">
+                            <h3 class="font-semibold text-white mb-4">Pipeline Breakdown</h3>
+                            <div class="space-y-4" id="pipeline-breakdown-list">
+                                <!-- Populated by JS -->
                             </div>
                         </div>
-                    </section>
+                    </div>
                 </div>
             </div>
 
-            <!-- Input Adapters Tab -->
-            <div id="input-tab" class="tab-content">
-                <div class="tab-toolbar">
-                    <div class="toolbar-title">
-                        <h2>
-                            <span class="material-icons">input</span>
-                            Input Adapters
-                        </h2>
-                        <span class="badge" id="inputBadge">0</span>
-                    </div>
-                    <div class="toolbar-actions">
-                        <div class="search-box">
-                            <span class="material-icons">search</span>
-                            <input type="text" placeholder="Search inputs..." onkeyup="filterAdapters('input', this.value)">
+            <!-- PIPELINE VIEW -->
+            <div id="view-pipeline-visual" class="hidden h-full flex flex-col">
+                <div class="flex justify-between items-center mb-6">
+                     <h3 class="text-lg font-medium text-white">Pipeline Topology</h3>
+                </div>
+                
+                <div class="flex-1 bg-slate-900 border border-slate-800 rounded-xl relative overflow-hidden" style="background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 20px 20px;">
+                    <!-- Simple CSS Flow Visualization -->
+                    <div class="absolute inset-0 flex items-center justify-center p-10 overflow-x-auto">
+                        
+                        <!-- Input Stage -->
+                        <div onclick="App.switchView('inputs')" class="flex flex-col items-center min-w-[200px] group cursor-pointer hover:scale-105 transition-transform">
+                            <div class="w-16 h-16 rounded-2xl bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center mb-4 shadow-lg shadow-blue-900/20">
+                                <span class="material-icons-round text-blue-500 text-3xl">input</span>
+                            </div>
+                            <h4 class="font-bold text-white">Sources</h4>
+                            <p class="text-xs text-slate-400 mt-1" id="topo-input-count">0 Adapters</p>
                         </div>
-                        <button onclick="openCreateModal('input')" class="btn btn-primary">
-                            <span class="material-icons">add</span>
-                            <span>Create</span>
-                        </button>
+
+                        <!-- Connector -->
+                        <div class="w-24 h-0.5 bg-slate-600 relative mx-4">
+                            <div class="absolute -top-1 left-1/2 -ml-1 w-2 h-2 bg-slate-400 rounded-full animate-ping"></div>
+                        </div>
+
+                        <!-- Parser Stage -->
+                        <div onclick="App.switchView('parser')" class="flex flex-col items-center min-w-[200px] group cursor-pointer hover:scale-105 transition-transform">
+                             <div class="w-16 h-16 rounded-2xl bg-purple-500/20 border-2 border-purple-500 flex items-center justify-center mb-4 shadow-lg shadow-purple-900/20">
+                                <span class="material-icons-round text-purple-500 text-3xl">code</span>
+                            </div>
+                            <h4 class="font-bold text-white">Parsing</h4>
+                            <p class="text-xs text-slate-400 mt-1" id="topo-parser-count">0 Parsers</p>
+                        </div>
+
+                        <!-- Connector -->
+                        <div class="w-24 h-0.5 bg-slate-600 relative mx-4"></div>
+
+                         <!-- Transform Stage -->
+                         <div onclick="App.switchView('transform')" class="flex flex-col items-center min-w-[200px] group cursor-pointer hover:scale-105 transition-transform">
+                            <div class="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center mb-4 shadow-lg shadow-amber-900/20">
+                               <span class="material-icons-round text-amber-500 text-3xl">transform</span>
+                           </div>
+                           <h4 class="font-bold text-white">Enrichment</h4>
+                           <p class="text-xs text-slate-400 mt-1" id="topo-transform-count">0 Transforms</p>
+                       </div>
+
+                       <!-- Connector -->
+                       <div class="w-24 h-0.5 bg-slate-600 relative mx-4"></div>
+
+                       <!-- Output Stage -->
+                       <div onclick="App.switchView('outputs')" class="flex flex-col items-center min-w-[200px] group cursor-pointer hover:scale-105 transition-transform">
+                            <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center mb-4 shadow-lg shadow-emerald-900/20">
+                               <span class="material-icons-round text-emerald-500 text-3xl">output</span>
+                           </div>
+                           <h4 class="font-bold text-white">Destinations</h4>
+                           <p class="text-xs text-slate-400 mt-1" id="topo-output-count">0 Outputs</p>
+                       </div>
+
                     </div>
                 </div>
-                <div id="inputList" class="adapter-grid"></div>
             </div>
 
-            <!-- Parsers Tab -->
-            <div id="parser-tab" class="tab-content">
-                <div class="tab-toolbar">
-                    <div class="toolbar-title">
-                        <h2>
-                            <span class="material-icons">code</span>
-                            Parsers
-                        </h2>
-                         <span class="badge" id="parserBadge">0</span>
-                    </div>
-                    <div class="toolbar-actions">
-                        <div class="search-box">
-                            <span class="material-icons">search</span>
-                            <input type="text" placeholder="Search parsers..." onkeyup="filterAdapters('parser', this.value)">
+            <!-- LIVE TAIL VIEW -->
+            <div id="view-live-tail" class="hidden h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex gap-4 items-center">
+                        <div class="flex items-center gap-2">
+                             <span class="loading loading-spinner loading-xs text-blue-500"></span>
+                             <span class="text-xs text-blue-400 font-mono">LIVE</span>
                         </div>
-                        <button onclick="openCreateModal('parser')" class="btn btn-primary">
-                            <span class="material-icons">add</span>
-                            <span>Create</span>
-                        </button>
                     </div>
-                </div>
-                <div id="parserList" class="adapter-grid"></div>
-            </div>
-
-            <!-- Transforms Tab -->
-            <div id="transform-tab" class="tab-content">
-                <div class="tab-toolbar">
-                    <div class="toolbar-title">
-                        <h2>
-                            <span class="material-icons">transform</span>
-                            Transforms
-                        </h2>
-                         <span class="badge" id="transformBadge">0</span>
-                    </div>
-                    <div class="toolbar-actions">
-                        <div class="search-box">
-                            <span class="material-icons">search</span>
-                            <input type="text" placeholder="Search transforms..." onkeyup="filterAdapters('transform', this.value)">
-                        </div>
-                        <button onclick="openCreateModal('transform')" class="btn btn-primary">
-                            <span class="material-icons">add</span>
-                            <span>Create</span>
-                        </button>
-                    </div>
-                </div>
-                <div id="transformList" class="adapter-grid"></div>
-            </div>
-
-            <!-- Output Adapters Tab -->
-            <div id="output-tab" class="tab-content">
-                <div class="tab-toolbar">
-                    <div class="toolbar-title">
-                        <h2>
-                            <span class="material-icons">output</span>
-                            Output Adapters
-                        </h2>
-                         <span class="badge" id="outputBadge">0</span>
-                    </div>
-                    <div class="toolbar-actions">
-                        <div class="search-box">
-                            <span class="material-icons">search</span>
-                            <input type="text" placeholder="Search outputs..." onkeyup="filterAdapters('output', this.value)">
-                        </div>
-                        <button onclick="openCreateModal('output')" class="btn btn-primary">
-                            <span class="material-icons">add</span>
-                            <span>Create</span>
-                        </button>
-                    </div>
-                </div>
-                <div id="outputList" class="adapter-grid"></div>
-            </div>
-
-            <!-- Settings Tab -->
-            <div id="settings-tab" class="tab-content">
-                <div class="tab-toolbar">
-                    <div class="toolbar-title">
-                        <h2>
-                            <span class="material-icons">settings</span>
-                            Settings
-                        </h2>
+                    <div class="flex gap-2">
+                        <button class="btn btn-sm btn-ghost text-slate-400" onclick="document.getElementById('terminal-window').innerHTML = ''">Clear</button>
+                        <button class="btn btn-sm btn-secondary" onclick="App.togglePauseTail(this)">Pause</button>
                     </div>
                 </div>
                 
-                <div class="grid-2">
-                    <section class="card">
-                        <div class="card-header">
-                            <h2>
-                                <span class="material-icons">tune</span>
-                                Performance Tuning
-                            </h2>
-                        </div>
-                        <div class="card-body">
-                            <form id="pipelineSettingsForm" onsubmit="savePipelineSettings(event)">
-                                <div class="form-group">
-                                    <label for="parserThreadsInput">
-                                        Parser & Transform Threads
-                                        <span class="material-icons help-icon" title="Number of threads dedicated to parsing and transforming logs">help_outline</span>
-                                    </label>
-                                    <div style="display: flex; gap: var(--spacing-sm); align-items: flex-start;">
-                                        <div style="flex: 1;">
-                                            <input type="number" id="parserThreadsInput" min="1" class="form-control" placeholder="Default: 4">
-                                            <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary);">
-                                                Controls the parallelism of the processing stage. Higher values may improve throughput but consume more CPU.
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style="display: flex; justify-content: flex-end; margin-top: var(--spacing-lg);">
-                                    <button type="submit" class="btn btn-primary">
-                                        <span class="material-icons">save</span> Save Changes
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </section>
-                    
-                    <section class="card">
-                        <div class="card-header">
-                            <h2>
-                                <span class="material-icons">info</span>
-                                About
-                            </h2>
-                        </div>
-                        <div class="card-body">
-                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">
-                                <strong>LogParser</strong> is a high-performance log processing pipeline.
-                            </p>
-                            <div class="info-item">
-                                <span class="info-label">Version</span>
-                                <span class="info-value">1.0.0</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">Build Date</span>
-                                <span class="info-value">2025-07-30</span>
-                            </div>
-                        </div>
-                    </section>
+                <div class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-4 overflow-y-auto font-mono text-xs leading-relaxed" id="terminal-window">
+                    <div class="text-slate-500 mb-2 border-b border-slate-800 pb-2"># Listening for events (Simulated in Prototype)...</div>
                 </div>
             </div>
-        </main>
-    </div>
 
-    <!-- Modal for Create/Edit -->
-    <div id="configModal" class="modal">
-        <div class="modal-overlay" onclick="closeModal()"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">
-                    <span class="material-icons">settings</span>
-                    Add Configuration
-                </h2>
-                <button class="btn-icon" onclick="closeModal()">
-                    <span class="material-icons">close</span>
+            <!-- GENERIC LIST VIEW (Inputs/Outputs/etc) -->
+            <div id="view-list-generic" class="hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="tabs tabs-boxed bg-slate-800 p-1">
+                        <a class="tab tab-active text-white">All</a>
+                        <a class="tab text-slate-400">Enabled</a>
+                        <a class="tab text-slate-400">Disabled</a>
+                    </div>
+                    <button class="btn btn-primary btn-sm gap-2" onclick="App.openCreateModal()">
+                        <span class="material-icons-round text-sm">add</span>
+                        Create New
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto rounded-lg border border-slate-800">
+                    <table class="table w-full">
+                        <!-- head -->
+                        <thead class="bg-slate-900 text-slate-400 text-xs uppercase">
+                            <tr>
+                                <th>Status</th>
+                                <th>Message Type / ID</th>
+                                <th>Type</th>
+                                <th>Configuration</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="generic-list-body" class="bg-slate-900/50 text-sm">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- SETTINGS VIEW -->
+            <div id="view-settings" class="hidden">
+                 <div class="card bg-slate-900 border border-slate-800 shadow-xl max-w-2xl">
+                    <div class="card-body">
+                        <h2 class="card-title text-white">Performance Tuning</h2>
+                        <div class="form-control w-full">
+                            <label class="label">
+                                <span class="label-text text-slate-300">Parser & Transform Threads</span>
+                            </label>
+                            <input type="number" id="setting-threads" placeholder="4" class="input input-bordered bg-slate-800 text-white w-full" />
+                            <label class="label">
+                                <span class="label-text-alt text-slate-500">Number of threads dedicated to parsing and transforming. Requires restart.</span>
+                            </label>
+                        </div>
+                        <div class="card-actions justify-end mt-4">
+                            <button class="btn btn-primary" onclick="App.saveSettings()">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal: Control Panel -->
+    <dialog id="control_modal" class="modal">
+        <div class="modal-box bg-slate-900 border border-slate-800">
+            <h3 class="font-bold text-lg text-white mb-4">Pipeline Controls</h3>
+            
+            <div class="grid gap-3">
+                <button class="btn btn-outline border-slate-700 text-slate-300 justify-start hover:bg-slate-800 hover:text-white" onclick="App.reloadPipeline()">
+                    <span class="material-icons-round mr-2 text-blue-500">refresh</span>
+                    Reload Configuration (Hot)
+                </button>
+                <button class="btn btn-outline border-slate-700 text-slate-300 justify-start hover:bg-slate-800 hover:text-white" onclick="App.validateAndReload()">
+                    <span class="material-icons-round mr-2 text-emerald-500">check_circle</span>
+                    Validate Config Integrity
+                </button>
+                <button class="btn btn-outline border-red-900/30 text-red-400 justify-start hover:bg-red-900/20 hover:border-red-500/50" onclick="App.restartPipeline()">
+                    <span class="material-icons-round mr-2">restart_alt</span>
+                    Full Pipeline Restart
                 </button>
             </div>
-            <div class="modal-body">
-                <form id="configForm">
-                    <div class="form-group">
-                        <label for="adapterType">
-                            <span class="material-icons">category</span>
-                            Type
-                        </label>
-                        <select id="adapterType" onchange="loadAdapterSchema()" required>
-                            <option value="">Select Type</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="messageType">
-                            <span class="material-icons">label</span>
-                            Message Type
-                        </label>
-                        <input type="text" id="messageType" required>
-                        <small>Unique identifier for this adapter</small>
-                    </div>
-
-                    <div id="dynamicFields" class="dynamic-fields"></div>
-
-                    <div id="enabledFieldGroup" class="form-group checkbox-group">
-                        <label>
-                            <input type="checkbox" id="enabled" checked>
-                            <span>Enabled</span>
-                        </label>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">
-                            <span class="material-icons">save</span>
-                            <span>Save</span>
-                        </button>
-                        <button type="button" onclick="closeModal()" class="btn btn-secondary">
-                            <span class="material-icons">cancel</span>
-                            <span>Cancel</span>
-                        </button>
-                    </div>
+            
+            <div class="modal-action">
+                <form method="dialog">
+                    <button class="btn btn-ghost">Close</button>
                 </form>
             </div>
         </div>
-    </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
 
-    <!-- Mapper Overlay -->
-    <!-- Removed: Mapper is now integrated into the generic configuration modal -->
+    <!-- Modal: Edit/Create Adapter -->
+    <dialog id="config_modal" class="modal">
+        <div class="modal-box w-11/12 max-w-5xl bg-slate-900 border border-slate-800">
+            <h3 class="font-bold text-lg text-white mb-4" id="modal-title">Configure Adapter</h3>
+            
+            <form id="config-form" onsubmit="App.handleConfigSubmit(event)">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                     <div class="form-control">
+                        <label class="label"><span class="label-text text-slate-300">Adapter Type</span></label>
+                        <select id="config-type" class="select select-bordered bg-slate-800 text-white" onchange="App.loadSchema(this.value)" required>
+                            <option value="">Select Type</option>
+                        </select>
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text text-slate-300">Message Type (ID)</span></label>
+                        <input type="text" id="config-messagetype" class="input input-bordered bg-slate-800 text-white" required />
+                    </div>
+                </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="toast">
-        <span class="material-icons toast-icon"></span>
-        <span class="toast-message"></span>
-    </div>
+                <!-- Dynamic Fields Container -->
+                <div id="dynamic-fields" class="space-y-4 mb-6 border-t border-slate-800 pt-4">
+                    <!-- Fields injected here -->
+                </div>
+                
+                <div class="form-control w-52 mb-6" id="enabled-group">
+                    <label class="cursor-pointer label">
+                        <span class="label-text text-slate-300">Enabled</span>
+                        <input type="checkbox" id="config-enabled" class="toggle toggle-primary" checked />
+                    </label>
+                </div>
 
+                <div class="modal-action">
+                    <button type="button" class="btn btn-ghost" onclick="document.getElementById('config_modal').close()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast toast-end z-50"></div>
+
+    <!-- Scripts -->
     <script src="/js/api.js"></script>
     <script src="/js/mapper.js"></script>
     <script src="/js/app.js"></script>
-    <script>
-        // Theme toggle functionality
-        function toggleTheme() {
-            const body = document.body;
-            const isDark = body.classList.toggle('dark-theme');
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        }
-
-        // Load saved theme
-        document.addEventListener('DOMContentLoaded', () => {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'dark') {
-                document.body.classList.add('dark-theme');
-            }
-        });
-    </script>
 </body>
 </html>

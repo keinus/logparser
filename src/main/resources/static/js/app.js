@@ -1,1057 +1,718 @@
-// Global State
-let currentTab = 'dashboard';
-let currentAdapterType = 'input';
-let currentEditingId = null;
-let adapterTypes = {};
-let refreshInterval = null;
-let adapterData = {
-    input: [],
-    parser: [],
-    transform: [],
-    output: []
-};
-
-// Initialize App
-document.addEventListener('DOMContentLoaded', async () => {
-    await initializeApp();
-    startAutoRefresh();
-});
-
-async function initializeApp() {
-    await loadMetadata();
-    await refreshPipelineStatus();
-    await loadDashboard();
-    // Pre-load all data for filtering
-    await Promise.all([
-        loadInputAdapters(),
-        loadParsers(),
-        loadTransforms(),
-        loadOutputAdapters()
-    ]);
-    showTab('dashboard');
-}
-
-// Load Metadata
-async function loadMetadata() {
-    try {
-        const [inputTypes, parserTypes, transformTypes, outputTypes] = await Promise.all([
-            metadataAPI.getInputAdapterTypes(),
-            metadataAPI.getParserTypes(),
-            metadataAPI.getTransformTypes(),
-            metadataAPI.getOutputAdapterTypes()
-        ]);
-
-        adapterTypes = {
-            input: inputTypes,
-            parser: parserTypes,
-            transform: transformTypes,
-            output: outputTypes
-        };
-    } catch (error) {
-        showToast('Failed to load metadata: ' + error.message, 'error');
-    }
-}
-
-// Tab Management
-function showTab(tabName, event) {
-    currentTab = tabName;
-
-    // Update tab buttons
-    document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    // Find and activate the clicked tab button
-    const tabButtons = document.querySelectorAll('.tab-button');
-    tabButtons.forEach((btn, index) => {
-        const tabs = ['dashboard', 'input', 'parser', 'transform', 'output', 'settings'];
-        if (tabs[index] === tabName) {
-            btn.classList.add('active');
-        }
-    });
-
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    document.getElementById(`${tabName}-tab`)?.classList.add('active');
-
-    // Load tab data
-    switch (tabName) {
-        case 'dashboard':
-            loadDashboard();
-            loadMonitoringData();
-            break;
-        case 'input':
-            loadInputAdapters();
-            break;
-        case 'parser':
-            loadParsers();
-            break;
-        case 'transform':
-            loadTransforms();
-            break;
-        case 'output':
-            loadOutputAdapters();
-            break;
-        case 'settings':
-            loadPipelineSettings();
-            break;
-    }
-}
-
-// Dashboard Functions
-async function loadDashboard() {
-    try {
-        const [inputData, parserData, transformData, outputData] = await Promise.all([
-            inputAdapterAPI.getAll(),
-            parserAPI.getAll(),
-            transformAPI.getAll(),
-            outputAdapterAPI.getAll()
-        ]);
-
-        document.getElementById('inputCount').textContent = inputData.totalElements || 0;
-        document.getElementById('parserCount').textContent = parserData.totalElements || 0;
-        document.getElementById('transformCount').textContent = transformData.totalElements || 0;
-        document.getElementById('outputCount').textContent = outputData.totalElements || 0;
-
-        // Load settings
-        await loadPipelineSettings();
-    } catch (error) {
-        console.error('Failed to load dashboard:', error);
-    }
-}
-
-// Pipeline Status
-async function refreshPipelineStatus() {
-    try {
-        const status = await pipelineAPI.getStatus();
-        const statusValue = document.getElementById('statusValue');
-        
-        // Map status to visual style
-        const statusText = status.status || 'Unknown';
-        statusValue.textContent = statusText;
-        
-        statusValue.className = 'status-value';
-        if (statusText === 'RUNNING') statusValue.classList.add('running');
-        else if (statusText === 'STOPPED') statusValue.classList.add('stopped');
-        else if (statusText === 'RELOADING') statusValue.classList.add('reloading');
-        else statusValue.classList.add('error');
-
-    } catch (error) {
-        console.error('Failed to refresh pipeline status:', error);
-        document.getElementById('statusValue').textContent = 'Error';
-    }
-}
-
-// Pipeline Control Functions
-async function reloadPipeline() {
-    if (!confirm('Are you sure you want to reload the pipeline configuration?')) return;
-
-    try {
-        showProgress(true);
-        const result = await pipelineAPI.reload();
-        showToast(result.message || 'Pipeline reloaded successfully', 'success');
-        await refreshPipelineStatus();
-        setTimeout(() => {
-            loadDashboard();
-            loadMonitoringData();
-        }, 2000);
-    } catch (error) {
-        showToast('Failed to reload pipeline: ' + error.message, 'error');
-    } finally {
-        showProgress(false);
-    }
-}
-
-async function validateAndReload() {
-    if (!confirm('Are you sure you want to validate and reload the configuration?')) return;
-
-    try {
-        showProgress(true);
-        const result = await pipelineAPI.validateAndReload();
-        showToast(result.message || 'Configuration validated and reloaded', 'success');
-        await refreshPipelineStatus();
-        setTimeout(() => {
-            loadDashboard();
-            loadMonitoringData();
-        }, 2000);
-    } catch (error) {
-        showToast('Failed to validate and reload: ' + error.message, 'error');
-    } finally {
-        showProgress(false);
-    }
-}
-
-async function restartPipeline() {
-    if (!confirm('Are you sure you want to restart the pipeline? This will stop all processing temporarily.')) return;
-
-    try {
-        showProgress(true);
-        const result = await pipelineAPI.restart();
-        showToast(result.message || 'Pipeline restarted successfully', 'success');
-        await refreshPipelineStatus();
-        setTimeout(() => {
-            loadDashboard();
-            loadMonitoringData();
-        }, 3000);
-    } catch (error) {
-        showToast('Failed to restart pipeline: ' + error.message, 'error');
-    } finally {
-        showProgress(false);
-    }
-}
-
-// Progress Display
-function showProgress(show, message = 'Processing...') {
-    const progressDiv = document.getElementById('reloadProgress');
-    if (show) {
-        progressDiv.style.display = 'block';
-        document.getElementById('progressText').textContent = message;
-        document.getElementById('progressFill').style.width = '50%';
-    } else {
-        progressDiv.style.display = 'none';
-    }
-}
-
-// Load Adapter Lists
-async function loadInputAdapters() {
-    try {
-        const data = await inputAdapterAPI.getAll();
-        adapterData.input = data.content || [];
-        updateBadge('input', adapterData.input.length);
-        renderAdapterList(adapterData.input, 'inputList', 'input');
-    } catch (error) {
-        showToast('Failed to load input adapters: ' + error.message, 'error');
-    }
-}
-
-async function loadParsers() {
-    try {
-        const data = await parserAPI.getAll();
-        adapterData.parser = data.content || [];
-        updateBadge('parser', adapterData.parser.length);
-        renderAdapterList(adapterData.parser, 'parserList', 'parser');
-    } catch (error) {
-        showToast('Failed to load parsers: ' + error.message, 'error');
-    }
-}
-
-async function loadTransforms() {
-    try {
-        const data = await transformAPI.getAll();
-        adapterData.transform = data.content || [];
-        updateBadge('transform', adapterData.transform.length);
-        renderAdapterList(adapterData.transform, 'transformList', 'transform');
-    } catch (error) {
-        showToast('Failed to load transforms: ' + error.message, 'error');
-    }
-}
-
-async function loadOutputAdapters() {
-    try {
-        const data = await outputAdapterAPI.getAll();
-        adapterData.output = data.content || [];
-        updateBadge('output', adapterData.output.length);
-        renderAdapterList(adapterData.output, 'outputList', 'output');
-    } catch (error) {
-        showToast('Failed to load output adapters: ' + error.message, 'error');
-    }
-}
-
-function updateBadge(type, count) {
-    const badge = document.getElementById(`${type}Badge`);
-    if (badge) badge.textContent = count;
-}
-
-// Filter Adapters
-function filterAdapters(type, query) {
-    const term = query.toLowerCase();
-    const filtered = adapterData[type].filter(item => 
-        (item.messagetype && item.messagetype.toLowerCase().includes(term)) ||
-        (item.type && item.type.toLowerCase().includes(term)) ||
-        (item.id && item.id.toString().includes(term))
-    );
-    renderAdapterList(filtered, `${type}List`, type);
-}
-
-// Render Adapter List
-function renderAdapterList(adapters, containerId, type) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    if (adapters.length === 0) {
-        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-tertiary); padding: 4rem;">No adapters found</div>';
-        return;
-    }
-
-    container.innerHTML = adapters.map(adapter => `
-        <div class="adapter-card">
-            <div class="adapter-header">
-                <div style="display: flex; align-items: center;">
-                    <div class="adapter-icon">
-                        <span class="material-icons">${getAdapterIcon(type)}</span>
-                    </div>
-                    <div class="adapter-title">
-                        <h3>${adapter.messagetype}</h3>
-                        <span class="adapter-subtitle">${adapter.type}</span>
-                    </div>
-                </div>
-                ${(type === 'input' || type === 'output') ? `
-                <label class="switch">
-                    <input type="checkbox" ${adapter.enabled ? 'checked' : ''} onchange="toggleAdapter('${type}', ${adapter.id}, this.checked)">
-                    <span class="slider"></span>
-                </label>
-                ` : ''}
-            </div>
-            
-            <div class="adapter-body">
-                <div class="info-grid">
-                    ${renderKeyInfo(adapter)}
-                </div>
-            </div>
-
-            <div class="adapter-footer">
-                <button class="btn btn-secondary btn-small" onclick="editAdapter('${type}', ${adapter.id})">
-                    <span class="material-icons" style="font-size: 14px;">edit</span> Edit
-                </button>
-                <button class="btn btn-danger btn-small" onclick="deleteAdapter('${type}', ${adapter.id})">
-                    <span class="material-icons" style="font-size: 14px;">delete</span> Delete
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Render Key Info (Simplified View)
-function renderKeyInfo(adapter) {
-    let items = [];
+// Main Application Logic
+const App = (function() {
     
-    // Add specific high-value fields first
-    if (adapter.host) items.push(createInfoItem('Host', adapter.host));
-    if (adapter.port) items.push(createInfoItem('Port', adapter.port));
-    if (adapter.bootstrapservers) items.push(createInfoItem('Brokers', adapter.bootstrapservers));
-    if (adapter.topicid) items.push(createInfoItem('Topic', adapter.topicid));
-    if (adapter.url) items.push(createInfoItem('URL', adapter.url));
-    if (adapter.path) items.push(createInfoItem('Path', adapter.path));
-    if (adapter.index) items.push(createInfoItem('Index', adapter.index));
-    
-    // For parser/transform params
-    if (adapter.param) {
-         if (typeof adapter.param === 'string') {
-             items.push(createInfoItem('Pattern', adapter.param));
-         } else if (typeof adapter.param === 'object') {
-             items.push(createInfoItem('Rules', Object.keys(adapter.param).join(', ')));
-         }
-    }
-
-    return items.join('') || '<div style="color: var(--text-tertiary); font-size: 0.875rem;">No detailed settings</div>';
-}
-
-function createInfoItem(label, value) {
-    return `
-        <div class="info-item">
-            <span class="info-label">${label}</span>
-            <span class="info-value" title="${value}">${value}</span>
-        </div>
-    `;
-}
-
-// Get Icon for Adapter Type
-function getAdapterIcon(type) {
-    const iconMap = {
-        'input': 'input',
-        'parser': 'code',
-        'transform': 'transform',
-        'output': 'output'
+    // State
+    const state = {
+        currentView: 'overview',
+        currentAdapterType: 'input', // input, parser, transform, output
+        refreshInterval: null,
+        chartInstance: null,
+        chartDataBuffer: [],
+        maxChartPoints: 60,
+        adapterCache: {
+            input: [], parser: [], transform: [], output: []
+        },
+        editingId: null
     };
-    return iconMap[type] || 'settings';
-}
 
-// Structured Render Details (Still needed for filtering or other logic?) 
-// No, the new card view uses renderKeyInfo. But we still need formatFieldName for form generation
-function formatFieldName(name) {
-    return name.replace(/([A-Z])/g, ' $1')
-        .replace(/^./, str => str.toUpperCase())
-        .trim();
-}
-
-// Modal Management
-function openCreateModal(type) {
-    currentAdapterType = type;
-    currentEditingId = null;
-
-    const modal = document.getElementById('configModal');
-    const title = document.getElementById('modalTitle');
-    const typeSelect = document.getElementById('adapterType');
-
-    title.innerHTML = `
-        <span class="material-icons">add_circle</span>
-        Add ${type.charAt(0).toUpperCase() + type.slice(1)}
-    `;
-
-    // Populate type dropdown
-    const types = adapterTypes[type] || [];
-    typeSelect.innerHTML = '<option value="">Select Type</option>' +
-        types.map(t => `<option value="${t.className || t.type}">${t.displayName || t.type}</option>`).join('');
-
-    // Reset form
-    document.getElementById('configForm').reset();
-    document.getElementById('dynamicFields').innerHTML = '';
-    document.getElementById('enabled').checked = true;
-
-    // Hide/Show Enabled field based on type
-    const enabledGroup = document.getElementById('enabledFieldGroup');
-    if (type === 'parser' || type === 'transform') {
-        enabledGroup.style.display = 'none';
-    } else {
-        enabledGroup.style.display = 'block';
+    // --- Initialization ---
+    async function init() {
+        console.log('Initializing LogParser UI...');
+        
+        // Initial Data Load
+        await Promise.all([
+            loadDashboardStats(),
+            loadMetadata(),
+            initChart()
+        ]);
+        
+        // Start Polling
+        startPolling();
+        
+        // Setup Search Debounce if needed (currently using onkeyup directly)
+        
+        // Mock Live Tail if needed (simulated for now as per prototype request)
+        startLiveTailSimulation();
     }
-
-    modal.classList.add('active');
-}
-
-async function editAdapter(type, id) {
-    currentAdapterType = type;
-    currentEditingId = id;
-
-    try {
-        const adapter = await getAdapterById(type, id);
-
-        const modal = document.getElementById('configModal');
-        const title = document.getElementById('modalTitle');
-        title.innerHTML = `
-            <span class="material-icons">edit</span>
-            Edit ${type.charAt(0).toUpperCase() + type.slice(1)}
-        `;
-
-        // Hide/Show Enabled field based on type
-        const enabledGroup = document.getElementById('enabledFieldGroup');
-        if (type === 'parser' || type === 'transform') {
-            enabledGroup.style.display = 'none';
-        } else {
-            enabledGroup.style.display = 'block';
-        }
-
-        // Populate form
-        document.getElementById('messageType').value = adapter.messagetype;
-        if (type === 'input' || type === 'output') {
-             document.getElementById('enabled').checked = adapter.enabled;
-        }
-
-        // Populate type dropdown
-        const typeSelect = document.getElementById('adapterType');
-        const types = adapterTypes[type] || [];
-        typeSelect.innerHTML = '<option value="">Select Type</option>' +
-            types.map(t => `<option value="${t.className || t.type}" ${(t.className || t.type) === adapter.type ? 'selected' : ''}>${t.displayName || t.type}</option>`).join('');
-
-        // Load schema and populate fields
-        await loadAdapterSchema();
-
-        // Populate dynamic fields with existing values
-        setTimeout(() => populateFormFields(adapter), 100);
-
-        modal.classList.add('active');
-    } catch (error) {
-        showToast('Failed to load adapter: ' + error.message, 'error');
-    }
-}
-
-function populateFormFields(adapter) {
-    Object.entries(adapter).forEach(([key, value]) => {
-        // Special handling for 'param' object in Transforms
-        if (key === 'param' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
-             Object.entries(value).forEach(([subKey, subValue]) => {
-                 const input = document.querySelector(`[name="${subKey}"]`);
-                 if (input) setInputValue(input, subValue);
-             });
-             return;
-        }
-
-        const input = document.querySelector(`[name="${key}"]`);
-        if (input && value != null) {
-            setInputValue(input, value);
-        }
-    });
-}
-
-function setInputValue(input, value) {
-    if (input.type === 'checkbox') {
-        input.checked = value;
-    } else if (typeof value === 'object') {
-        // Pretty print JSON for textareas
-        input.value = JSON.stringify(value, null, 2);
-    } else {
-        input.value = value;
-    }
-}
-
-function closeModal() {
-    const modal = document.getElementById('configModal');
-    modal.classList.remove('active');
-    modal.classList.remove('modal-xl');
-    currentEditingId = null;
-}
-
-// Load Adapter Schema
-async function loadAdapterSchema() {
-    const typeSelect = document.getElementById('adapterType');
-    const selectedType = typeSelect.value;
-    const modal = document.getElementById('configModal');
     
-    // Reset modal width
-    modal.classList.remove('modal-xl');
-
-    if (!selectedType) {
-        document.getElementById('dynamicFields').innerHTML = '';
-        return;
-    }
-
-    try {
-        let schema;
-        switch (currentAdapterType) {
-            case 'input':
-                schema = await metadataAPI.getInputAdapterSchema(selectedType);
-                break;
-            case 'parser':
-                schema = await metadataAPI.getParserSchema(selectedType);
-                break;
-            case 'transform':
-                schema = await metadataAPI.getTransformSchema(selectedType);
-                break;
-            case 'output':
-                schema = await metadataAPI.getOutputAdapterSchema(selectedType);
-                break;
-        }
-
-        // Special handling for Structure/Mapping Transform
-        if (currentAdapterType === 'transform' && (schema.type === 'Structure' || selectedType === 'Structure')) {
-            modal.classList.add('modal-xl');
-            
-            const container = document.getElementById('dynamicFields');
-            // Initialize Mapper
-            MapperUI.render(container);
-            
-            // Load Data
-            const messageType = document.getElementById('messageType').value;
-            let existingConfig = null;
-            if (currentEditingId) {
-                // We need the full adapter object. We can fetch it or use cached if available.
-                // For simplicity, fetch fresh.
-                const adapter = await getAdapterById('transform', currentEditingId);
-                existingConfig = adapter;
+    function startPolling() {
+        // Poll status every 2 seconds
+        setInterval(async () => {
+            if (state.currentView === 'overview') {
+                await loadDashboardStats();
             }
-            
-            await MapperUI.loadData(messageType, existingConfig);
-            return; // Skip standard field rendering
-        }
-
-        renderDynamicFields(schema);
-    } catch (error) {
-        console.error('Failed to load schema:', error);
-        document.getElementById('dynamicFields').innerHTML = '<p>Failed to load configuration fields</p>';
-    }
-}
-
-// Render Dynamic Fields
-function renderDynamicFields(schema) {
-    const container = document.getElementById('dynamicFields');
-    if (!schema || !schema.fields) {
-        container.innerHTML = '<p>No additional configuration required</p>';
-        return;
+        }, 2000);
     }
 
-    let html = '<h4>Configuration</h4>';
-    const typeSelect = document.getElementById('adapterType');
-    const selectedType = typeSelect.value;
-    const isPatternParser = currentAdapterType === 'parser' && 
-        (selectedType.includes('Grok') || selectedType === 'GrokParser' || 
-         selectedType.includes('Regex') || selectedType === 'RegexParser');
-
-    html += schema.fields.map(field => {
-        const inputType = getInputType(field.type);
-        const required = field.required ? 'required' : '';
+    // --- Navigation ---
+    function switchView(viewName) {
+        state.currentView = viewName;
         
-        let label = formatFieldName(field.name);
-        if (isPatternParser && field.name === 'param') {
-            label = 'Pattern';
-        }
-
-        return `
-            <div class="form-group">
-                <label for="${field.name}">${label}:</label>
-                ${inputType === 'select'
-                    ? `<select name="${field.name}" ${required}>
-                        <option value="">Select...</option>
-                        ${(field.choices || []).map(choice => `<option value="${choice}">${choice}</option>`).join('')}
-                       </select>`
-                    : inputType === 'textarea'
-                    ? `<textarea name="${field.name}" ${required}></textarea>`
-                    : `<input type="${inputType}" name="${field.name}" ${required}>`
-                }
-                ${field.description ? `<small>${field.description}</small>` : ''}
-            </div>
-        `;
-    }).join('');
-
-    if (isPatternParser) {
-        html += `
-            <div class="form-group" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                <h4>Test Pattern</h4>
-                <label for="testData">Example Data:</label>
-                <textarea id="testData" class="form-control" rows="3" placeholder="Enter log line to test..."></textarea>
-                <div style="margin-top: 0.5rem; text-align: right;">
-                    <button type="button" class="btn btn-secondary" onclick="testPattern()">
-                        <span class="material-icons">play_arrow</span> Test Pattern
-                    </button>
-                </div>
-                <div id="testResult" style="margin-top: 1rem; display: none;">
-                    <label>Result:</label>
-                    <pre style="background: var(--bg-secondary); padding: 1rem; border-radius: 4px; overflow-x: auto; font-family: monospace;"></pre>
-                </div>
-            </div>
-        `;
-    }
-
-    container.innerHTML = html;
-}
-
-async function testPattern() {
-    const patternInput = document.querySelector('[name="param"]');
-    const dataInput = document.getElementById('testData');
-    const resultDiv = document.getElementById('testResult');
-    const resultPre = resultDiv.querySelector('pre');
-    const typeSelect = document.getElementById('adapterType');
-
-    if (!patternInput || !patternInput.value) {
-        showToast('Please enter a pattern first', 'warning');
-        return;
-    }
-    if (!dataInput || !dataInput.value) {
-        showToast('Please enter example data', 'warning');
-        return;
-    }
-
-    try {
-        resultDiv.style.display = 'block';
-        resultPre.textContent = 'Testing...';
-        resultPre.style.color = 'inherit';
-        
-        const response = await parserAPI.test({
-            type: typeSelect.value,
-            param: patternInput.value,
-            sampleData: dataInput.value
+        // Update Sidebar Active State
+        document.querySelectorAll('aside nav a').forEach(el => {
+            el.classList.remove('sidebar-active', 'text-blue-500', 'bg-blue-500/10');
+            el.classList.add('text-slate-400');
         });
+
+        // Determine which nav ID to highlight
+        let navId = 'nav-' + viewName;
+        if (viewName === 'inputs') { navId = 'nav-input'; state.currentAdapterType = 'input'; }
+        else if (viewName === 'outputs') { navId = 'nav-output'; state.currentAdapterType = 'output'; }
+        else if (viewName === 'parser') { navId = 'nav-parser'; state.currentAdapterType = 'parser'; }
+        else if (viewName === 'transform') { navId = 'nav-transform'; state.currentAdapterType = 'transform'; }
         
-        resultPre.textContent = JSON.stringify(response, null, 2);
-    } catch (error) {
-        resultPre.textContent = 'Error: ' + error.message;
-        resultPre.style.color = 'var(--danger)';
-    }
-}
+        const activeNav = document.getElementById(navId);
+        if (activeNav) {
+            activeNav.classList.add('sidebar-active');
+            activeNav.classList.remove('text-slate-400');
+        }
 
-// Removed openSchemaMapper since it is now integrated
+        // Update Header Title
+        const titles = {
+            'overview': 'Overview',
+            'live-tail': 'Live Data Tail',
+            'pipeline-visual': 'Pipeline Visualization',
+            'inputs': 'Data Sources',
+            'parser': 'Parsers',
+            'transform': 'Processing Rules',
+            'outputs': 'Destinations',
+            'settings': 'System Settings'
+        };
+        document.getElementById('page-title').textContent = titles[viewName] || 'Dashboard';
 
+        // Hide all views
+        document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
 
-function getInputType(fieldType) {
-    const typeMap = {
-        'String': 'text',
-        'Integer': 'number',
-        'Long': 'number',
-        'Boolean': 'checkbox',
-        'Map': 'textarea',
-        'List': 'textarea'
-    };
-    return typeMap[fieldType] || 'text';
-}
-
-// Form Submission
-document.getElementById('configForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const formData = new FormData(e.target);
-    const data = {
-        type: document.getElementById('adapterType').value,
-        messagetype: document.getElementById('messageType').value
-    };
-
-    // Only add enabled field for supported types
-    if (currentAdapterType === 'input' || currentAdapterType === 'output') {
-        data.enabled = document.getElementById('enabled').checked;
-    }
-
-    // Prepare param object for transforms
-    if (currentAdapterType === 'transform') {
-        const typeSelect = document.getElementById('adapterType');
-        if (typeSelect.value === 'Structure') {
-             // Get data from MapperUI
-             data.param = MapperUI.getData();
+        // Show target view
+        if (['inputs', 'outputs', 'parser', 'transform'].includes(viewName)) {
+            document.getElementById('view-list-generic').classList.remove('hidden');
+            loadAdapterList(state.currentAdapterType);
         } else {
-             data.param = {};
+            const target = document.getElementById('view-' + viewName);
+            if (target) target.classList.remove('hidden');
+            
+            if (viewName === 'overview') {
+                initChart(); // Re-render chart if canvas was destroyed/hidden
+            } else if (viewName === 'pipeline-visual') {
+                 updateTopologyCounts();
+            } else if (viewName === 'settings') {
+                 loadSettings();
+            }
         }
     }
 
-    // Add dynamic fields
-    formData.forEach((value, key) => {
-        // Skip if MapperUI handled it (Structure)
-        if (currentAdapterType === 'transform' && document.getElementById('adapterType').value === 'Structure') {
+    // --- Dashboard & Monitoring ---
+    async function loadDashboardStats() {
+        try {
+            const status = await pipelineAPI.getStatus();
+            const threads = await pipelineAPI.getThreads();
+            
+            // Text Metrics
+            document.getElementById('stat-components').textContent = 
+                (status.inputAdapterCount || 0) + (status.parserCount || 0) + 
+                (status.transformCount || 0) + (status.outputAdapterCount || 0);
+            
+            const throughput = status.throughput !== undefined ? parseFloat(status.throughput).toFixed(1) : "0.0";
+            document.getElementById('stat-throughput').textContent = `${throughput}/s`;
+            
+            document.getElementById('stat-queue').textContent = status.queueSize || 0;
+            document.getElementById('queue-progress').value = status.queueSize || 0;
+            
+            document.getElementById('stat-threads').textContent = threads.length || 0;
+            
+            // Status Pill
+            const pill = document.getElementById('status-pill');
+            const pillText = document.getElementById('pipeline-status-text');
+            pillText.textContent = status.status;
+            
+            pill.className = `badge badge-outline gap-2 ml-2 ${status.status === 'RUNNING' ? 'badge-success' : 'badge-error'}`;
+            
+            // Footer Stats
+            document.getElementById('threads-count').textContent = `Threads: ${threads.length}`;
+            // Mem usage is not in API currently, placeholder
+            
+            // Update Chart Buffer
+            updateChart(throughput);
+
+            // Update Breakdown List
+            updateBreakdownList(status);
+
+        } catch (e) {
+            console.error("Failed to load dashboard stats", e);
+        }
+    }
+    
+    function updateBreakdownList(status) {
+        const list = document.getElementById('pipeline-breakdown-list');
+        if (!list) return;
+        
+        const items = [
+            { label: 'Inputs', count: status.inputAdapterCount, color: 'emerald' },
+            { label: 'Parsers', count: status.parserCount, color: 'emerald' },
+            { label: 'Transforms', count: status.transformCount, color: 'emerald' },
+            { label: 'Outputs', count: status.outputAdapterCount, color: 'amber' }
+        ];
+        
+        list.innerHTML = items.map(item => `
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                <div class="flex items-center">
+                    <div class="w-2 h-2 rounded-full bg-${item.color}-500 mr-3"></div>
+                    <span class="text-sm font-medium text-slate-300">${item.label}</span>
+                </div>
+                <span class="text-xs text-slate-400 font-mono">${item.count} Active</span>
+            </div>
+        `).join('');
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('trafficChart');
+        if (!ctx) return;
+        
+        if (state.chartInstance) {
+            // Already initialized
             return;
         }
 
-        if (key !== 'type' && key !== 'messagetype' && key !== 'enabled') {
-            let parsedValue = value;
-            // Try to parse JSON for Map/List fields
-            if (value.startsWith('{') || value.startsWith('[')) {
-                try {
-                    parsedValue = JSON.parse(value);
-                } catch {
-                    parsedValue = value;
+        const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)'); 
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+        state.chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(60).fill(''),
+                datasets: [{
+                    label: 'Events Per Second',
+                    data: Array(60).fill(0),
+                    borderColor: '#3b82f6',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false, // Performance
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        grid: { color: '#1e293b' },
+                        ticks: { color: '#64748b' },
+                        beginAtZero: true
+                    }
                 }
-            } else if (value === 'true' || value === 'false') {
-                // Parse boolean values (from checkboxes or selects)
-                parsedValue = value === 'true';
-            } else if (!isNaN(value) && value.trim() !== '') {
-                 // Keep as string if schema says so, but here we don't know schema
-                 // Let's rely on backend parsing/coercion which usually works for basic types
-                 // Or if it looks like a number, parse it?
-                 // Safer to let backend parse strings if DTO fields are Integer.
-                 // But for untyped Maps, we might want numbers.
-                 // Let's parse int if it looks like int.
-                 if (/^-?\d+$/.test(value)) parsedValue = parseInt(value, 10);
             }
+        });
+    }
 
-            if (currentAdapterType === 'transform') {
-                data.param[key] = parsedValue;
-            } else {
-                data[key] = parsedValue;
-            }
-        }
-    });
-
-    try {
-        if (currentEditingId) {
-            await updateAdapter(currentAdapterType, currentEditingId, data);
-            showToast('Adapter updated successfully', 'success');
-        } else {
-            await createAdapter(currentAdapterType, data);
-            showToast('Adapter created successfully', 'success');
-        }
-
-        closeModal();
-        // Refresh the current tab data
-        if (currentAdapterType === 'input') await loadInputAdapters();
-        else if (currentAdapterType === 'parser') await loadParsers();
-        else if (currentAdapterType === 'transform') await loadTransforms();
-        else if (currentAdapterType === 'output') await loadOutputAdapters();
+    function updateChart(value) {
+        if (!state.chartInstance) return;
         
-        showTab(currentAdapterType);
-    } catch (error) {
-        showToast('Failed to save adapter: ' + error.message, 'error');
+        const data = state.chartInstance.data.datasets[0].data;
+        data.push(value);
+        data.shift();
+        state.chartInstance.update();
     }
-});
-
-// CRUD Operations
-async function getAdapterById(type, id) {
-    switch (type) {
-        case 'input': return await inputAdapterAPI.getById(id);
-        case 'parser': return await parserAPI.getById(id);
-        case 'transform': return await transformAPI.getById(id);
-        case 'output': return await outputAdapterAPI.getById(id);
-    }
-}
-
-async function createAdapter(type, data) {
-    switch (type) {
-        case 'input': return await inputAdapterAPI.create(data);
-        case 'parser': return await parserAPI.create(data);
-        case 'transform': return await transformAPI.create(data);
-        case 'output': return await outputAdapterAPI.create(data);
-    }
-}
-
-async function updateAdapter(type, id, data) {
-    switch (type) {
-        case 'input': return await inputAdapterAPI.update(id, data);
-        case 'parser': return await parserAPI.update(id, data);
-        case 'transform': return await transformAPI.update(id, data);
-        case 'output': return await outputAdapterAPI.update(id, data);
-    }
-}
-
-async function deleteAdapter(type, id) {
-    if (!confirm('Are you sure you want to delete this adapter?')) return;
-
-    try {
-        switch (type) {
-            case 'input': await inputAdapterAPI.delete(id); break;
-            case 'parser': await parserAPI.delete(id); break;
-            case 'transform': await transformAPI.delete(id); break;
-            case 'output': await outputAdapterAPI.delete(id); break;
-        }
-
-        showToast('Adapter deleted successfully', 'success');
-        // Refresh and re-filter
-        if (type === 'input') await loadInputAdapters();
-        else if (type === 'parser') await loadParsers();
-        else if (type === 'transform') await loadTransforms();
-        else if (type === 'output') await loadOutputAdapters();
-        
-    } catch (error) {
-        showToast('Failed to delete adapter: ' + error.message, 'error');
-    }
-}
-
-async function toggleAdapter(type, id, enable) {
-    try {
-        const api = type === 'input' ? inputAdapterAPI :
-                    type === 'parser' ? parserAPI :
-                    type === 'transform' ? transformAPI : outputAdapterAPI;
-
-        if (enable) {
-            await api.enable(id);
-        } else {
-            await api.disable(id);
-        }
-
-        showToast(`Adapter ${enable ? 'enabled' : 'disabled'} successfully`, 'success');
-        // No need to reload everything, just update state locally if needed, but simplest to let it be
-        // Update local data cache? 
-        const item = adapterData[type].find(a => a.id === id);
-        if (item) item.enabled = enable;
-        
-    } catch (error) {
-        showToast('Failed to toggle adapter: ' + error.message, 'error');
-        // Revert toggle visually? Ideally yes, but simplistic for now
-        // reload data to reset switch
-        if (type === 'input') await loadInputAdapters();
-        else if (type === 'parser') await loadParsers();
-        else if (type === 'transform') await loadTransforms();
-        else if (type === 'output') await loadOutputAdapters();
-    }
-}
-
-// Monitoring
-async function loadMonitoringData() {
-    try {
-        const [status, progress, threads] = await Promise.all([
-            pipelineAPI.getStatus(),
-            pipelineAPI.getReloadProgress(),
-            pipelineAPI.getThreads()
-        ]);
-
-        // Key Metrics
-        const statusEl = document.getElementById('monitorStatus');
-        statusEl.textContent = status.status;
-        // Reset classes and add specific status class
-        statusEl.className = 'metric-value';
-        statusEl.classList.add(status.status ? status.status.toLowerCase() : 'unknown');
-        
-        // Throughput
-        const throughput = status.throughput !== undefined ? status.throughput : 0;
-        document.getElementById('monitorThroughput').textContent = `${parseFloat(throughput).toFixed(1)}/s`;
-        
-        document.getElementById('monitorQueueSize').textContent = status.queueSize;
-        document.getElementById('monitorThreadCount').textContent = threads.length;
-
-        // Component Status List
-        const componentList = document.getElementById('componentStatusList');
-        componentList.innerHTML = `
-            <div class="status-row">
-                <span class="material-icons" style="font-size: 1.2em; color: var(--primary);">input</span>
-                <span>Input Adapters</span>
-                <strong style="margin-left: auto;">${status.inputAdapterCount}</strong>
-            </div>
-            <div class="status-row">
-                <span class="material-icons" style="font-size: 1.2em; color: var(--warning);">code</span>
-                <span>Parsers</span>
-                <strong style="margin-left: auto;">${status.parserCount}</strong>
-            </div>
-            <div class="status-row">
-                <span class="material-icons" style="font-size: 1.2em; color: var(--secondary);">transform</span>
-                <span>Transforms</span>
-                <strong style="margin-left: auto;">${status.transformCount}</strong>
-            </div>
-            <div class="status-row">
-                <span class="material-icons" style="font-size: 1.2em; color: var(--success);">output</span>
-                <span>Output Adapters</span>
-                <strong style="margin-left: auto;">${status.outputAdapterCount}</strong>
-            </div>
-        `;
-
-        // Render progress details
-        const progressContent = document.getElementById('reloadProgressDetail');
-        progressContent.innerHTML = Object.entries(progress).map(([key, value]) => `
-            <div class="status-item">
-                <div class="status-item-label">${formatFieldName(key)}:</div>
-                <div class="status-item-value">${typeof value === 'object' ? JSON.stringify(value) : value}</div>
-            </div>
-        `).join('');
-
-        // Render threads
-        renderThreads(threads);
-    } catch (error) {
-        console.error('Failed to load monitoring data:', error);
-    }
-}
-
-function renderThreads(threads) {
-    const container = document.getElementById('threadsContainer');
-
-    if (!threads || threads.length === 0) {
-        container.innerHTML = '<div class="empty-state">No active threads</div>';
-        return;
-    }
-
-    // Sort threads by ID
-    threads.sort((a, b) => a.threadId - b.threadId);
-
-    const typeIcons = {
-        'INPUT': 'input',
-        'OUTPUT': 'output',
-        'PARSER': 'code',
-        'BATCH': 'schedule',
-        'MONITOR': 'visibility',
-        'UNKNOWN': 'help_outline'
-    };
     
-    // Create Table
-    let html = `
-        <div class="table-responsive">
-            <table class="thread-table">
-                <thead>
-                    <tr>
-                        <th style="width: 60px; text-align: center;">Status</th>
-                        <th style="width: 60px;">ID</th>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Component</th>
-                        <th>Comp. ID</th>
-                        <th>State</th>
-                        <th>Extra Info</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
+    // --- Topology Visual ---
+    async function updateTopologyCounts() {
+        try {
+            const status = await pipelineAPI.getStatus();
+            document.getElementById('topo-input-count').textContent = (status.inputAdapterCount || 0) + ' Adapters';
+            document.getElementById('topo-parser-count').textContent = (status.parserCount || 0) + ' Parsers';
+            document.getElementById('topo-transform-count').textContent = (status.transformCount || 0) + ' Transforms';
+            document.getElementById('topo-output-count').textContent = (status.outputAdapterCount || 0) + ' Outputs';
+        } catch (e) {}
+    }
 
-    html += threads.map(thread => {
-        const statusColor = thread.alive ? 'var(--success)' : 'var(--danger)';
-        const type = thread.componentType || 'UNKNOWN';
-        const icon = typeIcons[type] || 'help_outline';
-        
-        // Prepare extra info summary
-        let extraInfo = '';
-        if (thread.metadata && Object.keys(thread.metadata).length > 0) {
-            extraInfo = Object.entries(thread.metadata)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join(', ');
-        } else if (thread.componentConfig && Object.keys(thread.componentConfig).length > 0) {
-            // Fallback to config if no metadata
-             extraInfo = Object.entries(thread.componentConfig)
-                .filter(([k, v]) => typeof v !== 'object')
-                .map(([k, v]) => `${k}: ${v}`)
-                .join(', ');
+    // --- Generic List View (CRUD) ---
+    async function loadAdapterList(type) {
+        try {
+            const apiMap = {
+                'input': inputAdapterAPI,
+                'parser': parserAPI,
+                'transform': transformAPI,
+                'output': outputAdapterAPI
+            };
+            
+            const response = await apiMap[type].getAll();
+            const list = response.content || [];
+            state.adapterCache[type] = list; // Cache for search
+            
+            // Update Badge
+            document.getElementById(`badge-${type}`).textContent = list.length;
+            
+            renderList(list, type);
+        } catch (e) {
+            showToast("Failed to load list: " + e.message, "error");
         }
+    }
+
+    function renderList(items, type) {
+        const tbody = document.getElementById('generic-list-body');
+        tbody.innerHTML = '';
         
-        return `
-            <tr>
-                <td style="text-align: center;">
-                    <span class="material-icons" style="font-size: 1.2em; color: ${statusColor}; vertical-align: middle;">${thread.alive ? 'check_circle' : 'cancel'}</span>
-                </td>
-                <td style="font-family: monospace;">${thread.threadId}</td>
-                <td class="thread-name-cell" style="font-weight: 500;">${thread.name}</td>
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-500">No configuration found.</td></tr>`;
+            return;
+        }
+
+        items.forEach(item => {
+            const enabled = (item.enabled !== false); // Default true usually, depends on schema
+            // Parsers/Transforms usually don't have 'enabled' field in DTO unless added recently, assume active
+            // Actually API supports enable/disable for all.
+            
+            const statusColor = enabled ? 'text-emerald-500' : 'text-slate-500';
+            const statusDot = enabled ? 'bg-emerald-500' : 'bg-slate-500';
+            const statusText = enabled ? 'Active' : 'Disabled';
+
+            // Extract key config info for display
+            let configSummary = getConfigSummary(item);
+
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-800/50 transition-colors border-b border-slate-800';
+            tr.innerHTML = `
                 <td>
-                    <span class="thread-type-badge ${type.toLowerCase()}">
-                        <span class="material-icons" style="font-size: 14px; margin-right: 4px;">${icon}</span>
-                        ${type}
-                    </span>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full ${statusDot}"></span>
+                        <span class="capitalize text-slate-300 text-xs">${statusText}</span>
+                    </div>
                 </td>
-                <td>${thread.componentName || '-'}</td>
-                <td>${thread.componentId || '-'}</td>
-                <td><span class="thread-state-badge">${thread.state}</span></td>
-                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; color: var(--text-secondary);">
-                    ${extraInfo || '-'}
+                <td>
+                    <div class="font-bold text-white">${item.messagetype}</div>
+                    <div class="text-xs text-slate-500 font-mono">ID: ${item.id}</div>
                 </td>
-            </tr>
-        `;
-    }).join('');
+                <td><span class="badge badge-ghost badge-sm font-mono">${item.type}</span></td>
+                <td class="text-slate-400 font-mono text-xs truncate max-w-xs" title="${configSummary}">${configSummary}</td>
+                <td class="text-right">
+                    ${(type === 'input' || type === 'output') ? `
+                    <label class="swap swap-rotate btn btn-ghost btn-xs text-slate-400">
+                        <input type="checkbox" ${enabled ? 'checked' : ''} onchange="App.toggleAdapter('${type}', ${item.id}, this.checked)" />
+                        <span class="swap-on material-icons-round text-sm">toggle_on</span>
+                        <span class="swap-off material-icons-round text-sm">toggle_off</span>
+                    </label>
+                    ` : ''}
+                    <button class="btn btn-ghost btn-xs text-blue-400 hover:text-white" onclick="App.editAdapter('${type}', ${item.id})">
+                        <span class="material-icons-round text-sm">edit</span>
+                    </button>
+                    <button class="btn btn-ghost btn-xs text-rose-400 hover:text-rose-300" onclick="App.deleteAdapter('${type}', ${item.id})">
+                        <span class="material-icons-round text-sm">delete</span>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
 
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
+    function getConfigSummary(item) {
+        if (item.host) return `Host: ${item.host}:${item.port}`;
+        if (item.url) return `URL: ${item.url}`;
+        if (item.topicid) return `Topic: ${item.topicid}`;
+        if (item.param) {
+            if (typeof item.param === 'string') return item.param;
+            return JSON.stringify(item.param);
+        }
+        return '-';
+    }
 
-    container.innerHTML = html;
-}
+    // --- Search ---
+    function handleSearch(query) {
+        const type = state.currentAdapterType;
+        const list = state.adapterCache[type] || [];
+        const lower = query.toLowerCase();
+        
+        const filtered = list.filter(item => 
+            (item.messagetype && item.messagetype.toLowerCase().includes(lower)) ||
+            (item.type && item.type.toLowerCase().includes(lower)) ||
+            (item.id && item.id.toString().includes(lower))
+        );
+        
+        renderList(filtered, type);
+    }
 
-// Toast Notification
-function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
-    const iconElement = toast.querySelector('.toast-icon');
-    const messageElement = toast.querySelector('.toast-message');
+    // --- Modals & Forms ---
+    async function loadMetadata() {
+        // Pre-load types if needed, or load on demand
+    }
 
-    // Set icon based on type
-    const iconMap = {
-        'success': 'check_circle',
-        'error': 'error',
-        'warning': 'warning',
-        'info': 'info'
+    async function openCreateModal() {
+        state.editingId = null;
+        document.getElementById('modal-title').textContent = `Add ${capitalize(state.currentAdapterType)}`;
+        document.getElementById('config-form').reset();
+        document.getElementById('dynamic-fields').innerHTML = '';
+        document.getElementById('config-modal').showModal();
+        
+        // Populate Types
+        const typeSelect = document.getElementById('config-type');
+        typeSelect.innerHTML = '<option value="">Loading...</option>';
+        
+        const typeMap = {
+            'input': metadataAPI.getInputAdapterTypes,
+            'parser': metadataAPI.getParserTypes,
+            'transform': metadataAPI.getTransformTypes,
+            'output': metadataAPI.getOutputAdapterTypes
+        };
+        
+        const types = await typeMap[state.currentAdapterType]();
+        typeSelect.innerHTML = '<option value="">Select Type</option>' + 
+            types.map(t => `<option value="${t.className || t.type}">${t.displayName || t.type}</option>`).join('');
+
+        // Toggle Enabled Switch Visibility (Parsers/Transforms usually always enabled)
+        document.getElementById('enabled-group').style.display = 
+            (state.currentAdapterType === 'input' || state.currentAdapterType === 'output') ? 'block' : 'none';
+    }
+
+    async function editAdapter(type, id) {
+        state.editingId = id;
+        state.currentAdapterType = type; // Safety sync
+        
+        try {
+            const apiMap = {
+                'input': inputAdapterAPI,
+                'parser': parserAPI,
+                'transform': transformAPI,
+                'output': outputAdapterAPI
+            };
+            
+            const data = await apiMap[type].getById(id);
+            
+            // Open Modal
+            await openCreateModal(); // Re-use init logic to load types
+            document.getElementById('modal-title').textContent = `Edit ${capitalize(type)}`;
+            
+            // Fill Basic Fields
+            document.getElementById('config-messagetype').value = data.messagetype;
+            document.getElementById('config-type').value = data.type;
+            if (data.enabled !== undefined) {
+                 document.getElementById('config-enabled').checked = data.enabled;
+            }
+
+            // Load Schema & Dynamic Fields
+            await loadSchema(data.type);
+            
+            // Fill Dynamic Fields
+            // Wait for DOM update
+            setTimeout(() => {
+                // Special Case: Mapper
+                if (type === 'transform' && data.type === 'Structure') {
+                    MapperUI.loadData(data.messagetype, data);
+                    return;
+                }
+                
+                // General Population
+                Object.entries(data).forEach(([key, value]) => {
+                     // If it's a param object (Transform generic), flatten or handle?
+                     // Usually Transforms have `param` as Map. Parsers have `param` as String.
+                     if (key === 'param' && typeof value === 'object' && value !== null) {
+                         Object.entries(value).forEach(([k, v]) => {
+                             const field = document.querySelector(`[name="${k}"]`);
+                             if (field) field.value = v;
+                         });
+                     } else {
+                         const field = document.querySelector(`[name="${key}"]`);
+                         if (field) field.value = value;
+                     }
+                });
+            }, 100);
+            
+        } catch (e) {
+            showToast("Failed to load adapter details", "error");
+        }
+    }
+
+    async function loadSchema(adapterType) {
+        if (!adapterType) return;
+        
+        const container = document.getElementById('dynamic-fields');
+        container.innerHTML = '<div class="text-center text-slate-500"><span class="loading loading-dots"></span></div>';
+        
+        try {
+            let schema;
+            const type = state.currentAdapterType;
+            if (type === 'input') schema = await metadataAPI.getInputAdapterSchema(adapterType);
+            else if (type === 'parser') schema = await metadataAPI.getParserSchema(adapterType);
+            else if (type === 'transform') schema = await metadataAPI.getTransformSchema(adapterType);
+            else if (type === 'output') schema = await metadataAPI.getOutputAdapterSchema(adapterType);
+            
+            // Special Case: Structure Transform -> Render Mapper UI
+            if (type === 'transform' && adapterType === 'Structure') {
+                MapperUI.render(container);
+                MapperUI.loadData(document.getElementById('config-messagetype').value);
+                return;
+            }
+
+            // Generic Render
+            if (!schema.fields || schema.fields.length === 0) {
+                container.innerHTML = '<p class="text-slate-500 text-sm">No additional configuration required.</p>';
+                return;
+            }
+
+            container.innerHTML = schema.fields.map(field => {
+                 let inputHtml = '';
+                 const required = field.required ? 'required' : '';
+                 
+                 // Map Types to HTML
+                 if (field.type === 'Boolean') {
+                     inputHtml = `
+                        <select name="${field.name}" class="select select-bordered bg-slate-800 text-white w-full" ${required}>
+                            <option value="true">True</option>
+                            <option value="false">False</option>
+                        </select>`;
+                 } else if (field.choices && field.choices.length > 0) {
+                     inputHtml = `
+                        <select name="${field.name}" class="select select-bordered bg-slate-800 text-white w-full" ${required}>
+                            ${field.choices.map(c => `<option value="${c}">${c}</option>`).join('')}
+                        </select>`;
+                 } else {
+                     inputHtml = `<input type="text" name="${field.name}" class="input input-bordered bg-slate-800 text-white w-full" ${required} />`;
+                 }
+
+                 return `
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text text-slate-300 capitalize">${formatLabel(field.name)}</span>
+                        </label>
+                        ${inputHtml}
+                        ${field.description ? `<label class="label"><span class="label-text-alt text-slate-500">${field.description}</span></label>` : ''}
+                    </div>
+                 `;
+            }).join('');
+            
+        } catch (e) {
+            container.innerHTML = '<p class="text-rose-400">Failed to load configuration schema.</p>';
+        }
+    }
+
+    async function handleConfigSubmit(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+            type: document.getElementById('config-type').value,
+            messagetype: document.getElementById('config-messagetype').value,
+        };
+        
+        if (state.currentAdapterType === 'input' || state.currentAdapterType === 'output') {
+            data.enabled = document.getElementById('config-enabled').checked;
+        }
+
+        // Special Case: Mapper
+        if (state.currentAdapterType === 'transform' && data.type === 'Structure') {
+            data.param = MapperUI.getData();
+        } else {
+            // Collect dynamic fields
+            const dynamicFields = document.querySelectorAll('#dynamic-fields [name]');
+            const params = {};
+            
+            dynamicFields.forEach(field => {
+                let val = field.value;
+                // Basic type coercion if feasible, or let backend handle strings
+                if (val === 'true') val = true;
+                if (val === 'false') val = false;
+                
+                // If Transform/Parser, fields often go into 'param'
+                if (state.currentAdapterType === 'transform') {
+                    params[field.name] = val;
+                } else if (state.currentAdapterType === 'parser' && field.name === 'param') {
+                    data.param = val; // Grok/Regex pattern usually top level string in simple implementation, but DTO might expect it.
+                } else {
+                    data[field.name] = val;
+                }
+            });
+
+            if (state.currentAdapterType === 'transform') {
+                data.param = params;
+            }
+        }
+
+        try {
+            const apiMap = {
+                'input': inputAdapterAPI,
+                'parser': parserAPI,
+                'transform': transformAPI,
+                'output': outputAdapterAPI
+            };
+            
+            if (state.editingId) {
+                await apiMap[state.currentAdapterType].update(state.editingId, data);
+                showToast("Updated successfully", "success");
+            } else {
+                await apiMap[state.currentAdapterType].create(data);
+                showToast("Created successfully", "success");
+            }
+            
+            document.getElementById('config_modal').close();
+            loadAdapterList(state.currentAdapterType);
+            
+        } catch (e) {
+            showToast("Operation failed: " + e.message, "error");
+        }
+    }
+
+    async function deleteAdapter(type, id) {
+        if (!confirm("Are you sure you want to delete this configuration?")) return;
+        try {
+            const apiMap = {
+                'input': inputAdapterAPI,
+                'parser': parserAPI,
+                'transform': transformAPI,
+                'output': outputAdapterAPI
+            };
+            await apiMap[type].delete(id);
+            showToast("Deleted successfully", "success");
+            loadAdapterList(type);
+        } catch (e) {
+            showToast("Delete failed", "error");
+        }
+    }
+    
+    async function toggleAdapter(type, id, checked) {
+        try {
+            const apiMap = {
+                'input': inputAdapterAPI,
+                'output': outputAdapterAPI
+            };
+            if (!apiMap[type]) return; // Parsers/Transforms might not have generic toggle API in this codebase yet
+            
+            if (checked) await apiMap[type].enable(id);
+            else await apiMap[type].disable(id);
+            
+            showToast(`Adapter ${checked ? 'enabled' : 'disabled'}`, "success");
+        } catch (e) {
+            showToast("Toggle failed", "error");
+            // Revert UI?
+            loadAdapterList(type);
+        }
+    }
+
+    // --- Control Panel ---
+    function openControlModal() {
+        document.getElementById('control_modal').showModal();
+    }
+    
+    async function reloadPipeline() {
+        showToast("Reloading pipeline...", "info");
+        try { await pipelineAPI.reload(); showToast("Reload signal sent", "success"); }
+        catch(e) { showToast("Reload failed", "error"); }
+    }
+    
+    async function validateAndReload() {
+        showToast("Validating...", "info");
+        try { await pipelineAPI.validateAndReload(); showToast("Validation passed & Reloaded", "success"); }
+        catch(e) { showToast("Validation failed", "error"); }
+    }
+    
+    async function restartPipeline() {
+        if(!confirm("Full restart will drop current connections. Continue?")) return;
+        showToast("Restarting...", "warning");
+        try { await pipelineAPI.restart(); showToast("Restart signal sent", "success"); }
+        catch(e) { showToast("Restart failed", "error"); }
+    }
+
+    // --- Settings ---
+    async function loadSettings() {
+        try {
+            const val = await settingsAPI.get('parser_threads');
+            if (val) document.getElementById('setting-threads').value = val;
+        } catch (e) {}
+    }
+    
+    async function saveSettings() {
+        const val = document.getElementById('setting-threads').value;
+        try {
+            await settingsAPI.update('parser_threads', val, 'INTEGER');
+            showToast("Settings saved", "success");
+        } catch (e) { showToast("Save failed", "error"); }
+    }
+
+    // --- Live Tail (Simulated/Mock) ---
+    function startLiveTailSimulation() {
+        setInterval(() => {
+            const view = document.getElementById('view-live-tail');
+            if (view.classList.contains('hidden')) return;
+            
+            const term = document.getElementById('terminal-window');
+            if (term.getAttribute('data-paused') === 'true') return;
+            
+            // Generate dummy log if no websocket logic present
+            const now = new Date().toISOString();
+            const methods = ['GET', 'POST', 'PUT', 'DELETE'];
+            const ips = ['192.168.1.10', '10.0.0.5', '172.16.0.23'];
+            const log = `[${now}] INFO [HttpInput] "src": "${ips[Math.floor(Math.random()*3)]}" "method": "${methods[Math.floor(Math.random()*4)]}" "ua": "Mozilla/5.0"`;
+            
+            const line = document.createElement('div');
+            line.className = 'text-slate-300 hover:bg-slate-800/50 px-1 py-0.5 border-b border-slate-800/30';
+            line.textContent = log;
+            term.appendChild(line);
+            
+            if (term.children.length > 50) term.removeChild(term.children[1]);
+            term.scrollTop = term.scrollHeight;
+        }, 1500);
+    }
+    
+    function togglePauseTail(btn) {
+        const term = document.getElementById('terminal-window');
+        const isPaused = term.getAttribute('data-paused') === 'true';
+        if (isPaused) {
+            term.setAttribute('data-paused', 'false');
+            btn.textContent = 'Pause';
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-secondary');
+        } else {
+             term.setAttribute('data-paused', 'true');
+             btn.textContent = 'Resume';
+             btn.classList.remove('btn-secondary');
+             btn.classList.add('btn-warning');
+        }
+    }
+
+    // --- Helpers ---
+    function showToast(msg, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const alertClass = type === 'success' ? 'alert-success' : (type === 'error' ? 'alert-error' : 'alert-info');
+        
+        const toast = document.createElement('div');
+        toast.className = `alert ${alertClass} text-white shadow-lg mb-2`;
+        toast.innerHTML = `<span>${msg}</span>`;
+        
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+    
+    function capitalize(s) {
+        return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+    
+    function formatLabel(s) {
+        return s.replace(/([A-Z])/g, ' $1').trim();
+    }
+
+    // Public API
+    return {
+        init,
+        switchView,
+        handleSearch,
+        openCreateModal,
+        openControlModal,
+        editAdapter,
+        deleteAdapter,
+        toggleAdapter,
+        handleConfigSubmit,
+        loadSchema,
+        reloadPipeline,
+        validateAndReload,
+        restartPipeline,
+        saveSettings,
+        togglePauseTail
     };
 
-    iconElement.textContent = iconMap[type] || 'info';
-    messageElement.textContent = message;
-    toast.className = `toast ${type} show`;
+})();
 
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, 3000);
-}
-
-// Auto Refresh
-function startAutoRefresh() {
-    refreshInterval = setInterval(async () => {
-        if (currentTab === 'dashboard') {
-            await loadMonitoringData();
-        }
-        await refreshPipelineStatus();
-    }, 5000);
-}
-
-// Close modal on outside click
-window.onclick = function(event) {
-    const modal = document.getElementById('configModal');
-    if (event.target === modal) {
-        closeModal();
-    }
-}
-
-// Pipeline Settings
-async function loadPipelineSettings() {
-    try {
-        const parserThreads = await settingsAPI.get('parser_threads');
-        const input = document.getElementById('parserThreadsInput');
-        if (input) {
-            input.value = parserThreads || 4; // Default to 4 if null
-        }
-    } catch (error) {
-        console.error('Failed to load pipeline settings:', error);
-    }
-}
-
-async function savePipelineSettings(event) {
-    event.preventDefault();
-    const input = document.getElementById('parserThreadsInput');
-    const value = parseInt(input.value, 10);
-
-    if (isNaN(value) || value < 1) {
-        showToast('Please enter a valid number of threads (minimum 1)', 'error');
-        return;
-    }
-
-    try {
-        await settingsAPI.update('parser_threads', value, 'INTEGER');
-        showToast('Settings saved. Restart pipeline to apply changes.', 'success');
-    } catch (error) {
-        showToast('Failed to save settings: ' + error.message, 'error');
-    }
-}
+// Initialize on Load
+document.addEventListener('DOMContentLoaded', App.init);
