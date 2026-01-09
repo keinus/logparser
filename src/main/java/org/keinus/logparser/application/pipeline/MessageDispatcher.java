@@ -16,12 +16,12 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;
-import org.keinus.logparser.domain.parsing.service.ParseService;
+import org.keinus.logparser.domain.transformation.service.StructuredTransformService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
-import org.keinus.logparser.domain.service.transform.StructuredTransformService;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.infrastructure.util.ThreadUtil;
 import org.keinus.logparser.domain.model.LogEvent;
+import org.keinus.logparser.domain.parse.service.ParseService;
 
 /**
  * MessageDispatcher 클래스는 로그 메시지를 입력 어댑터로부터 받아와서 파싱하고,

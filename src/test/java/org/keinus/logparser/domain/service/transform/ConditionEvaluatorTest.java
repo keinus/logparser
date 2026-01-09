@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.keinus.logparser.domain.transformation.service.ConditionEvaluator;
 
 public class ConditionEvaluatorTest {
 

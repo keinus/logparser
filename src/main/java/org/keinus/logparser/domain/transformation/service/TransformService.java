@@ -6,10 +6,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.keinus.logparser.application.service.DatabaseConfigLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.keinus.logparser.domain.configuration.model.TransformConfig;
+import org.keinus.logparser.domain.configuration.service.DatabaseConfigLoader;
 import org.keinus.logparser.domain.transformation.model.ITransform;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;

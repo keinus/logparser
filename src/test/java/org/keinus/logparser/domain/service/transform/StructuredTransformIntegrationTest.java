@@ -18,7 +18,10 @@ import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.model.mapping.FieldMapping;
 import org.keinus.logparser.domain.model.mapping.MappingConfiguration;
 import org.keinus.logparser.domain.model.mapping.SubTableRule;
-import org.keinus.logparser.domain.repository.MappingRepository;
+import org.keinus.logparser.domain.transformation.service.ConditionEvaluator;
+import org.keinus.logparser.domain.transformation.service.StructuredEventSerializer;
+import org.keinus.logparser.domain.transformation.service.StructuredTransformService;
+import org.keinus.logparser.infrastructure.persistence.repository.MappingRepository;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 

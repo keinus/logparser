@@ -6,8 +6,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
-import org.keinus.logparser.domain.ingestion.service.InputFactory;
-import org.keinus.logparser.domain.ingestion.model.InputAdapter;
+import org.keinus.logparser.domain.input.model.InputAdapter;
+import org.keinus.logparser.domain.input.service.InputFactory;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
 import org.keinus.logparser.domain.model.LogEvent;
 

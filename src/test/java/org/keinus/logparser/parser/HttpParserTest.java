@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.keinus.logparser.domain.model.LogEvent;
-import org.keinus.logparser.domain.parsing.model.HttpParser;
+import org.keinus.logparser.domain.parse.model.HttpParser;
 
 import java.util.Map;
 

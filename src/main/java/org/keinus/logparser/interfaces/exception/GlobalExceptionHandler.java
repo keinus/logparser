@@ -1,7 +1,7 @@
 package org.keinus.logparser.interfaces.exception;
 
 import lombok.extern.slf4j.Slf4j;
-import org.keinus.logparser.interfaces.rest.dto.response.ErrorResponse;
+import org.keinus.logparser.interfaces.dto.response.ErrorResponse;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;

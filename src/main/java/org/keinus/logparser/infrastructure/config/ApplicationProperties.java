@@ -3,12 +3,12 @@ package org.keinus.logparser.infrastructure.config;
 import java.util.List;
 import jakarta.annotation.PostConstruct;
 
-import org.keinus.logparser.application.service.DatabaseConfigLoader;
 import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
 import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
 import org.keinus.logparser.domain.configuration.model.TransformConfig;
 import org.keinus.logparser.domain.configuration.service.ConfigValidator;
+import org.keinus.logparser.domain.configuration.service.DatabaseConfigLoader;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;

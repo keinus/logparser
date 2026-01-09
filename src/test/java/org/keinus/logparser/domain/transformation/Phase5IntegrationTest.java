@@ -15,12 +15,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keinus.logparser.application.pipeline.ProcessingDispatcher;
 import org.keinus.logparser.domain.model.LogEvent;
-import org.keinus.logparser.domain.parsing.service.ParseService;
+import org.keinus.logparser.domain.parse.service.ParseService;
+import org.keinus.logparser.domain.transformation.service.ConditionEvaluator;
+import org.keinus.logparser.domain.transformation.service.StructuredEventSerializer;
+import org.keinus.logparser.domain.transformation.service.StructuredTransformService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
-import org.keinus.logparser.domain.service.transform.ConditionEvaluator;
-import org.keinus.logparser.domain.service.transform.StructuredEventSerializer;
-import org.keinus.logparser.domain.service.transform.StructuredTransformService;
-import org.keinus.logparser.domain.repository.MappingRepository;
+import org.keinus.logparser.infrastructure.persistence.repository.MappingRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;

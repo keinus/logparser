@@ -10,7 +10,6 @@ import java.util.Optional;
 import javax.sql.DataSource;
 
 import org.keinus.logparser.domain.model.mapping.MappingConfiguration;
-import org.keinus.logparser.domain.repository.MappingRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;

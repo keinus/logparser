@@ -11,7 +11,7 @@ import org.keinus.logparser.infrastructure.persistence.repository.OutputAdapterR
 import org.keinus.logparser.infrastructure.persistence.repository.ParserRepository;
 import org.keinus.logparser.infrastructure.persistence.repository.TransformRepository;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
-import org.keinus.logparser.interfaces.rest.dto.response.ThreadDetailDto;
+import org.keinus.logparser.interfaces.dto.response.ThreadDetailDto;
 import org.springframework.stereotype.Service;
 
 import java.util.*;

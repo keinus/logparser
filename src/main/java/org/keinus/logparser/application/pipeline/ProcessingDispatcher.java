@@ -5,9 +5,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.keinus.logparser.domain.model.LogEvent;
-import org.keinus.logparser.domain.parsing.service.ParseService;
+import org.keinus.logparser.domain.parse.service.ParseService;
+import org.keinus.logparser.domain.transformation.service.StructuredTransformService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
-import org.keinus.logparser.domain.service.transform.StructuredTransformService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

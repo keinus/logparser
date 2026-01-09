@@ -2,7 +2,7 @@ package org.keinus.logparser.domain.transformation.model;
 
 import org.keinus.logparser.domain.configuration.model.TransformParamConfig;
 import org.keinus.logparser.domain.model.LogEvent;
-import org.keinus.logparser.domain.service.transform.StructuredTransformService;
+import org.keinus.logparser.domain.transformation.service.StructuredTransformService;
 import org.keinus.logparser.infrastructure.util.SpringContextUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

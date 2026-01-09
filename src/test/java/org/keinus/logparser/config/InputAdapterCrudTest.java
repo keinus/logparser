@@ -3,7 +3,7 @@ package org.keinus.logparser.config;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.keinus.logparser.application.config.ConfigManagementService;
+import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
 import org.keinus.logparser.infrastructure.persistence.entity.InputAdapterEntity;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;

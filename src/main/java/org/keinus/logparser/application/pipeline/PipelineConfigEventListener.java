@@ -3,7 +3,7 @@ package org.keinus.logparser.application.pipeline;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.domain.event.*;
-import org.keinus.logparser.domain.parsing.service.ParseService;
+import org.keinus.logparser.domain.parse.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
