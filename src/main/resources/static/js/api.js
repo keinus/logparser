@@ -130,6 +130,10 @@ const parserAPI = {
 
     disable(id) {
         return api.patch(`/parsers/${id}/disable`);
+    },
+
+    test(data) {
+        return api.post('/parsers/test', data);
     }
 };
 

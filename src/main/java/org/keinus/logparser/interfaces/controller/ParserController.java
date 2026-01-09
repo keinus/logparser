@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
 import org.keinus.logparser.domain.configuration.service.ConfigValidationService;
+import org.keinus.logparser.domain.parse.service.ParseService;
 import org.keinus.logparser.infrastructure.persistence.entity.ParserEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/parsers")
@@ -21,6 +23,7 @@ public class ParserController {
 
     private final ConfigManagementService configManagementService;
     private final ConfigValidationService validationService;
+    private final ParseService parseService;
 
     @GetMapping
     public ResponseEntity<Page<ParserEntity>> getAllParsers(Pageable pageable) {
@@ -88,5 +91,26 @@ public class ParserController {
 
         ConfigValidationService.ValidationResult result = validationService.validateParser(entity);
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/test")
+    public ResponseEntity<?> testParser(@RequestBody ParserTestRequest request) {
+        try {
+            Map<String, Object> result = parseService.testParser(
+                request.getType(), 
+                request.getParam(), 
+                request.getSampleData()
+            );
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @lombok.Data
+    public static class ParserTestRequest {
+        private String type;
+        private Object param;
+        private String sampleData;
     }
 }

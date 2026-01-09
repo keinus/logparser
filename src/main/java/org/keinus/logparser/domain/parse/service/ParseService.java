@@ -117,4 +117,33 @@ public class ParseService {
         }
         return false;
     }
+
+    /**
+     * Tests a parser with the given configuration and sample data.
+     */
+    public java.util.Map<String, Object> testParser(String parserType, Object param, String sampleData) {
+        IParser parser = loadLibrary(parserType);
+        if (parser == null) {
+            throw new IllegalArgumentException("Invalid parser type: " + parserType);
+        }
+        
+        try {
+            parser.init(param);
+        } catch (Exception e) {
+             throw new IllegalArgumentException("Failed to initialize parser: " + e.getMessage(), e);
+        }
+        
+        LogEvent event = new LogEvent(sampleData, "test-host", "test-type");
+        boolean success = parser.parse(event);
+        
+        if (event.hasError()) {
+             throw new RuntimeException("Parsing failed: " + event.getProcessingError());
+        }
+        
+        if (!success) {
+            return java.util.Collections.emptyMap();
+        }
+        
+        return event.getFields();
+    }
 }

@@ -562,14 +562,24 @@ function renderDynamicFields(schema) {
     }
 
     let html = '<h4>Configuration</h4>';
+    const typeSelect = document.getElementById('adapterType');
+    const selectedType = typeSelect.value;
+    const isPatternParser = currentAdapterType === 'parser' && 
+        (selectedType.includes('Grok') || selectedType === 'GrokParser' || 
+         selectedType.includes('Regex') || selectedType === 'RegexParser');
 
     html += schema.fields.map(field => {
         const inputType = getInputType(field.type);
         const required = field.required ? 'required' : '';
+        
+        let label = formatFieldName(field.name);
+        if (isPatternParser && field.name === 'param') {
+            label = 'Pattern';
+        }
 
         return `
             <div class="form-group">
-                <label for="${field.name}">${formatFieldName(field.name)}:</label>
+                <label for="${field.name}">${label}:</label>
                 ${inputType === 'select'
                     ? `<select name="${field.name}" ${required}>
                         <option value="">Select...</option>
@@ -584,7 +594,60 @@ function renderDynamicFields(schema) {
         `;
     }).join('');
 
+    if (isPatternParser) {
+        html += `
+            <div class="form-group" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <h4>Test Pattern</h4>
+                <label for="testData">Example Data:</label>
+                <textarea id="testData" class="form-control" rows="3" placeholder="Enter log line to test..."></textarea>
+                <div style="margin-top: 0.5rem; text-align: right;">
+                    <button type="button" class="btn btn-secondary" onclick="testPattern()">
+                        <span class="material-icons">play_arrow</span> Test Pattern
+                    </button>
+                </div>
+                <div id="testResult" style="margin-top: 1rem; display: none;">
+                    <label>Result:</label>
+                    <pre style="background: var(--bg-secondary); padding: 1rem; border-radius: 4px; overflow-x: auto; font-family: monospace;"></pre>
+                </div>
+            </div>
+        `;
+    }
+
     container.innerHTML = html;
+}
+
+async function testPattern() {
+    const patternInput = document.querySelector('[name="param"]');
+    const dataInput = document.getElementById('testData');
+    const resultDiv = document.getElementById('testResult');
+    const resultPre = resultDiv.querySelector('pre');
+    const typeSelect = document.getElementById('adapterType');
+
+    if (!patternInput || !patternInput.value) {
+        showToast('Please enter a pattern first', 'warning');
+        return;
+    }
+    if (!dataInput || !dataInput.value) {
+        showToast('Please enter example data', 'warning');
+        return;
+    }
+
+    try {
+        resultDiv.style.display = 'block';
+        resultPre.textContent = 'Testing...';
+        resultPre.style.color = 'inherit';
+        
+        const response = await parserAPI.test({
+            type: typeSelect.value,
+            param: patternInput.value,
+            sampleData: dataInput.value
+        });
+        
+        resultPre.textContent = JSON.stringify(response, null, 2);
+    } catch (error) {
+        resultPre.textContent = 'Error: ' + error.message;
+        resultPre.style.color = 'var(--danger)';
+    }
 }
 
 // Removed openSchemaMapper since it is now integrated
