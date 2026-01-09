@@ -35,7 +35,7 @@ public class InputFactory {
 	public static InputAdapter getInputAdapter(InputAdapterConfig config) {
 		String type = config.getType();
 		try {
-			Class<?> cls = Class.forName("org.keinus.logparser.domain.ingestion.model." + type);
+			Class<?> cls = Class.forName("org.keinus.logparser.domain.input.model." + type);
 			return (InputAdapter) cls.getDeclaredConstructor(InputAdapterConfig.class).newInstance(config);
 		}
 		catch (InstantiationException | IllegalAccessException | IllegalArgumentException

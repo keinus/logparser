@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.keinus.logparser.domain.model.LogEvent;
@@ -27,7 +28,7 @@ public class StructuredTransformService {
     private final MappingRepository mappingRepository;
     private final ConditionEvaluator conditionEvaluator;
     private final StructuredEventSerializer serializer;
-    private final Map<String, MappingConfiguration> configCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Optional<MappingConfiguration>> configCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public StructuredTransformService(MappingRepository mappingRepository, 
                                       ConditionEvaluator conditionEvaluator,
@@ -73,8 +74,8 @@ public class StructuredTransformService {
         String messageType = logEvent.getMessageType();
         // 1. Load Configuration (Cached)
         MappingConfiguration config = configCache.computeIfAbsent(messageType, key -> 
-            mappingRepository.findByMessageType(key).orElse(null)
-        );
+            mappingRepository.findByMessageType(key)
+        ).orElse(null);
         return transform(logEvent, config);
     }
 

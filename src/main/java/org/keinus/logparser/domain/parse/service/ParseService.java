@@ -76,7 +76,7 @@ public class ParseService {
     }
 
     private IParser loadLibrary(String parserClassName) {
-        String className = "org.keinus.logparser.domain.parsing.model." + parserClassName;
+        String className = "org.keinus.logparser.domain.parse.model." + parserClassName;
         Class<?> testClass;
         try {
             testClass = Class.forName(className);

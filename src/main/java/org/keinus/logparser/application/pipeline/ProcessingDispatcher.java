@@ -73,6 +73,7 @@ public class ProcessingDispatcher implements Runnable {
             // log.debug("Processing log event: {}", logEvent.getMessageType()); // Verbose log
 
             boolean parseResult = parseService.parse(logEvent);
+
             if (!parseResult) {
                 // Parsing failed
                 logEvent.markAsError("Parsing failed");
@@ -88,6 +89,7 @@ public class ProcessingDispatcher implements Runnable {
             // Stage 2: Transformation (Legacy/Field)
             // ==========================================
             boolean transformResult = transformService.transform(logEvent);
+
             if (!transformResult) {
                 log.debug("Log event filtered out by transform service");
                 return; // Filtered out
@@ -109,6 +111,7 @@ public class ProcessingDispatcher implements Runnable {
             // Stage 4: Output
             // ==========================================
             putOutputMsg(logEvent);
+
 
         } catch (Exception e) {
             log.error("Error processing log event: {}", logEvent, e);

@@ -26,7 +26,7 @@ public class TransformService {
     private final DatabaseConfigLoader databaseConfigLoader;
 
     private ITransform loadLibrary(String className) {
-        String classFullName = "org.keinus.logparser.domain.transformation.model." + className;
+        String classFullName = "org.keinus.logparser.domain.transform.model." + className;
         Class<?> testClass;
         try {
             testClass = Class.forName(classFullName);

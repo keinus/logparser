@@ -34,7 +34,7 @@ public class OutputFactory {
 			// OutputAdapterConfig를 Map으로 변환
 			Map<String, String> param = convertConfigToMap(config);
 
-			Class<?> cls = Class.forName("org.keinus.logparser.domain.delivery.model." + type);
+			Class<?> cls = Class.forName("org.keinus.logparser.domain.output.model." + type);
 			return (OutputAdapter) cls.getDeclaredConstructor(Map.class).newInstance(param);
 		}
 		catch (InstantiationException | IllegalAccessException | IllegalArgumentException
