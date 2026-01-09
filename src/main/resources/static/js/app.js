@@ -339,27 +339,43 @@ const App = (function() {
         // Pre-load types if needed, or load on demand
     }
 
-    async function openCreateModal() {
-        state.editingId = null;
-        document.getElementById('modal-title').textContent = `Add ${capitalize(state.currentAdapterType)}`;
-        document.getElementById('config-form').reset();
-        document.getElementById('dynamic-fields').innerHTML = '';
-        document.getElementById('config-modal').showModal();
+    async function openCreateModal(isEdit = false) {
+        if (!isEdit) {
+            state.editingId = null;
+            document.getElementById('modal-title').textContent = `Add ${capitalize(state.currentAdapterType)}`;
+            document.getElementById('config-form').reset();
+            document.getElementById('dynamic-fields').innerHTML = '';
+        }
+        
+        document.getElementById('config_modal').showModal();
         
         // Populate Types
         const typeSelect = document.getElementById('config-type');
+        // Save current selection if editing
+        const currentSelection = typeSelect.value;
+        
         typeSelect.innerHTML = '<option value="">Loading...</option>';
         
-        const typeMap = {
-            'input': metadataAPI.getInputAdapterTypes,
-            'parser': metadataAPI.getParserTypes,
-            'transform': metadataAPI.getTransformTypes,
-            'output': metadataAPI.getOutputAdapterTypes
-        };
-        
-        const types = await typeMap[state.currentAdapterType]();
-        typeSelect.innerHTML = '<option value="">Select Type</option>' + 
-            types.map(t => `<option value="${t.className || t.type}">${t.displayName || t.type}</option>`).join('');
+        try {
+            const typeMap = {
+                'input': metadataAPI.getInputAdapterTypes,
+                'parser': metadataAPI.getParserTypes,
+                'transform': metadataAPI.getTransformTypes,
+                'output': metadataAPI.getOutputAdapterTypes
+            };
+            
+            const types = await typeMap[state.currentAdapterType]();
+            typeSelect.innerHTML = '<option value="">Select Type</option>' + 
+                types.map(t => `<option value="${t.className || t.type}">${t.displayName || t.type}</option>`).join('');
+                
+            // Restore selection if it exists in new options
+            if (currentSelection) {
+                typeSelect.value = currentSelection;
+            }
+        } catch (e) {
+            console.error("Failed to load adapter types", e);
+            typeSelect.innerHTML = '<option value="">Error loading types</option>';
+        }
 
         // Toggle Enabled Switch Visibility (Parsers/Transforms usually always enabled)
         document.getElementById('enabled-group').style.display = 
@@ -367,7 +383,6 @@ const App = (function() {
     }
 
     async function editAdapter(type, id) {
-        state.editingId = id;
         state.currentAdapterType = type; // Safety sync
         
         try {
@@ -379,15 +394,19 @@ const App = (function() {
             };
             
             const data = await apiMap[type].getById(id);
+            console.log("Loaded adapter data:", data);
             
-            // Open Modal
-            await openCreateModal(); // Re-use init logic to load types
+            // Open Modal in Edit Mode
+            await openCreateModal(true);
+            
+            state.editingId = id; // Set after modal opens (and potentially resets)
             document.getElementById('modal-title').textContent = `Edit ${capitalize(type)}`;
             
             // Fill Basic Fields
-            document.getElementById('config-messagetype').value = data.messagetype;
-            document.getElementById('config-type').value = data.type;
-            if (data.enabled !== undefined) {
+            if (document.getElementById('config-messagetype')) document.getElementById('config-messagetype').value = data.messagetype || '';
+            if (document.getElementById('config-type')) document.getElementById('config-type').value = data.type || '';
+            
+            if (data.enabled !== undefined && document.getElementById('config-enabled')) {
                  document.getElementById('config-enabled').checked = data.enabled;
             }
 
@@ -399,7 +418,7 @@ const App = (function() {
             setTimeout(() => {
                 // Special Case: Mapper
                 if (type === 'transform' && data.type === 'Structure') {
-                    MapperUI.loadData(data.messagetype, data);
+                    if (window.MapperUI) MapperUI.loadData(data.messagetype, data);
                     return;
                 }
                 
@@ -410,17 +429,24 @@ const App = (function() {
                      if (key === 'param' && typeof value === 'object' && value !== null) {
                          Object.entries(value).forEach(([k, v]) => {
                              const field = document.querySelector(`[name="${k}"]`);
-                             if (field) field.value = v;
+                             if (field) {
+                                 if (field.type === 'checkbox') field.checked = v === true || v === 'true';
+                                 else field.value = v;
+                             }
                          });
                      } else {
                          const field = document.querySelector(`[name="${key}"]`);
-                         if (field) field.value = value;
+                         if (field) {
+                             if (field.type === 'checkbox') field.checked = value === true || value === 'true';
+                             else field.value = value;
+                         }
                      }
                 });
             }, 100);
             
         } catch (e) {
-            showToast("Failed to load adapter details", "error");
+            console.error("Edit adapter failed:", e);
+            showToast("Failed to load adapter details: " + e.message, "error");
         }
     }
 
@@ -440,13 +466,17 @@ const App = (function() {
             
             // Special Case: Structure Transform -> Render Mapper UI
             if (type === 'transform' && adapterType === 'Structure') {
-                MapperUI.render(container);
-                MapperUI.loadData(document.getElementById('config-messagetype').value);
+                if (window.MapperUI) {
+                    MapperUI.render(container);
+                    MapperUI.loadData(document.getElementById('config-messagetype').value);
+                } else {
+                    container.innerHTML = '<p class="text-error">MapperUI module not loaded.</p>';
+                }
                 return;
             }
 
             // Generic Render
-            if (!schema.fields || schema.fields.length === 0) {
+            if (!schema || !schema.fields || schema.fields.length === 0) {
                 container.innerHTML = '<p class="text-slate-500 text-sm">No additional configuration required.</p>';
                 return;
             }
@@ -482,8 +512,76 @@ const App = (function() {
                  `;
             }).join('');
             
+            // Add Test Pattern UI for Grok/Regex Parsers
+            if (state.currentAdapterType === 'parser' && 
+               (adapterType.includes('Grok') || adapterType.includes('Regex'))) {
+                const testUiHtml = `
+                    <div class="divider border-slate-700"></div>
+                    <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <h4 class="font-bold text-slate-300 mb-3 flex items-center gap-2">
+                            <span class="material-icons-round text-blue-400">science</span>
+                            Test Pattern
+                        </h4>
+                        <div class="form-control mb-3">
+                            <label class="label">
+                                <span class="label-text text-slate-400">Sample Log Data</span>
+                            </label>
+                            <textarea id="test-sample-data" class="textarea textarea-bordered bg-slate-900 font-mono text-xs h-24 text-slate-300 leading-relaxed" placeholder="Paste a log line here to test against the pattern above..."></textarea>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-secondary mb-3" onclick="App.testPattern()">
+                            Run Test
+                        </button>
+                        <div id="test-result-container" class="hidden">
+                             <label class="label">
+                                <span class="label-text text-slate-400">Result</span>
+                            </label>
+                            <div class="mockup-code bg-slate-950 text-xs p-0 border border-slate-800">
+                                <pre id="test-result-content" class="text-emerald-400 p-4 block overflow-x-auto"></pre>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', testUiHtml);
+            }
+            
         } catch (e) {
-            container.innerHTML = '<p class="text-rose-400">Failed to load configuration schema.</p>';
+            console.error("Load schema failed:", e);
+            container.innerHTML = '<p class="text-rose-400">Failed to load configuration schema: ' + e.message + '</p>';
+        }
+    }
+    
+    async function testPattern() {
+        const type = document.getElementById('config-type').value;
+        const paramInput = document.querySelector('[name="param"]'); // pattern usually in 'param'
+        const sampleData = document.getElementById('test-sample-data').value;
+        const resultContainer = document.getElementById('test-result-container');
+        const resultContent = document.getElementById('test-result-content');
+        
+        if (!paramInput || !paramInput.value) {
+            showToast("Please enter a pattern first", "warning");
+            return;
+        }
+        if (!sampleData) {
+            showToast("Please enter sample data", "warning");
+            return;
+        }
+        
+        resultContainer.classList.remove('hidden');
+        resultContent.textContent = "Testing...";
+        resultContent.className = "text-slate-400 p-4 block overflow-x-auto";
+        
+        try {
+            const result = await parserAPI.test({
+                type: type,
+                param: paramInput.value,
+                sampleData: sampleData
+            });
+            
+            resultContent.textContent = JSON.stringify(result, null, 2);
+            resultContent.className = "text-emerald-400 p-4 block overflow-x-auto";
+        } catch (e) {
+            resultContent.textContent = "Error: " + e.message;
+            resultContent.className = "text-rose-400 p-4 block overflow-x-auto";
         }
     }
 
@@ -709,7 +807,8 @@ const App = (function() {
         validateAndReload,
         restartPipeline,
         saveSettings,
-        togglePauseTail
+        togglePauseTail,
+        testPattern
     };
 
 })();

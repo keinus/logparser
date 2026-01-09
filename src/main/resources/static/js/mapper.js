@@ -1,7 +1,7 @@
 // Mapper UI Module
-const MapperUI = (function() {
+window.MapperUI = (function() {
     
-    // State
+    // State (Logic preserved)
     let currentState = {
         messageType: null,
         sourceFields: [],
@@ -14,95 +14,121 @@ const MapperUI = (function() {
     // DOM Elements Reference
     let containerEl = null;
 
-    // Helper to get element by ID (scoped if possible, but IDs are global)
+    // Helper to get element by ID
     function getEl(id) {
         return document.getElementById(id);
     }
 
-    // Initialize/Render the UI into a container
+    // --- Redesigned Render Function ---
     function render(container) {
         containerEl = container;
         containerEl.innerHTML = `
-            <div class="mapper-container" style="display: flex; flex-direction: column; height: 100%; gap: var(--spacing-md);">
+            <div class="flex flex-col h-full gap-4 text-slate-300">
                 
-                <!-- 1. Rules -->
-                <div class="mapper-section" style="background: var(--bg-tertiary); padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--border);">
-                    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: var(--spacing-md); color: var(--text-primary);">Transformation Rules</h3>
-                    <div style="display: flex; gap: var(--spacing-lg); flex-wrap: wrap;">
-                        <div style="flex: 2; min-width: 300px;">
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.875rem;">Condition (SpEL Expression)</label>
-                            <input type="text" id="condition-input" class="form-control" placeholder="e.g. dst_port == 80 || protocol == 'HTTP'">
-                            <small style="color: var(--text-tertiary);">Expression to determine when this sub-table rule applies.</small>
+                <!-- 1. Top Controls: Rules & Condition -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div class="md:col-span-8">
+                        <label class="label py-1">
+                            <span class="label-text text-slate-400 text-xs font-mono uppercase">Condition Rule (SpEL)</span>
+                        </label>
+                        <input type="text" id="condition-input" class="input input-bordered input-sm w-full bg-slate-800 border-slate-700 focus:border-blue-500 font-mono text-sm" placeholder="e.g. dst_port == 80 || protocol == 'HTTP'">
+                    </div>
+                    <div class="md:col-span-4">
+                        <label class="label py-1">
+                            <span class="label-text text-slate-400 text-xs font-mono uppercase">Target Sub-Table</span>
+                        </label>
+                        <select id="sub-schema-select" class="select select-bordered select-sm w-full bg-slate-800 border-slate-700 text-slate-300" onchange="MapperUI.handleSubTableChange()">
+                            <!-- Dynamic options -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 2. Main Workspace: Source vs Target -->
+                <div class="flex flex-col md:flex-row gap-6 flex-1 min-h-0">
+                    
+                    <!-- Source Panel (Left) -->
+                    <div class="w-full md:w-1/3 flex flex-col bg-slate-900 rounded-lg border border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-3 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                            <span class="font-semibold text-sm text-slate-200 flex items-center gap-2">
+                                <span class="material-icons-round text-base text-blue-500">data_object</span>
+                                Source Fields
+                            </span>
+                            <span class="text-xs text-slate-500">Drag to map</span>
                         </div>
-                        <div style="flex: 1; min-width: 200px;">
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.875rem;">Target Sub-Table</label>
-                            <select id="sub-schema-select" class="form-control" onchange="MapperUI.handleSubTableChange()">
-                                <!-- Dynamic options -->
-                            </select>
+                        
+                        <!-- Add Field Input -->
+                        <div class="p-2 border-b border-slate-800 bg-slate-900">
+                            <div class="join w-full">
+                                <input type="text" id="new-field-name" class="input input-xs input-bordered join-item w-full bg-slate-800 border-slate-700" placeholder="Add custom field...">
+                                <button class="btn btn-xs btn-primary join-item" onclick="MapperUI.addCustomField()">
+                                    <span class="material-icons-round text-xs">add</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Draggable Source List -->
+                        <div id="source-list" class="flex-1 overflow-y-auto p-3 space-y-2 scroll-smooth">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Target Panel (Right) -->
+                    <div class="w-full md:w-2/3 flex flex-col bg-slate-900 rounded-lg border border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-3 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                            <span class="font-semibold text-sm text-slate-200 flex items-center gap-2">
+                                <span class="material-icons-round text-base text-emerald-500">table_chart</span>
+                                Target Schema
+                            </span>
+                            <div class="flex gap-2">
+                                <button class="btn btn-xs btn-ghost text-slate-400 hover:text-white" onclick="MapperUI.resetMapping()">
+                                    Reset
+                                </button>
+                                <button class="btn btn-xs btn-outline btn-primary gap-1" onclick="MapperUI.autoMap()">
+                                    <span class="material-icons-round text-xs">auto_fix_high</span>
+                                    Auto Map
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="target-area" class="flex-1 overflow-y-auto p-4 space-y-6">
+                            <!-- Common Schema Section -->
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider px-1">
+                                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Common Table (event)
+                                </div>
+                                <div id="common-schema-rows" class="border border-slate-800 rounded-md divide-y divide-slate-800 bg-slate-900/50"></div>
+                            </div>
+
+                            <!-- Sub Schema Section -->
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider px-1">
+                                    <span class="w-2 h-2 rounded-full bg-pink-500"></span> <span id="sub-schema-header">Sub Table</span>
+                                </div>
+                                <div id="sub-schema-rows" class="border border-slate-800 rounded-md divide-y divide-slate-800 bg-slate-900/50"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 2. Mapping Area -->
-                <div class="mapper-section" style="flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border); overflow: hidden;">
-                    <div style="padding: var(--spacing-md); background: var(--bg-tertiary); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-primary);">Schema Mapping</h3>
-                        <div style="display: flex; gap: var(--spacing-sm);">
-                            <button class="btn btn-secondary btn-small" onclick="MapperUI.resetMapping()">Reset</button>
-                            <button class="btn btn-primary btn-small" onclick="MapperUI.autoMap()">
-                                <span class="material-icons" style="font-size: 16px;">auto_fix_high</span> Auto Map
+                <!-- 3. Simulation (Collapsible) -->
+                <div class="collapse collapse-arrow bg-slate-900 border border-slate-800 rounded-lg">
+                    <input type="checkbox" /> 
+                    <div class="collapse-title text-sm font-medium flex items-center gap-2 text-slate-300">
+                        <span class="material-icons-round text-blue-400">play_circle</span>
+                        Simulation Preview
+                    </div>
+                    <div class="collapse-content">
+                        <div class="flex flex-col gap-3 pt-2">
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text-alt text-slate-500">Sample JSON Data</span></label>
+                                <textarea id="sample-log-data" class="textarea textarea-bordered textarea-sm bg-slate-800 font-mono text-xs h-20 leading-relaxed text-slate-300 border-slate-700" placeholder='{"src_ip": "192.168.1.1", "method": "GET"}'></textarea>
+                            </div>
+                            <button class="btn btn-sm btn-primary w-full sm:w-auto self-start" onclick="MapperUI.runSimulation()">
+                                Run Simulation
                             </button>
-                        </div>
-                    </div>
-
-                    <div style="display: flex; flex: 1; min-height: 0;">
-                        <!-- Source Column -->
-                        <div style="width: 300px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-primary);">
-                            <div style="padding: var(--spacing-sm); border-bottom: 1px solid var(--border); background: var(--bg-tertiary);">
-                                <h4 style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Source Fields</h4>
+                            <div class="mockup-code bg-slate-950 text-xs p-0 border border-slate-800 min-h-[6rem]">
+                                <pre id="sim-result" class="text-emerald-400 p-4"> // Result will appear here...</pre>
                             </div>
-                            <div style="padding: var(--spacing-sm); border-bottom: 1px solid var(--border);">
-                                <div style="display: flex; gap: var(--spacing-xs);">
-                                    <input type="text" id="new-field-name" class="form-control" placeholder="Add custom field..." style="padding: 4px 8px; font-size: 0.8rem;">
-                                    <button class="btn btn-secondary btn-small" onclick="MapperUI.addCustomField()">Add</button>
-                                </div>
-                            </div>
-                            <div id="source-list" style="flex: 1; overflow-y: auto; padding: var(--spacing-sm);"></div>
-                        </div>
-
-                        <!-- Target Column -->
-                        <div style="flex: 1; display: flex; flex-direction: column; background: var(--bg-primary); min-width: 0;">
-                            <div style="padding: var(--spacing-sm); border-bottom: 1px solid var(--border); background: var(--bg-tertiary);">
-                                <h4 style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Target Schema</h4>
-                            </div>
-                            <div id="target-area" style="flex: 1; overflow-y: auto; padding: var(--spacing-lg);">
-                                <div style="margin-bottom: var(--spacing-lg);">
-                                    <div style="padding: var(--spacing-sm) var(--spacing-md); background: #e0e7ff; color: #3730a3; font-weight: 600; font-size: 0.875rem; border-radius: var(--radius-sm) var(--radius-sm) 0 0; border: 1px solid #c7d2fe; border-bottom: none;">Common Table: event</div>
-                                    <div id="common-schema-rows" style="border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);"></div>
-                                </div>
-                                <div>
-                                    <div id="sub-schema-header" style="padding: var(--spacing-sm) var(--spacing-md); background: #fce7f3; color: #831843; font-weight: 600; font-size: 0.875rem; border-radius: var(--radius-sm) var(--radius-sm) 0 0; border: 1px solid #fbcfe8; border-bottom: none;">Sub Table</div>
-                                    <div id="sub-schema-rows" style="border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 3. Simulation (Collapsible?) -->
-                <div class="mapper-section" style="background: var(--bg-tertiary); padding: var(--spacing-md); border-radius: var(--radius-md); border: 1px solid var(--border);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="document.getElementById('sim-content').style.display = document.getElementById('sim-content').style.display === 'none' ? 'block' : 'none'">
-                         <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0;">Simulation Preview <span class="material-icons" style="font-size: 16px; vertical-align: middle;">expand_more</span></h3>
-                    </div>
-                    <div id="sim-content" style="display: none; margin-top: var(--spacing-md);">
-                        <div style="margin-bottom: var(--spacing-md);">
-                            <textarea id="sample-log-data" class="form-control" rows="3" placeholder='{"src_ip": "192.168.1.1", "method": "GET"}' style="font-family: monospace; font-size: 0.875rem;"></textarea>
-                        </div>
-                        <button class="btn btn-secondary btn-small" onclick="MapperUI.runSimulation()">
-                            <span class="material-icons" style="font-size: 16px;">play_arrow</span> Run Simulation
-                        </button>
-                        <div style="margin-top: var(--spacing-md);">
-                            <div id="sim-result" style="background: #1e293b; color: #4ade80; padding: var(--spacing-md); border-radius: var(--radius-sm); font-family: monospace; white-space: pre-wrap; max-height: 200px; overflow-y: auto; font-size: 0.875rem;">// Result will appear here...</div>
                         </div>
                     </div>
                 </div>
@@ -122,36 +148,18 @@ const MapperUI = (function() {
             if (existingConfig && existingConfig.param) {
                 // If it's a "Structure" transform, 'param' is the config object
                 loadConfigToState(existingConfig.param);
-            } else {
-                 // Try to load from server if nothing passed (legacy)
-                 // But in new flow, we usually pass empty or existing
             }
         } catch (e) {
             console.error("Error initializing mapper:", e);
-            // showToast("Failed to load mapper data", "error");
         }
         
         renderUI();
     }
 
     async function loadSchemaMetadata() {
-        // Use the global metadataAPI if available, else fetch
-        // Assuming metadataAPI from app.js is available or fetch directly
-        const res = await fetch('/api/v1/metadata/transform-schema/Structure'); // A bit hacky, need generic schema
-        // Actually the endpoint /api/transform/schema used in old code seems custom.
-        // Let's assume we need to fetch the DB schema which might be static or dynamic.
-        // For now, I will Mock/Hardcode based on the old code's expected response structure
-        // OR fetch from a known endpoint.
-        // The old code hit `/api/transform/schema`.
-        
-        // Let's try to hit the old endpoint if it exists or mock it for prototype
+        // Mocking Schema Data logic (preserved)
         try {
-             // In a real app, this should come from a Metadata Service that knows about the Data Warehouse schema.
-             // I'll reuse the logic from the old code:
-             const response = await fetch('/api/v1/metadata/output-adapter-schema/OpenSearch'); // Just to check connection? No.
-             
-             // MOCK DATA for Prototype purposes as per context requirements "Autonomously implement"
-             // I'll simulate the schema metadata typically found in LogParser.
+             // Simulating metadata found in LogParser.
              const data = {
                  commonSchema: [
                      { name: 'timestamp', type: 'Instant' },
@@ -208,7 +216,7 @@ const MapperUI = (function() {
     }
 
     function loadConfigToState(config) {
-        if (!config) return;
+        if (!config) return; 
         
         // Common Mappings
         if (config.commonMappings) {
@@ -265,20 +273,28 @@ const MapperUI = (function() {
         renderTargetSchemas();
     }
 
+    // --- Redesigned Source List ---
     function renderSourceList() {
         const container = getEl('source-list');
         container.innerHTML = '';
         currentState.sourceFields.forEach(field => {
-            const div = document.createElement('div');
-            div.className = 'field-item';
-            div.draggable = true;
-            div.ondragstart = (e) => e.dataTransfer.setData('text', field);
-            div.style.cssText = 'padding: 8px; background: var(--bg-primary); border: 1px solid var(--border); margin-bottom: 4px; border-radius: 4px; cursor: grab; display: flex; align-items: center; gap: 8px; font-size: 0.875rem;';
-            div.innerHTML = `
-                <span class="material-icons" style="font-size: 14px; color: var(--text-tertiary);">data_object</span>
-                <span>${field}</span>
+            const chip = document.createElement('div');
+            // DaisyUI Badge style
+            chip.className = 'badge badge-neutral gap-2 cursor-grab hover:bg-slate-700 hover:text-white transition-colors py-3 w-full justify-start border-slate-700 text-slate-300';
+            chip.draggable = true;
+            chip.ondragstart = (e) => {
+                e.dataTransfer.setData('text', field);
+                e.currentTarget.classList.add('opacity-50');
+            };
+            chip.ondragend = (e) => {
+                e.currentTarget.classList.remove('opacity-50');
+            };
+            
+            chip.innerHTML = `
+                <span class="material-icons-round text-xs text-slate-500">drag_indicator</span>
+                <span class="font-mono text-xs">${field}</span>
             `;
-            container.appendChild(div);
+            container.appendChild(chip);
         });
     }
 
@@ -301,40 +317,64 @@ const MapperUI = (function() {
         renderSchemaGroup(subCols, 'sub-schema-rows');
     }
 
+    // --- Redesigned Schema Row ---
     function renderSchemaGroup(columns, containerId) {
         const container = getEl(containerId);
         container.innerHTML = '';
         
         columns.forEach(col => {
             const row = document.createElement('div');
-            row.className = 'schema-row';
-            row.style.cssText = 'display: flex; padding: 8px 12px; border-bottom: 1px solid var(--border); align-items: center; background: var(--bg-primary);';
+            // Table-row like Flex layout
+            row.className = 'flex items-center p-2 text-sm gap-4 hover:bg-slate-800 transition-colors group';
             
             const currentMap = currentState.mappingState[col.name];
             const isActive = !!currentMap;
 
-            let options = `<option value="">(Select...)</option>`;
+            let options = `<option value="">Select...</option>`;
             currentState.sourceFields.forEach(src => {
                 const selected = src === currentMap ? 'selected' : '';
                 options += `<option value="${src}" ${selected}>${src}</option>`;
             });
 
+            // Visual Drop Zone Class
+            const dropZoneClass = isActive 
+                ? 'bg-blue-500/10 border-blue-500/30' 
+                : 'bg-slate-950 border-slate-700 border-dashed hover:border-slate-500';
+
             row.innerHTML = `
-                <div class="col-name" style="flex: 1; font-weight: 500; font-size: 0.875rem;" title="${col.type}">${col.name}</div>
-                <div class="col-type" style="width: 80px; color: var(--text-tertiary); font-size: 0.75rem;">${col.type}</div>
-                <div class="col-mapping" style="flex: 2;">
-                    <div class="mapping-input-wrapper ${isActive ? 'active' : ''}" 
-                         style="display: flex; gap: 4px;"
+                <!-- Column Info -->
+                <div class="flex-1 min-w-0">
+                    <div class="font-medium text-slate-300 truncate" title="${col.name}">${col.name}</div>
+                    <div class="text-[10px] font-mono text-slate-500">${col.type}</div>
+                </div>
+
+                <!-- Connector Icon -->
+                <div class="text-slate-600">
+                    <span class="material-icons-round text-sm">arrow_right_alt</span>
+                </div>
+
+                <!-- Mapping Control (Drop Zone) -->
+                <div class="flex-[1.5]">
+                    <div class="relative flex items-center gap-2 p-1 rounded border ${dropZoneClass} transition-all"
                          ondrop="MapperUI.handleDrop(event, '${col.name}')" 
-                         ondragover="MapperUI.allowDrop(event)">
+                         ondragover="MapperUI.allowDrop(event)"
+                         ondragenter="this.classList.add('border-blue-500', 'bg-blue-500/5')"
+                         ondragleave="this.classList.remove('border-blue-500', 'bg-blue-500/5')">
                         
-                        <select class="combo-select" onchange="MapperUI.manualSelect('${col.name}', this.value)" style="flex: 1; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.875rem;">
-                            ${options}
-                        </select>
-                         ${isActive ? `
-                        <button onclick="MapperUI.clearMap('${col.name}')" style="background: none; border: none; cursor: pointer; color: var(--text-tertiary);">
-                            <span class="material-icons" style="font-size: 16px;">close</span>
-                        </button>` : ''}
+                        ${isActive ? `
+                            <span class="badge badge-sm badge-info gap-1 pl-1 pr-2">
+                                <span class="material-icons-round text-[10px]">data_object</span>
+                                ${currentMap}
+                            </span>
+                            <button onclick="MapperUI.clearMap('${col.name}')" class="btn btn-ghost btn-xs btn-circle text-slate-500 hover:text-white absolute right-1">
+                                <span class="material-icons-round text-xs">close</span>
+                            </button>
+                        ` : `
+                            <select class="select select-ghost select-xs w-full text-slate-400 font-normal focus:bg-transparent pl-1" 
+                                    onchange="MapperUI.manualSelect('${col.name}', this.value)">
+                                ${options}
+                            </select>
+                        `}
                     </div>
                 </div>
             `;
@@ -342,9 +382,14 @@ const MapperUI = (function() {
         });
     }
 
-    // Actions
+    // Actions (Preserved Logic)
     function handleDrop(ev, targetCol) {
         ev.preventDefault();
+        // Remove highlight class if added via dragenter
+        if(ev.currentTarget) {
+             ev.currentTarget.classList.remove('border-blue-500', 'bg-blue-500/5');
+        }
+        
         const srcField = ev.dataTransfer.getData('text');
         manualSelect(targetCol, srcField);
     }
@@ -452,10 +497,8 @@ const MapperUI = (function() {
         const simResult = getEl('sim-result');
         simResult.innerText = "Simulating...";
 
-        // Mock simulation if endpoint not real, or try real endpoint
         try {
-            // Re-using the logic from legacy `transform.js`
-            const res = await fetch('/api/v1/transforms/simulate', { // Guessing endpoint
+            const res = await fetch('/api/v1/transforms/simulate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -472,7 +515,6 @@ const MapperUI = (function() {
                  const result = await res.json();
                  simResult.innerText = JSON.stringify(result, null, 2);
             } else {
-                 // Fallback Mock
                  simResult.innerText = "Simulation API not ready.\nMock Result:\n" + JSON.stringify({
                      ...sampleData,
                      _mapped: true,
