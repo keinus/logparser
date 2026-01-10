@@ -5,6 +5,7 @@ const App = (function() {
     const state = {
         currentView: 'overview',
         currentAdapterType: 'input', // input, parser, transform, output
+        currentListFilter: 'all',    // all, enabled, disabled
         refreshInterval: null,
         chartInstance: null,
         chartDataBuffer: [],
@@ -86,6 +87,9 @@ const App = (function() {
         // Show target view
         if (['inputs', 'outputs', 'parser', 'transform'].includes(viewName)) {
             document.getElementById('view-list-generic').classList.remove('hidden');
+            // Reset filter on view switch
+            state.currentListFilter = 'all';
+            updateFilterUI();
             loadAdapterList(state.currentAdapterType);
         } else {
             const target = document.getElementById('view-' + viewName);
@@ -94,7 +98,7 @@ const App = (function() {
             if (viewName === 'overview') {
                 initChart(); // Re-render chart if canvas was destroyed/hidden
             } else if (viewName === 'pipeline-visual') {
-                 updateTopologyCounts();
+                 renderMockTopology();
             } else if (viewName === 'settings') {
                  loadSettings();
             }
@@ -120,6 +124,12 @@ const App = (function() {
             
             document.getElementById('stat-threads').textContent = threads.length || 0;
             
+            // Update Sidebar Badges (Global Health Check)
+            document.getElementById('badge-input').textContent = status.inputAdapterCount || 0;
+            document.getElementById('badge-parser').textContent = status.parserCount || 0;
+            document.getElementById('badge-transform').textContent = status.transformCount || 0;
+            document.getElementById('badge-output').textContent = status.outputAdapterCount || 0;
+            
             // Status Pill
             const pill = document.getElementById('status-pill');
             const pillText = document.getElementById('pipeline-status-text');
@@ -136,10 +146,53 @@ const App = (function() {
 
             // Update Breakdown List
             updateBreakdownList(status);
+            
+            // Update Thread List
+            renderThreadList(threads);
 
         } catch (e) {
             console.error("Failed to load dashboard stats", e);
         }
+    }
+    
+    function renderThreadList(threads) {
+        const tbody = document.getElementById('thread-list-body');
+        if (!tbody) return;
+        
+        if (!threads || threads.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-slate-500">No active managed threads found.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = threads.map(t => {
+            const stateClass = t.state === 'RUNNABLE' ? 'text-emerald-400' : 
+                             (t.state === 'WAITING' || t.state === 'TIMED_WAITING') ? 'text-amber-400' : 'text-slate-400';
+            
+            const typeColors = {
+                'INPUT': 'badge-info',
+                'OUTPUT': 'badge-success', // emerald
+                'PARSER': 'badge-secondary', // purple-ish usually
+                'TRANSFORM': 'badge-warning',
+                'BATCH': 'badge-ghost',
+                'MONITOR': 'badge-neutral'
+            };
+            const typeBadge = typeColors[t.componentType] || 'badge-ghost';
+            
+            return `
+            <tr class="hover:bg-slate-800/50 border-b border-slate-800/50">
+                <td><span class="badge badge-xs ${typeBadge} badge-outline font-bold">${t.componentType || 'SYSTEM'}</span></td>
+                <td>
+                    <div class="font-bold text-slate-200">${t.componentName || t.name}</div>
+                    ${t.componentName ? `<div class="text-[10px] text-slate-500">${t.name}</div>` : ''}
+                </td>
+                <td class="${stateClass} font-bold text-xs">${t.state}</td>
+                <td class="text-slate-500 text-xs">#${t.threadId}</td>
+                <td class="text-right">
+                    <span class="inline-block w-2 h-2 rounded-full ${t.alive ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+                </td>
+            </tr>
+            `;
+        }).join('');
     }
     
     function updateBreakdownList(status) {
@@ -218,6 +271,147 @@ const App = (function() {
         state.chartInstance.update();
     }
     
+    // --- Topology Visual (Prototype) ---
+    function renderMockTopology() {
+        const container = document.getElementById('view-pipeline-visual');
+        
+        // Mock Data to demonstrate the UI structure
+        const mockPipelines = [
+            {
+                messageType: 'WEB_ACCESS_LOG',
+                description: 'Nginx and Apache access logs from edge nodes',
+                inputs: [
+                    { type: 'HttpInput', name: 'Edge Listener', detail: 'Port: 8080' },
+                    { type: 'KafkaInput', name: 'Raw Topic', detail: 'Topic: web-raw' }
+                ],
+                processing: [
+                    { type: 'Parser', name: 'Grok: Common Log', badge: 'GROK' },
+                    { type: 'Transform', name: 'GeoIP Enrich', badge: 'ENRICH' },
+                    { type: 'Transform', name: 'Mask UserID', badge: 'MASK' }
+                ],
+                outputs: [
+                    { type: 'ElasticSearch', name: 'ES Production', detail: 'Index: web-2024' },
+                    { type: 'S3Output', name: 'Archive Bucket', detail: 'Region: us-east-1' },
+                    { type: 'KafkaOutput', name: 'Analytics Stream', detail: 'Topic: web-analytics' }
+                ]
+            },
+            {
+                messageType: 'APP_TRACE',
+                description: 'Application stack traces and error reports',
+                inputs: [
+                    { type: 'TcpInput', name: 'App Agent', detail: 'Port: 9000' }
+                ],
+                processing: [
+                    { type: 'Parser', name: 'JsonParser', badge: 'JSON' },
+                    { type: 'Transform', name: 'Filter Debug', badge: 'FILTER' }
+                ],
+                outputs: [
+                    { type: 'SlackOutput', name: 'DevOps Alert', detail: '#alerts-critical' }
+                ]
+            }
+        ];
+
+        let html = `
+            <div class="flex justify-between items-center mb-6">
+                 <div>
+                    <h3 class="text-lg font-bold text-white">Pipeline Topology</h3>
+                    <p class="text-xs text-slate-500 font-mono mt-1">Grouped by Message Type (Prototype)</p>
+                 </div>
+                 <div class="flex gap-2 text-xs font-mono text-slate-500">
+                    <span class="flex items-center gap-1"><div class="w-2 h-2 bg-blue-500 rounded-full"></div> Input</span>
+                    <span class="flex items-center gap-1"><div class="w-2 h-2 bg-purple-500 rounded-full"></div> Process</span>
+                    <span class="flex items-center gap-1"><div class="w-2 h-2 bg-emerald-500 rounded-full"></div> Output</span>
+                 </div>
+            </div>
+            <div class="space-y-8 pb-10">
+        `;
+
+        mockPipelines.forEach(pipe => {
+            html += `
+            <!-- Pipeline Row: ${pipe.messageType} -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm hover:border-slate-700 transition-colors">
+                
+                <!-- Header -->
+                <div class="bg-slate-800/50 px-6 py-3 border-b border-slate-800 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <span class="material-icons-round text-slate-400">hub</span>
+                        <div>
+                            <h4 class="font-bold text-slate-200 text-sm tracking-wide">${pipe.messageType}</h4>
+                            <p class="text-[10px] text-slate-500 font-mono">${pipe.description}</p>
+                        </div>
+                    </div>
+                    <span class="badge badge-ghost badge-sm font-mono">Active</span>
+                </div>
+
+                <!-- Swimlane Body -->
+                <div class="p-6 relative">
+                    <!-- Grid Layout: Sources -> Arrow -> Process -> Arrow -> Destinations -->
+                    <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1.5fr_auto_1fr] gap-6 items-start">
+                        
+                        <!-- 1. Sources Column -->
+                        <div class="flex flex-col gap-3 relative group">
+                            <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Sources</span>
+                            ${pipe.inputs.map(i => `
+                                <div class="bg-slate-800 border-l-2 border-blue-500 p-3 rounded shadow-sm flex items-center justify-between hover:bg-slate-750 cursor-pointer">
+                                    <div>
+                                        <div class="text-xs font-bold text-slate-300">${i.name}</div>
+                                        <div class="text-[10px] text-slate-500 font-mono">${i.detail}</div>
+                                    </div>
+                                    <span class="material-icons-round text-slate-600 text-sm">input</span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- Connector Arrow -->
+                        <div class="hidden lg:flex h-full items-center justify-center text-slate-700">
+                             <span class="material-icons-round text-2xl animate-pulse">arrow_right_alt</span>
+                        </div>
+
+                        <!-- 2. Processing Chain Column -->
+                        <div class="flex flex-col gap-2 relative">
+                            <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Processing Chain</span>
+                            
+                            <div class="bg-slate-800/30 rounded-lg p-3 border border-slate-700/50 flex flex-wrap gap-2 items-center min-h-[60px]">
+                                ${pipe.processing.map((p, idx) => `
+                                    <div class="flex items-center bg-slate-800 border border-slate-600 rounded px-2 py-1 shadow-sm">
+                                        <span class="text-[10px] font-bold text-purple-400 mr-2">${p.badge}</span>
+                                        <span class="text-xs text-slate-300">${p.name}</span>
+                                    </div>
+                                    ${idx < pipe.processing.length - 1 ? `<span class="material-icons-round text-slate-600 text-sm">chevron_right</span>` : ''}
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Connector Arrow -->
+                        <div class="hidden lg:flex h-full items-center justify-center text-slate-700">
+                             <span class="material-icons-round text-2xl animate-pulse">arrow_right_alt</span>
+                        </div>
+
+                        <!-- 3. Destinations Column -->
+                        <div class="flex flex-col gap-3 relative">
+                            <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Destinations</span>
+                            ${pipe.outputs.map(o => `
+                                <div class="bg-slate-800 border-r-2 border-emerald-500 p-3 rounded shadow-sm flex items-center justify-between hover:bg-slate-750 cursor-pointer text-right">
+                                    <span class="material-icons-round text-slate-600 text-sm">output</span>
+                                    <div>
+                                        <div class="text-xs font-bold text-slate-300">${o.name}</div>
+                                        <div class="text-[10px] text-slate-500 font-mono">${o.detail}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            `;
+        });
+
+        html += `</div>`;
+        container.innerHTML = html;
+        container.classList.remove('hidden');
+    }
+    
     // --- Topology Visual ---
     async function updateTopologyCounts() {
         try {
@@ -230,6 +424,30 @@ const App = (function() {
     }
 
     // --- Generic List View (CRUD) ---
+    function setFilter(filter) {
+        state.currentListFilter = filter;
+        updateFilterUI();
+        // Re-render using cache
+        const type = state.currentAdapterType;
+        renderList(state.adapterCache[type] || [], type);
+    }
+
+    function updateFilterUI() {
+        const filters = ['all', 'enabled', 'disabled'];
+        filters.forEach(f => {
+            const el = document.getElementById('tab-' + f);
+            if (el) {
+                if (f === state.currentListFilter) {
+                    el.classList.add('tab-active', 'text-white');
+                    el.classList.remove('text-slate-400');
+                } else {
+                    el.classList.remove('tab-active', 'text-white');
+                    el.classList.add('text-slate-400');
+                }
+            }
+        });
+    }
+
     async function loadAdapterList(type) {
         try {
             const apiMap = {
@@ -256,12 +474,20 @@ const App = (function() {
         const tbody = document.getElementById('generic-list-body');
         tbody.innerHTML = '';
         
-        if (items.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-500">No configuration found.</td></tr>`;
+        // Filter Logic
+        let filteredItems = items;
+        if (state.currentListFilter === 'enabled') {
+            filteredItems = items.filter(i => i.enabled !== false);
+        } else if (state.currentListFilter === 'disabled') {
+            filteredItems = items.filter(i => i.enabled === false);
+        }
+        
+        if (filteredItems.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-500">No matching items found.</td></tr>`;
             return;
         }
 
-        items.forEach(item => {
+        filteredItems.forEach(item => {
             const enabled = (item.enabled !== false); // Default true usually, depends on schema
             // Parsers/Transforms usually don't have 'enabled' field in DTO unless added recently, assume active
             // Actually API supports enable/disable for all.
@@ -277,9 +503,22 @@ const App = (function() {
             tr.className = 'hover:bg-slate-800/50 transition-colors border-b border-slate-800';
             tr.innerHTML = `
                 <td>
-                    <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full ${statusDot}"></span>
-                        <span class="capitalize text-slate-300 text-xs">${statusText}</span>
+                    <div class="flex items-center gap-3">
+                        ${(type === 'input' || type === 'output') ? `
+                        <label class="cursor-pointer flex items-center gap-2 group">
+                            <input type="checkbox" class="toggle toggle-success toggle-sm" 
+                                ${enabled ? 'checked' : ''} 
+                                onchange="App.toggleAdapter('${type}', ${item.id}, this.checked)" />
+                            <span class="text-xs font-mono font-bold ${enabled ? 'text-emerald-400' : 'text-slate-500 group-hover:text-slate-300'} transition-colors">
+                                ${enabled ? 'ON' : 'OFF'}
+                            </span>
+                        </label>
+                        ` : `
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full ${statusDot}"></span>
+                            <span class="capitalize text-slate-300 text-xs">${statusText}</span>
+                        </div>
+                        `}
                     </div>
                 </td>
                 <td>
@@ -289,19 +528,18 @@ const App = (function() {
                 <td><span class="badge badge-ghost badge-sm font-mono">${item.type}</span></td>
                 <td class="text-slate-400 font-mono text-xs truncate max-w-xs" title="${configSummary}">${configSummary}</td>
                 <td class="text-right">
-                    ${(type === 'input' || type === 'output') ? `
-                    <label class="swap swap-rotate btn btn-ghost btn-xs text-slate-400">
-                        <input type="checkbox" ${enabled ? 'checked' : ''} onchange="App.toggleAdapter('${type}', ${item.id}, this.checked)" />
-                        <span class="swap-on material-icons-round text-sm">toggle_on</span>
-                        <span class="swap-off material-icons-round text-sm">toggle_off</span>
-                    </label>
-                    ` : ''}
-                    <button class="btn btn-ghost btn-xs text-blue-400 hover:text-white" onclick="App.editAdapter('${type}', ${item.id})">
-                        <span class="material-icons-round text-sm">edit</span>
-                    </button>
-                    <button class="btn btn-ghost btn-xs text-rose-400 hover:text-rose-300" onclick="App.deleteAdapter('${type}', ${item.id})">
-                        <span class="material-icons-round text-sm">delete</span>
-                    </button>
+                    <div class="flex items-center justify-end gap-1">
+                        <div class="tooltip tooltip-left" data-tip="Edit Configuration">
+                            <button class="btn btn-ghost btn-sm btn-square text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 transition-all" onclick="App.editAdapter('${type}', ${item.id})">
+                                <span class="material-icons-round text-lg">edit</span>
+                            </button>
+                        </div>
+                        <div class="tooltip tooltip-left" data-tip="Delete Adapter">
+                            <button class="btn btn-ghost btn-sm btn-square text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 transition-all" onclick="App.deleteAdapter('${type}', ${item.id})">
+                                <span class="material-icons-round text-lg">delete</span>
+                            </button>
+                        </div>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -808,7 +1046,8 @@ const App = (function() {
         restartPipeline,
         saveSettings,
         togglePauseTail,
-        testPattern
+        testPattern,
+        setFilter
     };
 
 })();

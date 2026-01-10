@@ -227,6 +227,10 @@ const pipelineAPI = {
 
     getThreads() {
         return api.get('/pipeline/threads');
+    },
+    
+    getTopology() {
+        return api.get('/pipeline/topology');
     }
 };
 

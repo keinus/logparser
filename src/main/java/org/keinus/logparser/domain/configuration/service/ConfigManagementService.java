@@ -7,14 +7,19 @@ import org.keinus.logparser.domain.event.*;
 import org.keinus.logparser.infrastructure.persistence.entity.*;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;
+import org.keinus.logparser.interfaces.dto.response.PipelineTopologyDto;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -340,6 +345,132 @@ public class ConfigManagementService {
         if(key.equals("parser_threads")) {
             eventPublisher.publishEvent(new ParserTransformThreadsChangedEvent(this, ParserTransformThreadsChangedEvent.ChangeType.UPDATED, Integer.valueOf(entity.getConfigValue())));
         }
+    }
+
+    // ==================== Topology ====================
+
+    @Transactional(readOnly = true)
+    public List<PipelineTopologyDto> getPipelineTopology() {
+        Map<String, PipelineTopologyDto> topologyMap = new HashMap<>();
+
+        // 1. Inputs
+        inputAdapterRepository.findAll().forEach(input -> {
+            String msgType = input.getMessagetype();
+            topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
+                    .messageType(k)
+                    .description("Flow for " + k)
+                    .build())
+                .getInputs().add(mapInputToStage(input));
+        });
+
+        // 2. Parsers
+        parserRepository.findAll().forEach(parser -> {
+             String msgType = parser.getMessagetype();
+             topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
+                    .messageType(k)
+                    .description("Flow for " + k)
+                    .build())
+                .getProcessing().add(mapParserToStage(parser));
+        });
+
+        // 3. Transforms
+        transformRepository.findAll().forEach(transform -> {
+             String msgType = transform.getMessagetype();
+             topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
+                    .messageType(k)
+                    .description("Flow for " + k)
+                    .build())
+                .getProcessing().add(mapTransformToStage(transform));
+        });
+        
+        // Sort Processing by priority
+        topologyMap.values().forEach(dto -> 
+            dto.getProcessing().sort(Comparator.comparingInt(s -> s.getPriority() != null ? s.getPriority() : 999))
+        );
+
+        // 4. Outputs
+        outputAdapterRepository.findAll().forEach(output -> {
+             String msgType = output.getMessagetype();
+             topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
+                    .messageType(k)
+                    .description("Flow for " + k)
+                    .build())
+                .getOutputs().add(mapOutputToStage(output));
+        });
+
+        return new ArrayList<>(topologyMap.values());
+    }
+
+    private PipelineTopologyDto.PipelineStageDto mapInputToStage(InputAdapterEntity entity) {
+        String detail = "";
+        if ("HttpInput".equals(entity.getType()) || "TcpInput".equals(entity.getType()) || "UdpInput".equals(entity.getType())) {
+            detail = "Port: " + entity.getPort();
+        } else if ("KafkaInput".equals(entity.getType())) {
+            detail = "Topic: " + entity.getTopicid();
+        } else if ("FileInput".equals(entity.getType())) {
+            detail = "Path: " + entity.getPath();
+        }
+
+        return PipelineTopologyDto.PipelineStageDto.builder()
+                .id(entity.getId())
+                .type(entity.getType())
+                .name(entity.getType())
+                .detail(detail)
+                .badge("IN")
+                .enabled(entity.getEnabled())
+                .build();
+    }
+
+    private PipelineTopologyDto.PipelineStageDto mapParserToStage(ParserEntity entity) {
+        String badge = "PARSER";
+        if (entity.getType().toUpperCase().contains("GROK")) badge = "GROK";
+        else if (entity.getType().toUpperCase().contains("JSON")) badge = "JSON";
+        else if (entity.getType().toUpperCase().contains("REGEX")) badge = "REGEX";
+
+        return PipelineTopologyDto.PipelineStageDto.builder()
+                .id(entity.getId())
+                .type(entity.getType())
+                .name(entity.getType())
+                .detail("Prio: " + entity.getPriority())
+                .badge(badge)
+                .enabled(entity.getEnabled())
+                .priority(entity.getPriority())
+                .build();
+    }
+
+    private PipelineTopologyDto.PipelineStageDto mapTransformToStage(TransformEntity entity) {
+        String badge = "TRANSFORM";
+        if (entity.getType().toUpperCase().contains("MASK")) badge = "MASK";
+        else if (entity.getType().toUpperCase().contains("FILTER")) badge = "FILTER";
+        else if (entity.getType().toUpperCase().contains("GEO")) badge = "GEO";
+
+        return PipelineTopologyDto.PipelineStageDto.builder()
+                .id(entity.getId())
+                .type(entity.getType())
+                .name(entity.getType())
+                .detail("Prio: " + entity.getPriority())
+                .badge(badge)
+                .enabled(entity.getEnabled())
+                .priority(entity.getPriority())
+                .build();
+    }
+
+    private PipelineTopologyDto.PipelineStageDto mapOutputToStage(OutputAdapterEntity entity) {
+        String detail = "";
+        if (entity.getType().contains("Http")) detail = "URL: " + entity.getUrl();
+        else if (entity.getType().contains("Kafka")) detail = "Topic: " + entity.getTopicid();
+        else if (entity.getType().contains("Elastic")) detail = "Index: " + entity.getIndexTemplate();
+        else if (entity.getType().contains("File")) detail = "Path: " + entity.getPath();
+        else if (entity.getHost() != null) detail = "Host: " + entity.getHost();
+
+        return PipelineTopologyDto.PipelineStageDto.builder()
+                .id(entity.getId())
+                .type(entity.getType())
+                .name(entity.getType())
+                .detail(detail)
+                .badge("OUT")
+                .enabled(entity.getEnabled())
+                .build();
     }
 
     // ==================== Helper Methods ====================

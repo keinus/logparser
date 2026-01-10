@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.application.pipeline.PipelineReloadService;
 import org.keinus.logparser.application.service.ThreadMonitoringService;
+import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
+import org.keinus.logparser.interfaces.dto.response.PipelineTopologyDto;
 import org.keinus.logparser.interfaces.dto.response.ThreadDetailDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +22,12 @@ public class PipelineController {
 
     private final PipelineReloadService pipelineReloadService;
     private final ThreadMonitoringService threadMonitoringService;
+    private final ConfigManagementService configManagementService;
+
+    @GetMapping("/topology")
+    public ResponseEntity<List<PipelineTopologyDto>> getPipelineTopology() {
+        return ResponseEntity.ok(configManagementService.getPipelineTopology());
+    }
 
     @GetMapping("/status")
     public ResponseEntity<PipelineReloadService.PipelineStatusInfo> getPipelineStatus() {
