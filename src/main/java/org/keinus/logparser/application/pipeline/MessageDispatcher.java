@@ -76,6 +76,11 @@ public class MessageDispatcher {
      * ApplicationProperties 인스턴스
      */
     private final ApplicationProperties applicationProperties;
+    
+    /**
+     * LiveTailService 인스턴스
+     */
+    private final org.keinus.logparser.application.service.LiveTailService liveTailService;
 
     // 큐 모니터링 메트릭
     private final AtomicLong totalMessagesDropped = new AtomicLong(0);
@@ -107,6 +112,7 @@ public class MessageDispatcher {
             ParseService parseService,
             TransformService transformService,
             StructuredTransformService structuredTransformService,
+            org.keinus.logparser.application.service.LiveTailService liveTailService,
             ApplicationProperties applicationProperties,
             @Value("${log.message.queue-size:10000}") int queueSize) {
 
@@ -119,6 +125,7 @@ public class MessageDispatcher {
         this.parseService = parseService;
         this.transformService = transformService;
         this.structuredTransformService = structuredTransformService;
+        this.liveTailService = liveTailService;
         this.applicationProperties = applicationProperties;
 
         log.info("MessageDispatcher initialized with queue size: {}", queueSize);
@@ -166,6 +173,7 @@ public class MessageDispatcher {
             ProcessingDispatcher processingDispatcher = new ProcessingDispatcher(
                 inputMessageQueue, outputMessageQueue,
                 parseService, transformService, structuredTransformService,
+                liveTailService,
                 workerActive,
                 totalMessagesFailed
             );

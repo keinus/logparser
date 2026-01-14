@@ -7,6 +7,7 @@ Key features include:
 - **Dynamic Configuration:** Database-backed configuration with hot-reload support (no restart required).
 - **Multi-Protocol Support:** Input via File, TCP, UDP, HTTP, Kafka. Output to Kafka, OpenSearch, RDB, Console, etc.
 - **Pipeline Architecture:** Input -> Parser -> Transformer -> Output.
+- **Observability:** Real-time Pipeline Topology visualization and Live Tail (WebSocket).
 
 ## Tech Stack
 - **Language:** Java 21
@@ -16,6 +17,7 @@ Key features include:
 - **Libraries:**
   - `java-grok` (Parsing)
   - `spring-kafka`, `spring-amqp` (Messaging)
+  - `spring-websocket` (Live Tail)
   - `springdoc-openapi` (Documentation)
   - `sqlite-jdbc` (Persistence)
 
@@ -23,23 +25,25 @@ Key features include:
 The application follows a standard pipeline architecture:
 1.  **Input Adapters:** Ingest raw data from sources.
 2.  **Internal Queue 1:** Buffers raw data.
-3.  **Parsers:** Convert raw data to structured format (Map/JSON).
-4.  **Transformers:** Filter, mask, or modify fields.
-5.  **Internal Queue 2:** Buffers processed data.
-6.  **Output Adapters:** Dispatch data to final destinations.
+3.  **ProcessingDispatcher:** Unified thread handling Parsing and Transformation.
+    - **Parsers:** Convert raw data to structured format.
+    - **Transformers:** Filter, mask, or modify fields.
+    - **Live Tail Hook:** Broadcasts processed events via WebSocket.
+4.  **Internal Queue 2:** Buffers processed data.
+5.  **Output Adapters:** Dispatch data to final destinations.
 
 **Control Plane:** Configuration is stored in an SQLite database and managed via a REST API. Changes trigger a hot-reload event to update active components.
 
 ## Key Directories
 - **`src/main/java/org/keinus/logparser/`**: Root package.
-  - **`application/pipeline/`**: Core pipeline orchestration logic (`MessageDispatcher`, `PipelineReloadService`).
-  - **`domain/ingestion/`**: Input adapter implementations.
-  - **`domain/parsing/`**: Parser implementations (Grok, JSON).
-  - **`domain/delivery/`**: Output adapter implementations.
+  - **`application/pipeline/`**: Core pipeline orchestration logic (`MessageDispatcher`, `ProcessingDispatcher`).
+  - **`application/service/`**: Core services (`LiveTailService`).
   - **`domain/configuration/`**: Configuration models and validation logic.
+  - **`interfaces/websocket/`**: WebSocket handlers (`LiveTailHandler`).
+  - **`interfaces/controller/`**: REST Controllers.
 - **`src/main/resources/`**:
   - `application.yml`: Main configuration.
-  - `db/migration/`: Flyway SQL migration scripts.
+  - `static/`: Frontend assets (Vanilla JS + Tailwind).
 - **`data/`**: Runtime data storage (SQLite database).
 
 ## Build and Run

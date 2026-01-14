@@ -498,7 +498,7 @@ window.MapperUI = (function() {
         simResult.innerText = "Simulating...";
 
         try {
-            const res = await fetch('/api/v1/transforms/simulate', {
+            const res = await fetch('/api/v1/structure/simulate', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({

@@ -19,6 +19,10 @@ const api = {
                 throw new Error(error.message || `HTTP ${response.status}`);
             }
 
+            if (response.status === 204) {
+                return null;
+            }
+
             return await response.json();
         } catch (error) {
             console.error('API request failed:', error);
@@ -231,6 +235,18 @@ const pipelineAPI = {
     
     getTopology() {
         return api.get('/pipeline/topology');
+    },
+    
+    getLiveTailStatus() {
+        return api.get('/pipeline/livetail/status');
+    },
+
+    enableLiveTail() {
+        return api.post('/pipeline/livetail/enable');
+    },
+
+    disableLiveTail() {
+        return api.post('/pipeline/livetail/disable');
     }
 };
 

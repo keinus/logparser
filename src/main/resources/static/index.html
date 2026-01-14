@@ -452,7 +452,12 @@
                              <span class="text-xs text-blue-400 font-mono">LIVE</span>
                         </div>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-4 items-center">
+                        <label class="cursor-pointer label p-0 gap-2">
+                            <span class="label-text text-xs text-slate-400">Service</span> 
+                            <input type="checkbox" id="livetail-service-toggle" class="toggle toggle-success toggle-sm" onchange="App.toggleLiveTailService(this.checked)" />
+                        </label>
+                        <div class="h-4 w-px bg-slate-700"></div>
                         <button class="btn btn-sm btn-ghost text-slate-400" onclick="document.getElementById('terminal-window').innerHTML = ''">Clear</button>
                         <button class="btn btn-sm btn-secondary" onclick="App.togglePauseTail(this)">Pause</button>
                     </div>

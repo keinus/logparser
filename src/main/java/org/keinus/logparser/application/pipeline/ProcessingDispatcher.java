@@ -26,6 +26,7 @@ public class ProcessingDispatcher implements Runnable {
     private final ParseService parseService;
     private final TransformService transformService;
     private final StructuredTransformService structuredTransformService;
+    private final org.keinus.logparser.application.service.LiveTailService liveTailService;
     private final AtomicBoolean running;
     private final AtomicLong totalMessagesFailed;
 
@@ -35,6 +36,7 @@ public class ProcessingDispatcher implements Runnable {
             ParseService parseService,
             TransformService transformService,
             StructuredTransformService structuredTransformService,
+            org.keinus.logparser.application.service.LiveTailService liveTailService,
             AtomicBoolean running,
             AtomicLong totalMessagesFailed) {
         this.inputQueue = inputQueue;
@@ -42,6 +44,7 @@ public class ProcessingDispatcher implements Runnable {
         this.parseService = parseService;
         this.transformService = transformService;
         this.structuredTransformService = structuredTransformService;
+        this.liveTailService = liveTailService;
         this.running = running;
         this.totalMessagesFailed = totalMessagesFailed;
     }
@@ -108,7 +111,14 @@ public class ProcessingDispatcher implements Runnable {
             logEvent.markAsTransformed();
 
             // ==========================================
-            // Stage 4: Output
+            // Stage 4: Broadcast to Live Tail
+            // ==========================================
+            if (liveTailService != null) {
+                liveTailService.broadcastLog(logEvent);
+            }
+
+            // ==========================================
+            // Stage 5: Output
             // ==========================================
             putOutputMsg(logEvent);
 

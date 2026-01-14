@@ -460,7 +460,6 @@ public class ConfigManagementService {
         if (entity.getType().contains("Http")) detail = "URL: " + entity.getUrl();
         else if (entity.getType().contains("Kafka")) detail = "Topic: " + entity.getTopicid();
         else if (entity.getType().contains("Elastic")) detail = "Index: " + entity.getIndexTemplate();
-        else if (entity.getType().contains("File")) detail = "Path: " + entity.getPath();
         else if (entity.getHost() != null) detail = "Host: " + entity.getHost();
 
         return PipelineTopologyDto.PipelineStageDto.builder()

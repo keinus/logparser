@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/transform")
+@RequestMapping("/api/v1/structure")
 public class StructuredTransformController {
 
     private final SchemaDefinitionService schemaService;

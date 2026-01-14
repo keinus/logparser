@@ -61,6 +61,7 @@ public class Phase5IntegrationTest {
             parseService,
             transformService,
             structuredTransformService,
+            null, // LiveTailService
             new AtomicBoolean(true),
             new AtomicLong(0)
         );

@@ -23,6 +23,24 @@ public class PipelineController {
     private final PipelineReloadService pipelineReloadService;
     private final ThreadMonitoringService threadMonitoringService;
     private final ConfigManagementService configManagementService;
+    private final org.keinus.logparser.application.service.LiveTailService liveTailService;
+
+    @GetMapping("/livetail/status")
+    public ResponseEntity<Map<String, Boolean>> getLiveTailStatus() {
+        return ResponseEntity.ok(Map.of("enabled", liveTailService.isEnabled()));
+    }
+
+    @PostMapping("/livetail/enable")
+    public ResponseEntity<Void> enableLiveTail() {
+        liveTailService.setEnabled(true);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/livetail/disable")
+    public ResponseEntity<Void> disableLiveTail() {
+        liveTailService.setEnabled(false);
+        return ResponseEntity.ok().build();
+    }
 
     @GetMapping("/topology")
     public ResponseEntity<List<PipelineTopologyDto>> getPipelineTopology() {

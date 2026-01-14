@@ -32,8 +32,8 @@ const App = (function() {
         
         // Setup Search Debounce if needed (currently using onkeyup directly)
         
-        // Mock Live Tail if needed (simulated for now as per prototype request)
-        startLiveTailSimulation();
+        // Initialize Live Tail
+        connectLiveTail();
     }
     
     function startPolling() {
@@ -98,7 +98,7 @@ const App = (function() {
             if (viewName === 'overview') {
                 initChart(); // Re-render chart if canvas was destroyed/hidden
             } else if (viewName === 'pipeline-visual') {
-                 renderMockTopology();
+                 renderTopology();
             } else if (viewName === 'settings') {
                  loadSettings();
             }
@@ -271,145 +271,134 @@ const App = (function() {
         state.chartInstance.update();
     }
     
-    // --- Topology Visual (Prototype) ---
-    function renderMockTopology() {
+    // --- Topology Visual ---
+    async function renderTopology() {
         const container = document.getElementById('view-pipeline-visual');
-        
-        // Mock Data to demonstrate the UI structure
-        const mockPipelines = [
-            {
-                messageType: 'WEB_ACCESS_LOG',
-                description: 'Nginx and Apache access logs from edge nodes',
-                inputs: [
-                    { type: 'HttpInput', name: 'Edge Listener', detail: 'Port: 8080' },
-                    { type: 'KafkaInput', name: 'Raw Topic', detail: 'Topic: web-raw' }
-                ],
-                processing: [
-                    { type: 'Parser', name: 'Grok: Common Log', badge: 'GROK' },
-                    { type: 'Transform', name: 'GeoIP Enrich', badge: 'ENRICH' },
-                    { type: 'Transform', name: 'Mask UserID', badge: 'MASK' }
-                ],
-                outputs: [
-                    { type: 'ElasticSearch', name: 'ES Production', detail: 'Index: web-2024' },
-                    { type: 'S3Output', name: 'Archive Bucket', detail: 'Region: us-east-1' },
-                    { type: 'KafkaOutput', name: 'Analytics Stream', detail: 'Topic: web-analytics' }
-                ]
-            },
-            {
-                messageType: 'APP_TRACE',
-                description: 'Application stack traces and error reports',
-                inputs: [
-                    { type: 'TcpInput', name: 'App Agent', detail: 'Port: 9000' }
-                ],
-                processing: [
-                    { type: 'Parser', name: 'JsonParser', badge: 'JSON' },
-                    { type: 'Transform', name: 'Filter Debug', badge: 'FILTER' }
-                ],
-                outputs: [
-                    { type: 'SlackOutput', name: 'DevOps Alert', detail: '#alerts-critical' }
-                ]
+        container.innerHTML = '<div class="flex h-full items-center justify-center"><span class="loading loading-spinner loading-lg text-primary"></span></div>';
+        container.classList.remove('hidden');
+
+        try {
+            const topologyData = await pipelineAPI.getTopology();
+            
+            if (!topologyData || topologyData.length === 0) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-slate-500">
+                        <span class="material-icons-round text-4xl mb-2">schema</span>
+                        <p>No pipeline configuration found.</p>
+                        <button class="btn btn-sm btn-primary mt-4" onclick="App.openCreateModal()">Create Adapter</button>
+                    </div>`;
+                return;
             }
-        ];
 
-        let html = `
-            <div class="flex justify-between items-center mb-6">
-                 <div>
-                    <h3 class="text-lg font-bold text-white">Pipeline Topology</h3>
-                    <p class="text-xs text-slate-500 font-mono mt-1">Grouped by Message Type (Prototype)</p>
-                 </div>
-                 <div class="flex gap-2 text-xs font-mono text-slate-500">
-                    <span class="flex items-center gap-1"><div class="w-2 h-2 bg-blue-500 rounded-full"></div> Input</span>
-                    <span class="flex items-center gap-1"><div class="w-2 h-2 bg-purple-500 rounded-full"></div> Process</span>
-                    <span class="flex items-center gap-1"><div class="w-2 h-2 bg-emerald-500 rounded-full"></div> Output</span>
-                 </div>
-            </div>
-            <div class="space-y-8 pb-10">
-        `;
-
-        mockPipelines.forEach(pipe => {
-            html += `
-            <!-- Pipeline Row: ${pipe.messageType} -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm hover:border-slate-700 transition-colors">
-                
-                <!-- Header -->
-                <div class="bg-slate-800/50 px-6 py-3 border-b border-slate-800 flex justify-between items-center">
-                    <div class="flex items-center gap-3">
-                        <span class="material-icons-round text-slate-400">hub</span>
-                        <div>
-                            <h4 class="font-bold text-slate-200 text-sm tracking-wide">${pipe.messageType}</h4>
-                            <p class="text-[10px] text-slate-500 font-mono">${pipe.description}</p>
-                        </div>
-                    </div>
-                    <span class="badge badge-ghost badge-sm font-mono">Active</span>
+            let html = `
+                <div class="flex justify-between items-center mb-6">
+                     <div>
+                        <h3 class="text-lg font-bold text-white">Pipeline Topology</h3>
+                        <p class="text-xs text-slate-500 font-mono mt-1">Grouped by Message Type</p>
+                     </div>
+                     <div class="flex gap-2 text-xs font-mono text-slate-500">
+                        <span class="flex items-center gap-1"><div class="w-2 h-2 bg-blue-500 rounded-full"></div> Input</span>
+                        <span class="flex items-center gap-1"><div class="w-2 h-2 bg-purple-500 rounded-full"></div> Process</span>
+                        <span class="flex items-center gap-1"><div class="w-2 h-2 bg-emerald-500 rounded-full"></div> Output</span>
+                     </div>
                 </div>
+                <div class="space-y-8 pb-10">
+            `;
 
-                <!-- Swimlane Body -->
-                <div class="p-6 relative">
-                    <!-- Grid Layout: Sources -> Arrow -> Process -> Arrow -> Destinations -->
-                    <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1.5fr_auto_1fr] gap-6 items-start">
-                        
-                        <!-- 1. Sources Column -->
-                        <div class="flex flex-col gap-3 relative group">
-                            <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Sources</span>
-                            ${pipe.inputs.map(i => `
-                                <div class="bg-slate-800 border-l-2 border-blue-500 p-3 rounded shadow-sm flex items-center justify-between hover:bg-slate-750 cursor-pointer">
-                                    <div>
-                                        <div class="text-xs font-bold text-slate-300">${i.name}</div>
-                                        <div class="text-[10px] text-slate-500 font-mono">${i.detail}</div>
-                                    </div>
-                                    <span class="material-icons-round text-slate-600 text-sm">input</span>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <!-- Connector Arrow -->
-                        <div class="hidden lg:flex h-full items-center justify-center text-slate-700">
-                             <span class="material-icons-round text-2xl animate-pulse">arrow_right_alt</span>
-                        </div>
-
-                        <!-- 2. Processing Chain Column -->
-                        <div class="flex flex-col gap-2 relative">
-                            <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Processing Chain</span>
-                            
-                            <div class="bg-slate-800/30 rounded-lg p-3 border border-slate-700/50 flex flex-wrap gap-2 items-center min-h-[60px]">
-                                ${pipe.processing.map((p, idx) => `
-                                    <div class="flex items-center bg-slate-800 border border-slate-600 rounded px-2 py-1 shadow-sm">
-                                        <span class="text-[10px] font-bold text-purple-400 mr-2">${p.badge}</span>
-                                        <span class="text-xs text-slate-300">${p.name}</span>
-                                    </div>
-                                    ${idx < pipe.processing.length - 1 ? `<span class="material-icons-round text-slate-600 text-sm">chevron_right</span>` : ''}
-                                `).join('')}
+            topologyData.forEach(pipe => {
+                html += `
+                <!-- Pipeline Row: ${pipe.messageType} -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm hover:border-slate-700 transition-colors">
+                    
+                    <!-- Header -->
+                    <div class="bg-slate-800/50 px-6 py-3 border-b border-slate-800 flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <span class="material-icons-round text-slate-400">hub</span>
+                            <div>
+                                <h4 class="font-bold text-slate-200 text-sm tracking-wide">${pipe.messageType}</h4>
+                                <p class="text-[10px] text-slate-500 font-mono">${pipe.description || ''}</p>
                             </div>
                         </div>
+                        <span class="badge badge-ghost badge-sm font-mono">Active</span>
+                    </div>
 
-                        <!-- Connector Arrow -->
-                        <div class="hidden lg:flex h-full items-center justify-center text-slate-700">
-                             <span class="material-icons-round text-2xl animate-pulse">arrow_right_alt</span>
-                        </div>
-
-                        <!-- 3. Destinations Column -->
-                        <div class="flex flex-col gap-3 relative">
-                            <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Destinations</span>
-                            ${pipe.outputs.map(o => `
-                                <div class="bg-slate-800 border-r-2 border-emerald-500 p-3 rounded shadow-sm flex items-center justify-between hover:bg-slate-750 cursor-pointer text-right">
-                                    <span class="material-icons-round text-slate-600 text-sm">output</span>
-                                    <div>
-                                        <div class="text-xs font-bold text-slate-300">${o.name}</div>
-                                        <div class="text-[10px] text-slate-500 font-mono">${o.detail}</div>
+                    <!-- Swimlane Body -->
+                    <div class="p-6 relative">
+                        <!-- Grid Layout: Sources -> Arrow -> Process -> Arrow -> Destinations -->
+                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_auto_1.5fr_auto_1fr] gap-6 items-start">
+                            
+                            <!-- 1. Sources Column -->
+                            <div class="flex flex-col gap-3 relative group">
+                                <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Sources</span>
+                                ${pipe.inputs && pipe.inputs.length > 0 ? pipe.inputs.map(i => `
+                                    <div class="bg-slate-800 border-l-2 ${i.enabled ? 'border-blue-500' : 'border-slate-600'} p-3 rounded shadow-sm flex items-center justify-between hover:bg-slate-750 cursor-pointer" onclick="App.editAdapter('input', ${i.id})">
+                                        <div>
+                                            <div class="text-xs font-bold ${i.enabled ? 'text-slate-300' : 'text-slate-500 line-through'}">${i.name}</div>
+                                            <div class="text-[10px] text-slate-500 font-mono">${i.detail || ''}</div>
+                                        </div>
+                                        <span class="material-icons-round text-slate-600 text-sm">input</span>
                                     </div>
-                                </div>
-                            `).join('')}
-                        </div>
+                                `).join('') : '<div class="text-xs text-slate-600 italic py-2">No inputs configured</div>'}
+                            </div>
 
+                            <!-- Connector Arrow -->
+                            <div class="hidden lg:flex h-full items-center justify-center text-slate-700">
+                                 <span class="material-icons-round text-2xl ${pipe.inputs.some(i => i.enabled) ? 'text-blue-500/50' : ''}">arrow_right_alt</span>
+                            </div>
+
+                            <!-- 2. Processing Chain Column -->
+                            <div class="flex flex-col gap-2 relative">
+                                <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Processing Chain</span>
+                                
+                                <div class="bg-slate-800/30 rounded-lg p-3 border border-slate-700/50 flex flex-wrap gap-2 items-center min-h-[60px]">
+                                    ${pipe.processing && pipe.processing.length > 0 ? pipe.processing.map((p, idx) => `
+                                        <div class="flex items-center bg-slate-800 border ${p.enabled ? 'border-slate-600' : 'border-slate-700 opacity-50'} rounded px-2 py-1 shadow-sm cursor-pointer hover:border-slate-500" onclick="App.editAdapter('${p.badge === 'PARSER' || p.badge === 'GROK' || p.badge === 'JSON' || p.badge === 'REGEX' ? 'parser' : 'transform'}', ${p.id})">
+                                            <span class="text-[10px] font-bold ${p.badge.includes('GROK') || p.badge.includes('JSON') ? 'text-purple-400' : 'text-amber-400'} mr-2">${p.badge}</span>
+                                            <span class="text-xs text-slate-300">${p.type}</span>
+                                        </div>
+                                        ${idx < pipe.processing.length - 1 ? `<span class="material-icons-round text-slate-600 text-sm">chevron_right</span>` : ''}
+                                    `).join('') : '<span class="text-xs text-slate-600 italic">Pass-through (No processing)</span>'}
+                                </div>
+                            </div>
+
+                            <!-- Connector Arrow -->
+                            <div class="hidden lg:flex h-full items-center justify-center text-slate-700">
+                                 <span class="material-icons-round text-2xl ${pipe.outputs.some(o => o.enabled) ? 'text-emerald-500/50' : ''}">arrow_right_alt</span>
+                            </div>
+
+                            <!-- 3. Destinations Column -->
+                            <div class="flex flex-col gap-3 relative">
+                                <span class="absolute -top-3 left-0 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Destinations</span>
+                                ${pipe.outputs && pipe.outputs.length > 0 ? pipe.outputs.map(o => `
+                                    <div class="bg-slate-800 border-r-2 ${o.enabled ? 'border-emerald-500' : 'border-slate-600'} p-3 rounded shadow-sm flex items-center justify-between hover:bg-slate-750 cursor-pointer text-right" onclick="App.editAdapter('output', ${o.id})">
+                                        <span class="material-icons-round text-slate-600 text-sm">output</span>
+                                        <div>
+                                            <div class="text-xs font-bold ${o.enabled ? 'text-slate-300' : 'text-slate-500 line-through'}">${o.name}</div>
+                                            <div class="text-[10px] text-slate-500 font-mono">${o.detail || ''}</div>
+                                        </div>
+                                    </div>
+                                `).join('') : '<div class="text-xs text-slate-600 italic py-2 text-right">No outputs configured</div>'}
+                            </div>
+
+                        </div>
                     </div>
                 </div>
-            </div>
-            `;
-        });
+                `;
+            });
 
-        html += `</div>`;
-        container.innerHTML = html;
-        container.classList.remove('hidden');
+            html += `</div>`;
+            container.innerHTML = html;
+
+        } catch (e) {
+            console.error("Failed to load topology:", e);
+            container.innerHTML = `
+                <div class="alert alert-error max-w-lg mx-auto mt-10">
+                    <span class="material-icons-round">error</span>
+                    <span>Failed to load topology: ${e.message}</span>
+                    <button class="btn btn-sm" onclick="App.renderTopology()">Retry</button>
+                </div>
+            `;
+        }
     }
     
     // --- Topology Visual ---
@@ -965,29 +954,102 @@ const App = (function() {
         } catch (e) { showToast("Save failed", "error"); }
     }
 
-    // --- Live Tail (Simulated/Mock) ---
-    function startLiveTailSimulation() {
-        setInterval(() => {
+    // --- Live Tail ---
+    let ws = null;
+    let wsReconnectInterval = null;
+
+    async function connectLiveTail() {
+        // Init Toggle State
+        try {
+            const status = await pipelineAPI.getLiveTailStatus();
+            const toggle = document.getElementById('livetail-service-toggle');
+            if(toggle) toggle.checked = status.enabled;
+        } catch (e) {
+            console.error("Failed to fetch live tail status", e);
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const url = `${protocol}//${window.location.host}/ws/tail`;
+        
+        console.log(`Connecting to Live Tail WebSocket: ${url}`);
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+            console.log('Live Tail connected');
+            const term = document.getElementById('terminal-window');
+            term.innerHTML += `<div class="text-emerald-500 font-bold border-b border-emerald-900/50 pb-1"># Connected to log stream</div>`;
+            
+            if (wsReconnectInterval) {
+                clearInterval(wsReconnectInterval);
+                wsReconnectInterval = null;
+            }
+        };
+
+        ws.onmessage = (event) => {
             const view = document.getElementById('view-live-tail');
             if (view.classList.contains('hidden')) return;
             
             const term = document.getElementById('terminal-window');
             if (term.getAttribute('data-paused') === 'true') return;
             
-            // Generate dummy log if no websocket logic present
-            const now = new Date().toISOString();
-            const methods = ['GET', 'POST', 'PUT', 'DELETE'];
-            const ips = ['192.168.1.10', '10.0.0.5', '172.16.0.23'];
-            const log = `[${now}] INFO [HttpInput] "src": "${ips[Math.floor(Math.random()*3)]}" "method": "${methods[Math.floor(Math.random()*4)]}" "ua": "Mozilla/5.0"`;
+            try {
+                const payload = JSON.parse(event.data);
+                const now = new Date(payload.timestamp || Date.now()).toISOString();
+                const type = payload.messageType || 'UNKNOWN';
+                const dataStr = JSON.stringify(payload.data || payload);
+                
+                const log = `[${now}] ${type} ${dataStr}`;
+                
+                const line = document.createElement('div');
+                line.className = 'text-slate-300 hover:bg-slate-800/50 px-1 py-0.5 border-b border-slate-800/30 break-all';
+                line.textContent = log;
+                term.appendChild(line);
+                
+                // Buffer limit
+                while (term.children.length > 500) {
+                    term.removeChild(term.children[0]);
+                }
+                
+                // Auto-scroll if near bottom
+                if (term.scrollHeight - term.scrollTop - term.clientHeight < 100) {
+                    term.scrollTop = term.scrollHeight;
+                }
+                
+            } catch (e) {
+                console.warn('Failed to parse log event', e);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('Live Tail disconnected');
+            const term = document.getElementById('terminal-window');
+            if (term) term.innerHTML += `<div class="text-amber-500 font-bold border-b border-amber-900/50 pb-1"># Disconnected. Reconnecting...</div>`;
             
-            const line = document.createElement('div');
-            line.className = 'text-slate-300 hover:bg-slate-800/50 px-1 py-0.5 border-b border-slate-800/30';
-            line.textContent = log;
-            term.appendChild(line);
-            
-            if (term.children.length > 50) term.removeChild(term.children[1]);
-            term.scrollTop = term.scrollHeight;
-        }, 1500);
+            if (!wsReconnectInterval) {
+                wsReconnectInterval = setInterval(connectLiveTail, 3000);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            ws.close();
+        };
+    }
+
+    async function toggleLiveTailService(enabled) {
+        try {
+            if (enabled) {
+                await pipelineAPI.enableLiveTail();
+                showToast("Live Tail Service Enabled", "success");
+            } else {
+                await pipelineAPI.disableLiveTail();
+                showToast("Live Tail Service Disabled", "warning");
+            }
+        } catch (e) {
+            showToast("Failed to toggle service: " + e.message, "error");
+            // Revert toggle UI
+            document.getElementById('livetail-service-toggle').checked = !enabled;
+        }
     }
     
     function togglePauseTail(btn) {
@@ -1046,6 +1108,7 @@ const App = (function() {
         restartPipeline,
         saveSettings,
         togglePauseTail,
+        toggleLiveTailService,
         testPattern,
         setFilter
     };
