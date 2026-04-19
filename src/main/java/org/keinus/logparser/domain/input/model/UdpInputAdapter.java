@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,6 +30,8 @@ import org.keinus.logparser.domain.model.LogEvent;
 public class UdpInputAdapter extends InputAdapter {
 	private static final int MAX_PACKET_SIZE = 1600; 
 	private DatagramSocket serverSocket = null;
+	private final byte[] receiveBuffer = new byte[MAX_PACKET_SIZE];
+	private final DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
 
 	public UdpInputAdapter(InputAdapterConfig config) throws IOException {
 		super(config);
@@ -38,6 +42,7 @@ public class UdpInputAdapter extends InputAdapter {
 		int port = config.getPort();
 		try {
 			serverSocket = new DatagramSocket(port);
+			serverSocket.setSoTimeout(5000);
 			log.info("UDP Input Adapter started at port {}", port);
 		} catch (SocketException e) {
 			log.error("Failed to initialize UDP socket on port {}: {}", port, e.getMessage(), e);
@@ -51,29 +56,37 @@ public class UdpInputAdapter extends InputAdapter {
 			return null;
 
 		try {
-			byte[] buffer = new byte[MAX_PACKET_SIZE];
-			DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
-			serverSocket.setSoTimeout(5000);
+			receivePacket.setLength(receiveBuffer.length);
 			serverSocket.receive(receivePacket);
 			int actualLength = receivePacket.getLength();
 			if (actualLength > MAX_PACKET_SIZE) {
 				throw new SecurityException("패킷 크기가 제한을 초과했습니다");
 			}
 
-			String payload = new String(receivePacket.getData(), 0, receivePacket.getLength());
+			String payload = new String(receiveBuffer, 0, actualLength, StandardCharsets.UTF_8);
 
 			String host = receivePacket.getAddress().toString();
 			return createLogEvent(payload, host);
+		} catch (SocketTimeoutException e) {
+			return null;
+		} catch (SocketException e) {
+			if (serverSocket == null || serverSocket.isClosed()) {
+				log.debug("UDP socket closed, stopping receive loop");
+			} else {
+				log.warn("UDP socket error: {}", e.getMessage());
+			}
 		} catch (IOException e) {
-			log.error(e.getMessage());
+			log.warn("Failed to receive UDP packet: {}", e.getMessage());
 		}
 		return null;
 	}
 
 	@Override
 	public void close() throws IOException {
-		if (serverSocket != null)
+		if (serverSocket != null) {
 			serverSocket.close();
+			serverSocket = null;
+		}
 	}
 
 }

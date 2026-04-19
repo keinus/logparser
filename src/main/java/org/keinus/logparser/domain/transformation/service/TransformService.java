@@ -2,6 +2,7 @@ package org.keinus.logparser.domain.transformation.service;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,12 @@ public class TransformService {
     private final DatabaseConfigLoader databaseConfigLoader;
 
     private ITransform loadLibrary(String className) {
-        String classFullName = "org.keinus.logparser.domain.transform.model." + className;
+        if ("Structure".equals(className)) {
+            LOGGER.info("Skipping legacy Structure transform registration because structured transformation runs centrally");
+            return null;
+        }
+
+        String classFullName = "org.keinus.logparser.domain.transformation.model." + className;
         Class<?> testClass;
         try {
             testClass = Class.forName(classFullName);
@@ -55,18 +61,7 @@ public class TransformService {
 
     public TransformService(ApplicationProperties applicationProperties, DatabaseConfigLoader databaseConfigLoader) {
         this.databaseConfigLoader = databaseConfigLoader;
-
-        List<TransformConfig> transformList = applicationProperties.getTransform();
-        for(TransformConfig trans : transformList) {
-            ITransform transformInterface = loadLibrary(trans.getType());
-            if(transformInterface == null)
-               continue;
-            transformInterface.init(trans.getParam());
-            var msgType = trans.getMessagetype();
-            transformer.computeIfAbsent(msgType, k -> new ArrayList<>());
-            transformer.get(msgType).add(transformInterface);
-            LOGGER.info("Transform registered: {}", trans.getType());
-        }
+        this.transformer = buildTransformers(applicationProperties.getTransform());
     }
 
     /**
@@ -75,32 +70,18 @@ public class TransformService {
     public synchronized void reload() {
         LOGGER.info("Reloading transforms from database");
 
-        // 기존 변환 초기화
-        Map<String, List<ITransform>> newTransformer = new HashMap<>();
-
         try {
             DatabaseConfigLoader.PipelineConfiguration config = databaseConfigLoader.loadConfiguration();
-            List<TransformConfig> transformList = config.getTransform();
-
-            for(TransformConfig trans : transformList) {
-                ITransform transformInterface = loadLibrary(trans.getType());
-                if(transformInterface == null)
-                    continue;
-                transformInterface.init(trans.getParam());
-                var msgType = trans.getMessagetype();
-                newTransformer.computeIfAbsent(msgType, k -> new ArrayList<>());
-                newTransformer.get(msgType).add(transformInterface);
-                LOGGER.info("Transform reloaded: {}", trans.getType());
-            }
-
-            // 새 변환으로 교체
-            this.transformer = newTransformer;
-            LOGGER.info("Transform reload completed: {} transforms loaded", transformList.size());
-
+            reload(config.getTransform());
         } catch (Exception e) {
             LOGGER.error("Failed to reload transforms", e);
             throw new RuntimeException("Failed to reload transforms", e);
         }
+    }
+
+    public synchronized void reload(List<TransformConfig> transformList) {
+        this.transformer = buildTransformers(transformList);
+        LOGGER.info("Transform reload completed: {} transforms loaded", transformList == null ? 0 : transformList.size());
     }
 
     /**
@@ -114,5 +95,32 @@ public class TransformService {
             }
         }
         return true;
+    }
+
+    private Map<String, List<ITransform>> buildTransformers(List<TransformConfig> transformList) {
+        Map<String, List<ITransform>> newTransformer = new HashMap<>();
+        if (transformList == null) {
+            return newTransformer;
+        }
+
+        List<TransformConfig> sortedTransforms = transformList.stream()
+                .sorted(Comparator
+                        .comparing((TransformConfig transform) -> transform.getPriority() == null ? Integer.MAX_VALUE : transform.getPriority())
+                        .thenComparing(transform -> transform.getId() == null ? Long.MAX_VALUE : transform.getId()))
+                .toList();
+
+        for (TransformConfig trans : sortedTransforms) {
+            ITransform transformInterface = loadLibrary(trans.getType());
+            if (transformInterface == null) {
+                continue;
+            }
+            transformInterface.init(trans.getParam());
+            String msgType = trans.getMessagetype();
+            newTransformer.computeIfAbsent(msgType, k -> new ArrayList<>());
+            newTransformer.get(msgType).add(transformInterface);
+            LOGGER.info("Transform registered: {} (priority={})", trans.getType(), trans.getPriority());
+        }
+
+        return newTransformer;
     }
 }

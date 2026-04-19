@@ -1,5 +1,6 @@
 package org.keinus.logparser.domain.model;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.HashMap;
@@ -8,6 +9,10 @@ import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -27,19 +32,20 @@ import lombok.Setter;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LogEvent implements Serializable {
     private static final long serialVersionUID = 1L;
+    private static final ObjectMapper OUTPUT_MAPPER = createOutputMapper();
 
     // === Core Metadata (ETL 과정에서 항상 필요) ===
-    @Getter @Setter
+    @Getter
     private String messageType;
 
-    @Getter @Setter
+    @Getter
     private Instant timestamp;
 
-    @Getter @Setter
+    @Getter
     private String sourceHost;
 
     // === Raw Data ===
-    @Getter @Setter
+    @Getter
     @JsonIgnore  // 출력 시 제외 (origin_text로 별도 처리)
     private String originalText;
 
@@ -54,6 +60,18 @@ public class LogEvent implements Serializable {
     @Getter @Setter
     @JsonIgnore
     private String processingError;
+
+    @JsonIgnore
+    private transient Map<String, Object> preparedOutputMap;
+
+    @JsonIgnore
+    private transient Map<String, Object> preparedOutputMapWithOrigin;
+
+    @JsonIgnore
+    private transient String preparedOutputJson;
+
+    @JsonIgnore
+    private transient String preparedOutputJsonWithOrigin;
 
     // === 생성자 ===
 
@@ -91,6 +109,7 @@ public class LogEvent implements Serializable {
      * 특정 필드 값을 설정합니다.
      */
     public LogEvent setField(String key, Object value) {
+        invalidateOutputPayload();
         getFields().put(key, value);
         return this;
     }
@@ -107,6 +126,7 @@ public class LogEvent implements Serializable {
      */
     public LogEvent removeField(String key) {
         if (fields != null) {
+            invalidateOutputPayload();
             fields.remove(key);
         }
         return this;
@@ -117,6 +137,7 @@ public class LogEvent implements Serializable {
      */
     public LogEvent setFields(Map<String, Object> newFields) {
         if (newFields != null && !newFields.isEmpty()) {
+            invalidateOutputPayload();
             getFields().putAll(newFields);
         }
         return this;
@@ -156,13 +177,74 @@ public class LogEvent implements Serializable {
         return this;
     }
 
+    public void setMessageType(String messageType) {
+        invalidateOutputPayload();
+        this.messageType = messageType;
+    }
+
+    public void setTimestamp(Instant timestamp) {
+        invalidateOutputPayload();
+        this.timestamp = timestamp;
+    }
+
+    public void setSourceHost(String sourceHost) {
+        invalidateOutputPayload();
+        this.sourceHost = sourceHost;
+    }
+
+    public void setOriginalText(String originalText) {
+        invalidateOutputPayload();
+        this.originalText = originalText;
+    }
+
     // === JSON 출력용 메서드 ===
+
+    public void prepareOutputPayload() {
+        prepareOutputPayload(false);
+    }
+
+    public void prepareOutputPayload(boolean includeOriginText) {
+        Map<String, Object> snapshot = buildOutputMap(includeOriginText);
+        String serialized = serializeOutputMap(snapshot);
+
+        if (includeOriginText) {
+            this.preparedOutputMapWithOrigin = snapshot;
+            this.preparedOutputJsonWithOrigin = serialized;
+        } else {
+            this.preparedOutputMap = snapshot;
+            this.preparedOutputJson = serialized;
+        }
+    }
+
+    public String toOutputJson() {
+        return toOutputJson(false);
+    }
+
+    public String toOutputJson(boolean includeOriginText) {
+        String cached = includeOriginText ? preparedOutputJsonWithOrigin : preparedOutputJson;
+        if (cached != null) {
+            return cached;
+        }
+        return serializeOutputMap(toOutputMap(includeOriginText));
+    }
 
     /**
      * JSON 직렬화를 위한 출력 맵을 생성합니다.
      * 출력 설정에 따라 원본 텍스트 포함 여부를 결정할 수 있습니다.
      */
     public Map<String, Object> toOutputMap() {
+        return toOutputMap(false);
+    }
+
+    public Map<String, Object> toOutputMap(boolean includeOriginText) {
+        Map<String, Object> cached = includeOriginText ? preparedOutputMapWithOrigin : preparedOutputMap;
+        if (cached != null) {
+            return cached;
+        }
+        return buildOutputMap(includeOriginText);
+    }
+
+    private Map<String, Object> buildOutputMap(boolean includeOriginText) {
         Map<String, Object> output = new HashMap<>();
 
         // 메타데이터 추가
@@ -171,11 +253,37 @@ public class LogEvent implements Serializable {
         if (sourceHost != null) output.put("source_host", sourceHost);
 
         // 파싱된 필드 추가
-        if (hasFields()) {
+        if (fields != null && !fields.isEmpty()) {
             output.putAll(fields);
         }
 
+        if (includeOriginText && originalText != null) {
+            output.put("origin_text", originalText);
+        }
+
         return output;
+    }
+
+    private String serializeOutputMap(Map<String, Object> outputMap) {
+        try {
+            return OUTPUT_MAPPER.writeValueAsString(outputMap);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize output payload", e);
+        }
+    }
+
+    private void invalidateOutputPayload() {
+        preparedOutputMap = null;
+        preparedOutputMapWithOrigin = null;
+        preparedOutputJson = null;
+        preparedOutputJsonWithOrigin = null;
+    }
+
+    private static ObjectMapper createOutputMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return mapper;
     }
 
     // === 편의 메서드 ===

@@ -4,7 +4,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,11 +30,13 @@ import org.keinus.logparser.domain.model.LogEvent;
  */
 @Slf4j
 public class TcpOutputAdapter extends OutputAdapter {
-	private Socket socket;
-	private String host = null;
-	private int port = 0;
-	private int retry = 3;
-	private static final int SOCKET_TIMEOUT_MS = 5000;
+	private static final int DEFAULT_RETRY_COUNT = 3;
+	private static final int DEFAULT_RETRY_DELAY_MS = 1000;
+
+	private final String host;
+	private final int port;
+	private final int retryCount;
+	private final int retryDelayMs;
 	private final AtomicBoolean closed = new AtomicBoolean(false);
 	private final ReentrantLock lock = new ReentrantLock();
 
@@ -44,85 +45,58 @@ public class TcpOutputAdapter extends OutputAdapter {
 
 		port = Integer.parseInt(obj.get("port"));
 		host = obj.get("host");
+		retryCount = parsePositiveInt(obj.get("retryCount"), DEFAULT_RETRY_COUNT);
+		retryDelayMs = parsePositiveInt(obj.get("retryDelayMs"), DEFAULT_RETRY_DELAY_MS);
 		log.info("TCP Output Adapter initialized for {}:{}", host, port);
-	}
-
-	private Socket createNewSocket() throws IOException {
-		Socket newSocket = new Socket();
-		newSocket.setSoTimeout(SOCKET_TIMEOUT_MS);
-		return newSocket;
-	}
-
-	private void ensureConnection() throws IOException {
-		if (socket == null || socket.isClosed() || !socket.isConnected()) {
-			if (socket != null && !socket.isClosed()) {
-				try {
-					socket.close();
-				} catch (IOException e) {
-					log.debug("Error closing old socket: {}", e.getMessage());
-				}
-			}
-			socket = createNewSocket();
-			connectWithRetry();
-		}
-	}
-
-	private void connectWithRetry() throws IOException {
-		int count = 0;
-		IOException lastException = null;
-
-		while (count < retry) {
-			try {
-				socket.connect(new InetSocketAddress(host, port), SOCKET_TIMEOUT_MS);
-				log.debug("Successfully connected to {}:{}", host, port);
-				return;
-			} catch (IOException e) {
-				lastException = e;
-				log.error("Connection failed (attempt {}/{}): {}", count + 1, retry, e.getMessage());
-				count++;
-				if (count < retry) {
-					ThreadUtil.sleep(1000);
-				}
-			}
-		}
-		throw new IOException("Failed to connect after " + retry + " attempts", lastException);
 	}
 
 	@Override
 	public void send(LogEvent logEvent) {
-		String jsonString = toJson(logEvent.toOutputMap());
+		String jsonString = serializeEvent(logEvent);
+		byte[] payload = jsonString.getBytes(StandardCharsets.UTF_8);
 		lock.lock();
 		try {
-			ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(jsonString);
-
-			try {
-				ensureConnection();
-
-				// DataOutputStream을 try-with-resources로 닫지 않고 직접 사용
-				DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-				// ByteBuffer의 실제 데이터 크기만큼만 전송
-				dos.write(byteBuffer.array(), 0, byteBuffer.limit());
-				dos.flush();
-				// DataOutputStream을 닫지 않고 소켓만 닫기
-
-				// 전송 후 소켓 닫기 (각 메시지마다 새로운 연결 사용)
-				socket.close();
-				socket = null;
-
-			} catch (IOException e) {
-				log.error("Failed to send message: {}", e.getMessage(), e);
-				// 연결 실패 시 소켓 정리
-				if (socket != null) {
-					try {
-						socket.close();
-					} catch (IOException closeEx) {
-						log.debug("Error closing socket after failure: {}", closeEx.getMessage());
-					}
-					socket = null;
-				}
-			}
+			sendWithRetry(payload);
 		} finally {
 			lock.unlock();
+		}
+	}
+
+	private void sendWithRetry(byte[] payload) {
+		IOException lastException = null;
+
+		for (int attempt = 1; attempt <= retryCount; attempt++) {
+			try (Socket socket = new Socket()) {
+				socket.setKeepAlive(false);
+				socket.setTcpNoDelay(true);
+				socket.setSoTimeout(getTimeoutMs());
+				socket.connect(new InetSocketAddress(host, port), getTimeoutMs());
+
+				DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+				dos.write(payload);
+				dos.flush();
+				return;
+			} catch (IOException e) {
+				lastException = e;
+				log.error("Connection failed (attempt {}/{}): {}", attempt, retryCount, e.getMessage());
+				if (attempt < retryCount) {
+					ThreadUtil.sleep(retryDelayMs);
+				}
+			}
+		}
+
+		throw deliveryFailure("Failed to send message", lastException);
+	}
+
+	private int parsePositiveInt(String value, int defaultValue) {
+		if (value == null || value.isBlank()) {
+			return defaultValue;
+		}
+		try {
+			int parsed = Integer.parseInt(value);
+			return parsed > 0 ? parsed : defaultValue;
+		} catch (NumberFormatException e) {
+			return defaultValue;
 		}
 	}
 
@@ -132,25 +106,6 @@ public class TcpOutputAdapter extends OutputAdapter {
 		if (!closed.compareAndSet(false, true)) {
 			log.debug("TCP Output Adapter already closed, skipping");
 			return;
-		}
-
-		lock.lock();
-		try {
-			if (socket != null) {
-				try {
-					if (!socket.isClosed()) {
-						socket.close();
-						log.info("TCP Output Adapter socket closed");
-					}
-				} catch (IOException e) {
-					log.error("Error closing TCP socket: {}", e.getMessage(), e);
-					throw e;
-				} finally {
-					socket = null;
-				}
-			}
-		} finally {
-			lock.unlock();
 		}
 	}
 }

@@ -14,6 +14,7 @@ import org.keinus.logparser.domain.model.LogEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
+import org.springframework.core.annotation.Order;
 
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -36,12 +37,15 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
+@Order(2)
 public class InputAdapterComponent implements ApplicationListener<ApplicationReadyEvent> {
+    private static final String INPUT_THREAD_PREFIX = "InputAdapter-";
+
     /**
      * input adapter map
      */
     private final java.util.concurrent.ConcurrentHashMap<Long, InputAdapter> adapterMap = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final AtomicBoolean running = new AtomicBoolean(true);
+    private final AtomicBoolean running = new AtomicBoolean(false);
     private final ThreadManager threadManager;
     private final MessageDispatcher dispatcher;
     private final ApplicationProperties appProp;
@@ -57,6 +61,18 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     }
 
     private void initializeInputAdapters() {
+        if (!adapterMap.isEmpty()) {
+            log.info("Resetting {} previously registered input adapters before initialization", adapterMap.size());
+            for (InputAdapter adapter : List.copyOf(adapterMap.values())) {
+                try {
+                    adapter.close();
+                } catch (IOException e) {
+                    log.warn("Failed to close stale input adapter {}", adapter, e);
+                }
+            }
+            clearAdapterRegistry();
+        }
+
         List<InputAdapterConfig> inputConfigs = appProp.getInput();
         log.info("Initializing input adapters. Config count: {}",
                 inputConfigs == null ? "null" : inputConfigs.size());
@@ -91,6 +107,11 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     }
 
     public void startPipeline() {
+        if (!running.compareAndSet(false, true)) {
+            log.info("Input adapters already running");
+            return;
+        }
+
         log.info("=== Starting Input Adapters ===");
 
         // Initialize adapters from ApplicationProperties (after all beans are ready)
@@ -103,7 +124,6 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
             return;
         }
 
-        running.set(true);
         for (InputAdapter adapter : adapterMap.values()) {
             startAdapterThread(adapter);
         }
@@ -111,7 +131,7 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     }
 
     private void startAdapterThread(InputAdapter adapter) {
-        String threadName = "InputAdapter-" + adapter.getId() + "-" + adapter.getMessageType();
+        String threadName = getThreadName(adapter);
         log.info("Starting thread for adapter: {}", threadName);
 
         Runnable lamda = () -> this.processInputAdapter(adapter);
@@ -124,14 +144,19 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     }
 
     public void addAdapter(InputAdapterConfig config) {
-        if (!config.getEnabled().booleanValue()) {
+        if (!Boolean.TRUE.equals(config.getEnabled())) {
             log.info("Adapter is disabled, skipping start: {}", config.getMessagetype());
             return;
         }
         try {
+            if (config.getId() != null && adapterMap.containsKey(config.getId())) {
+                removeAdapter(config.getId());
+            }
             InputAdapter adapter = InputFactory.getInputAdapter(config);
             adapterMap.put(adapter.getId(), adapter);
-            startAdapterThread(adapter);
+            if (running.get()) {
+                startAdapterThread(adapter);
+            }
             log.info("Added and started input adapter: id={}, type={}", adapter.getId(), adapter.getMessageType());
         } catch (Exception e) {
             log.error("Failed to add input adapter", e);
@@ -142,10 +167,10 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     public void removeAdapter(Long id) {
         InputAdapter adapter = adapterMap.remove(id);
         if (adapter != null) {
-            String threadName = "InputAdapter-" + adapter.getId() + "-" + adapter.getMessageType();
+            String threadName = getThreadName(adapter);
             try {
-                threadManager.stopThread(threadName);
                 adapter.close();
+                threadManager.stopThread(threadName);
                 log.info("Stopped and removed input adapter: id={}", id);
             } catch (Exception e) {
                 log.error("Error stopping input adapter: id={}", id, e);
@@ -227,8 +252,12 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
     }
 
     public void close() {
-        running.set(false);
-        for (InputAdapter adapter : adapterMap.values()) {
+        if (!running.compareAndSet(true, false)) {
+            log.debug("InputAdapterComponent already stopped");
+        }
+
+        List<InputAdapter> adapters = List.copyOf(adapterMap.values());
+        for (InputAdapter adapter : adapters) {
             try {
                 adapter.close();
                 log.info("InputAdapter {} closed", adapter.getClass().getSimpleName());
@@ -236,5 +265,23 @@ public class InputAdapterComponent implements ApplicationListener<ApplicationRea
                 log.error("Failed to close InputAdapter", e);
             }
         }
+        threadManager.stopThreadsStartingWith(INPUT_THREAD_PREFIX, 10_000);
+        clearAdapterRegistry();
+    }
+
+    int getRegisteredAdapterCount() {
+        return adapterMap.size();
+    }
+
+    java.util.Set<Long> getRegisteredAdapterIds() {
+        return java.util.Set.copyOf(adapterMap.keySet());
+    }
+
+    private void clearAdapterRegistry() {
+        adapterMap.clear();
+    }
+
+    private String getThreadName(InputAdapter adapter) {
+        return INPUT_THREAD_PREFIX + adapter.getId() + "-" + adapter.getMessageType();
     }
 }

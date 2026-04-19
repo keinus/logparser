@@ -4,8 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.keinus.logparser.application.pipeline.PipelineReloadService;
+import org.keinus.logparser.application.pipeline.OutputAdapterComponent;
 import org.keinus.logparser.application.service.ThreadMonitoringService;
 import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
+import org.keinus.logparser.interfaces.dto.response.OutputAdapterMetricsDto;
 import org.keinus.logparser.interfaces.dto.response.PipelineTopologyDto;
 import org.keinus.logparser.interfaces.dto.response.ThreadDetailDto;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ import java.util.Map;
 public class PipelineController {
 
     private final PipelineReloadService pipelineReloadService;
+    private final OutputAdapterComponent outputAdapterComponent;
     private final ThreadMonitoringService threadMonitoringService;
     private final ConfigManagementService configManagementService;
     private final org.keinus.logparser.application.service.LiveTailService liveTailService;
@@ -51,6 +54,14 @@ public class PipelineController {
     public ResponseEntity<PipelineReloadService.PipelineStatusInfo> getPipelineStatus() {
         PipelineReloadService.PipelineStatusInfo status = pipelineReloadService.getPipelineStatus();
         return ResponseEntity.ok(status);
+    }
+
+    @GetMapping("/output-metrics")
+    public ResponseEntity<List<OutputAdapterMetricsDto>> getOutputMetrics() {
+        List<OutputAdapterMetricsDto> metrics = outputAdapterComponent.getAdapterMetrics().stream()
+                .map(OutputAdapterMetricsDto::from)
+                .toList();
+        return ResponseEntity.ok(metrics);
     }
 
     @PostMapping("/reload")

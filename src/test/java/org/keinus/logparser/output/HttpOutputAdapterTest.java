@@ -1,38 +1,40 @@
 package org.keinus.logparser.output;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.output.model.HttpOutputAdapter;
+import org.keinus.logparser.domain.output.model.OutputDeliveryException;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * HttpOutputAdapter 클래스의 단위 테스트
- *
- * 테스트 대상 함수들:
- * - HttpOutputAdapter(Map<String, String>) : 생성자 테스트
- * - send(LogEvent) : 기본 전송 기능 테스트
- * - close() : 리소스 정리 테스트
- */
 class HttpOutputAdapterTest {
 
-    private Map<String, String> validConfig;
+    private final Map<String, String> validConfig = new HashMap<>();
     private HttpOutputAdapter adapter;
-    private int testPort = 19083; // 테스트용 포트
 
-    @BeforeEach
-    void setUp() {
-        validConfig = new HashMap<>();
-        validConfig.put("url", "http://localhost:" + testPort + "/api/logs");
+    HttpOutputAdapterTest() {
         validConfig.put("messagetype", "http-output");
         validConfig.put("add_origin_text", "false");
+        validConfig.put("timeoutMs", "5000");
     }
 
     @AfterEach
@@ -45,101 +47,203 @@ class HttpOutputAdapterTest {
     @Test
     @DisplayName("생성자 테스트 - 유효한 설정으로 생성")
     void testConstructorWithValidConfig() throws IOException {
-        // When & Then
-        assertDoesNotThrow(() -> {
-            adapter = new HttpOutputAdapter(validConfig);
-        });
+        try (StubHttpServer server = StubHttpServer.success()) {
+            validConfig.put("url", server.url("/api/logs"));
+            assertDoesNotThrow(() -> adapter = new HttpOutputAdapter(validConfig));
+        }
     }
 
     @Test
     @DisplayName("생성자 테스트 - null 설정으로 생성 시 예외 발생")
     void testConstructorWithNullConfig() {
-        // When & Then
         assertThrows(IOException.class, () -> new HttpOutputAdapter(null));
     }
 
     @Test
     @DisplayName("생성자 테스트 - URL 누락 시 예외 발생")
     void testConstructorWithMissingUrl() {
-        // Given
-        validConfig.remove("url");
-
-        // When & Then
         assertThrows(IOException.class, () -> new HttpOutputAdapter(validConfig));
     }
 
     @Test
     @DisplayName("생성자 테스트 - 잘못된 URL 형식")
     void testConstructorWithInvalidUrl() {
-        // Given
         validConfig.put("url", "invalid-url-format");
-
-        // When & Then
         assertThrows(IOException.class, () -> new HttpOutputAdapter(validConfig));
     }
 
     @Test
-    @DisplayName("생성자 테스트 - 포트가 없는 URL")
-    void testConstructorWithUrlNoPort() throws IOException {
-        // Given
-        validConfig.put("url", "http://localhost:80/api/logs"); // 명시적으로 80 포트 추가
-
-        // When
-        adapter = new HttpOutputAdapter(validConfig);
-
-        // Then
-        assertNotNull(adapter);
-        assertEquals("http-output", adapter.getMessageType());
+    @DisplayName("생성자 테스트 - HTTPS URL 허용")
+    void testConstructorWithHttpsUrl() {
+        validConfig.put("url", "https://example.com/api/logs");
+        assertDoesNotThrow(() -> adapter = new HttpOutputAdapter(validConfig));
     }
 
     @Test
-    @DisplayName("getType() 테스트 - 메시지 타입 반환")
-    void testGetType() throws IOException {
-        // Given
-        adapter = new HttpOutputAdapter(validConfig);
+    @DisplayName("send() 테스트 - method, headers, origin_text를 반영한다")
+    void testSendUsesConfiguredMethodHeadersAndOriginText() throws Exception {
+        try (StubHttpServer server = StubHttpServer.success()) {
+            validConfig.put("url", server.url("/api/logs"));
+            validConfig.put("method", "PUT");
+            validConfig.put("headers", "{\"X-Test-Header\":\"enabled\"}");
+            validConfig.put("add_origin_text", "true");
+            adapter = new HttpOutputAdapter(validConfig);
 
-        // When
-        String type = adapter.getMessageType();
+            LogEvent logEvent = new LogEvent("test log", "localhost", "test");
+            logEvent.setField("level", "INFO");
 
-        // Then
-        assertEquals("http-output", type);
-    }
+            assertDoesNotThrow(() -> adapter.send(logEvent));
+            server.awaitRequest();
 
-    @Test
-    @DisplayName("close() 테스트 - 리소스 정리")
-    void testClose() throws IOException {
-        // Given
-        adapter = new HttpOutputAdapter(validConfig);
-
-        // When & Then
-        assertDoesNotThrow(() -> adapter.close());
-    }
-
-    @Test
-    @DisplayName("send() 테스트 - 기본 동작")
-    void testSendBasicOperation() throws IOException {
-        // Given
-        adapter = new HttpOutputAdapter(validConfig);
-
-        LogEvent logEvent = new LogEvent("test log", "localhost", "test");
-        logEvent.setField("level", "INFO");
-
-        // When & Then
-        // send() 메서드는 네트워크 연결이 필요하므로 예외가 발생하지 않는지만 확인
-        assertDoesNotThrow(() -> adapter.send(logEvent));
+            assertTrue(server.getRequestLine().startsWith("PUT /api/logs HTTP/1.1"));
+            assertEquals("enabled", server.getHeaders().get("x-test-header"));
+            assertTrue(server.getBody().contains("\"origin_text\":\"test log\""));
+            assertTrue(server.getBody().contains("\"level\":\"INFO\""));
+        }
     }
 
     @Test
     @DisplayName("send() 테스트 - 서버 연결 실패")
     void testSendConnectionFailure() throws IOException {
-        // Given
-        validConfig.put("url", "http://localhost:19999/api/logs"); // 존재하지 않는 포트
+        validConfig.put("url", "http://localhost:19999/api/logs");
         adapter = new HttpOutputAdapter(validConfig);
 
         LogEvent logEvent = new LogEvent("test log", "localhost", "test");
 
-        // When & Then
-        assertDoesNotThrow(() -> adapter.send(logEvent));
-        // 연결 실패 시에도 예외가 발생하지 않아야 함 (내부에서 처리)
+        assertThrows(OutputDeliveryException.class, () -> adapter.send(logEvent));
+    }
+
+    @Test
+    @DisplayName("send() 테스트 - non-2xx 응답이면 실패")
+    void testSendNon2xxResponse() throws Exception {
+        try (StubHttpServer server = StubHttpServer.error(500)) {
+            validConfig.put("url", server.url("/api/logs"));
+            adapter = new HttpOutputAdapter(validConfig);
+
+            LogEvent logEvent = new LogEvent("test log", "localhost", "test");
+
+            assertThrows(OutputDeliveryException.class, () -> adapter.send(logEvent));
+            server.awaitRequest();
+        }
+    }
+
+    @Test
+    @DisplayName("close() 테스트 - 리소스 정리")
+    void testClose() throws IOException {
+        validConfig.put("url", "https://example.com/api/logs");
+        adapter = new HttpOutputAdapter(validConfig);
+        assertDoesNotThrow(() -> adapter.close());
+    }
+
+    private static final class StubHttpServer implements AutoCloseable {
+        private final ServerSocket serverSocket;
+        private final Thread serverThread;
+        private final CountDownLatch requestLatch = new CountDownLatch(1);
+        private final int statusCode;
+        private volatile IOException serverError;
+        private volatile String requestLine;
+        private final Map<String, String> headers = new LinkedHashMap<>();
+        private volatile String body = "";
+
+        private StubHttpServer(int statusCode) throws IOException {
+            this.serverSocket = new ServerSocket(0);
+            this.statusCode = statusCode;
+            this.serverThread = Thread.ofPlatform().start(this::serveOnce);
+        }
+
+        static StubHttpServer success() throws IOException {
+            return new StubHttpServer(200);
+        }
+
+        static StubHttpServer error(int statusCode) throws IOException {
+            return new StubHttpServer(statusCode);
+        }
+
+        String url(String path) {
+            return "http://localhost:" + serverSocket.getLocalPort() + path;
+        }
+
+        void awaitRequest() throws Exception {
+            boolean received = requestLatch.await(5, TimeUnit.SECONDS);
+            if (!received) {
+                throw new AssertionError("HTTP request was not received by stub server");
+            }
+            if (serverError != null) {
+                throw serverError;
+            }
+        }
+
+        String getRequestLine() {
+            return requestLine;
+        }
+
+        Map<String, String> getHeaders() {
+            return headers;
+        }
+
+        String getBody() {
+            return body;
+        }
+
+        private void serveOnce() {
+            try (Socket socket = serverSocket.accept()) {
+                socket.setSoTimeout(5000);
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8)
+                );
+                requestLine = reader.readLine();
+
+                int contentLength = 0;
+                String line;
+                while ((line = reader.readLine()) != null && !line.isEmpty()) {
+                    int separatorIndex = line.indexOf(':');
+                    if (separatorIndex > 0) {
+                        String headerName = line.substring(0, separatorIndex).trim().toLowerCase();
+                        String headerValue = line.substring(separatorIndex + 1).trim();
+                        headers.put(headerName, headerValue);
+                        if ("content-length".equals(headerName)) {
+                            contentLength = Integer.parseInt(headerValue);
+                        }
+                    }
+                }
+
+                char[] buffer = new char[Math.max(contentLength, 1)];
+                int offset = 0;
+                while (offset < contentLength) {
+                    int read = reader.read(buffer, offset, contentLength - offset);
+                    if (read == -1) {
+                        break;
+                    }
+                    offset += read;
+                }
+                body = new String(buffer, 0, offset);
+
+                byte[] response = (
+                        "HTTP/1.1 " + statusCode + " Test\r\n" +
+                        "Content-Length: 0\r\n" +
+                        "Connection: close\r\n" +
+                        "\r\n"
+                ).getBytes(StandardCharsets.UTF_8);
+
+                OutputStream outputStream = socket.getOutputStream();
+                outputStream.write(response);
+                outputStream.flush();
+                requestLatch.countDown();
+            } catch (IOException e) {
+                serverError = e;
+                requestLatch.countDown();
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            serverSocket.close();
+            try {
+                serverThread.join(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while stopping stub server", e);
+            }
+        }
     }
 }

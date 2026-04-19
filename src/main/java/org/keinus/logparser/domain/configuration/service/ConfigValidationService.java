@@ -196,10 +196,18 @@ public class ConfigValidationService {
         Set<String> inputMessageTypes = new HashSet<>();
         Set<String> parserMessageTypes = new HashSet<>();
         Set<String> outputMessageTypes = new HashSet<>();
+        boolean hasGlobalOutput = false;
 
         inputAdapters.forEach(ia -> inputMessageTypes.add(ia.getMessagetype()));
         parsers.forEach(p -> parserMessageTypes.add(p.getMessagetype()));
-        outputAdapters.forEach(oa -> outputMessageTypes.add(oa.getMessagetype()));
+        for (OutputAdapterEntity outputAdapter : outputAdapters) {
+            String messageType = outputAdapter.getMessagetype();
+            if (isGlobalOutputType(messageType)) {
+                hasGlobalOutput = true;
+                continue;
+            }
+            outputMessageTypes.add(messageType);
+        }
 
         // Validate: Each input message type should have at least one parser (warning only)
         for (String inputMsgType : inputMessageTypes) {
@@ -210,7 +218,7 @@ public class ConfigValidationService {
 
         // Validate: Each parser message type should have at least one output
         for (String parserMsgType : parserMessageTypes) {
-            if (!outputMessageTypes.contains(parserMsgType)) {
+            if (!hasGlobalOutput && !outputMessageTypes.contains(parserMsgType)) {
                 warnings.add(String.format("Parser message type '%s' has no corresponding output adapter", parserMsgType));
             }
         }
@@ -238,6 +246,10 @@ public class ConfigValidationService {
                 isValid, errors.size(), warnings.size());
 
         return new PipelineIntegrityResult(isValid, errors, warnings);
+    }
+
+    private boolean isGlobalOutputType(String messageType) {
+        return messageType != null && "all".equalsIgnoreCase(messageType.trim());
     }
 
     // ==================== Error Management ====================

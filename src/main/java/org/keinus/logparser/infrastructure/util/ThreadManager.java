@@ -117,6 +117,10 @@ public class ThreadManager extends ThreadPoolExecutor {
      * @return 중지 요청된 스레드 수
      */
     public int stopThreadsStartingWith(String prefix) {
+        return stopThreadsStartingWith(prefix, 10_000);
+    }
+
+    public int stopThreadsStartingWith(String prefix, long timeoutMs) {
         if (prefix == null || prefix.isEmpty()) {
             return 0;
         }
@@ -136,24 +140,26 @@ public class ThreadManager extends ThreadPoolExecutor {
             }
         }
 
-        // 2. 종료 대기(최대 10초) 주석 처리. JVM의 종료 대기가 너무 길어서 이미 코드 레벨에서 종료를 보장하여 아래 대기 상태 체크를 하지 않고 넘어가기로 함.
-        // long timeoutMs = 10000;
-        // for (Thread thread : targetThreads) {
-        //     try {
-        //         if (thread.isAlive()) {
-        //             thread.join(timeoutMs);
-        //         }
-                
-        //         if (thread.isAlive()) {
-        //             LOGGER.warn("Thread {} did not finish within {} ms", thread.getName(), timeoutMs);
-        //         } else {
-        //             count++;
-        //         }
-        //     } catch (InterruptedException e) {
-        //         Thread.currentThread().interrupt();
-        //         LOGGER.error("Interrupted while waiting for thread {} to finish", thread.getName(), e);
-        //     }
-        // }
+        long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
+        for (Thread thread : targetThreads) {
+            try {
+                while (thread.isAlive()) {
+                    long remainingMs = deadline - System.currentTimeMillis();
+                    if (remainingMs <= 0) {
+                        LOGGER.warn("Thread {} did not finish within {} ms", thread.getName(), timeoutMs);
+                        break;
+                    }
+                    thread.join(Math.min(remainingMs, 1_000));
+                }
+                if (!thread.isAlive()) {
+                    count++;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                LOGGER.error("Interrupted while waiting for thread {} to finish", thread.getName(), e);
+                break;
+            }
+        }
 
         LOGGER.info("Stopped {} threads starting with '{}'", count, prefix);
         return count;

@@ -7,8 +7,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.HashMap;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,8 +31,11 @@ import org.keinus.logparser.domain.model.LogEvent;
 @Slf4j
 public class HttpInputAdapter extends InputAdapter {
 	private static final int MAX_CONTENT_LENGTH = 10 * 1024 * 1024; // 10MB
+	private static final int READ_BUFFER_SIZE = 8192;
+	private static final String LINE_SEPARATOR = System.lineSeparator();
 
 	private ServerSocket serverSocket;
+	private final String localHostAddress;
 
 	public HttpInputAdapter(InputAdapterConfig config) throws IOException {
 		super(config);
@@ -43,96 +45,81 @@ public class HttpInputAdapter extends InputAdapter {
 			}
 			int port = config.getPort();
 			serverSocket = new ServerSocket(port);
+			localHostAddress = InetAddress.getLocalHost().getHostAddress();
 
 			log.info("HTTP Input Adapter start at port {}", port);
 		} catch (IOException e) {
-			log.error(e.getMessage());
+			log.error("Failed to initialize HTTP input adapter: {}", e.getMessage(), e);
+			throw e;
 		}
 	}
 
-	private Object[] read(Socket socket) throws IOException {
-		char[] buffer = new char[1024];
-		StringBuilder sb = new StringBuilder();
-		Map<String, String> headers = new HashMap<>();
-		try (BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+	private String read(Socket socket) throws IOException {
+		StringBuilder sb = new StringBuilder(READ_BUFFER_SIZE);
+		try (BufferedReader br = new BufferedReader(
+				new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
 			String line;
-			int readed;
-			int rc;
+			int remaining = 0;
 
 			// Read request line
 			line = br.readLine();
+			if (line == null) {
+				return "";
+			}
 			sb.append(line);
-			sb.append(System.getProperty("line.separator"));
+			sb.append(LINE_SEPARATOR);
 
 			while ((line = br.readLine()) != null) {
 				sb.append(line);
-				sb.append(System.getProperty("line.separator"));
+				sb.append(LINE_SEPARATOR);
 				if (line.equals(""))
 					break;
-				if (line.contains(":")) {
-					String[] split = line.split(":", 2);
-					if (split.length >= 2) {
-						headers.put(split[0].toUpperCase().trim(), split[1].toUpperCase().trim());
+				if (line.regionMatches(true, 0, "Content-Length:", 0, "Content-Length:".length())) {
+					String contentLengthStr = line.substring("Content-Length:".length()).trim();
+					try {
+						remaining = Integer.parseInt(contentLengthStr);
+						if (remaining < 0 || remaining > MAX_CONTENT_LENGTH) {
+							throw new SecurityException("Content-Length 값이 허용 범위를 벗어남: " + remaining);
+						}
+					} catch (NumberFormatException e) {
+						log.error("Invalid Content-Length header: {}", contentLengthStr);
+						throw new IllegalArgumentException("Invalid Content-Length format", e);
 					}
-				}
-			}
-			// Content-Length 검증 및 파싱
-			int contentLength = 0;
-			String contentLengthStr = headers.get("CONTENT-LENGTH");
-			if (contentLengthStr != null) {
-				try {
-					contentLength = Integer.parseInt(contentLengthStr);
-					// 최대 10MB 제한
-					if (contentLength < 0 || contentLength > MAX_CONTENT_LENGTH) {
-						throw new SecurityException("Content-Length 값이 허용 범위를 벗어남: " + contentLength);
-					}
-				} catch (NumberFormatException e) {
-					log.error("Invalid Content-Length header: {}", contentLengthStr);
-					throw new IllegalArgumentException("Invalid Content-Length format", e);
 				}
 			}
 
-			if (contentLength > 0) {
-				readed = 0;
-				while ((rc = br.read(buffer, 0, 1024)) != -1) {
-					readed += rc;
-					sb.append(new String(buffer, 0, rc));
-					if (readed >= contentLength)
+			if (remaining > 0) {
+				char[] buffer = new char[Math.min(remaining, READ_BUFFER_SIZE)];
+				int expectedLength = remaining;
+				while (remaining > 0) {
+					int rc = br.read(buffer, 0, Math.min(remaining, buffer.length));
+					if (rc == -1) {
 						break;
+					}
+					sb.append(buffer, 0, rc);
+					remaining -= rc;
 				}
 
-				// 실제 읽은 데이터와 Content-Length 일치 검증
-				if (readed != contentLength) {
-					log.warn("Content-Length mismatch: expected {}, actual {}", contentLength, readed);
+				if (remaining != 0) {
+					log.warn("Content-Length mismatch: expected {}, actual {}", expectedLength, expectedLength - remaining);
 				}
 			}
 
 		}
-		return new Object[] { headers, sb.toString() };
+		return sb.toString();
 	}
 
 	@Override
 	public LogEvent run() {
 		if (serverSocket == null)
 			return null;
-		String msg = null;
 		try (Socket socket = serverSocket.accept()) {
-			var content = read(socket);
-			msg = (String) content[1];
+			String msg = read(socket);
+			return createLogEvent(msg, localHostAddress);
 		} catch (IOException e) {
 			log.error("Failed to read HTTP request: {}", e.getMessage(), e);
 			return null;
 		}
-
-		String host = null;
-		try {
-			host = InetAddress.getLocalHost().getHostAddress();
-		} catch (UnknownHostException e) {
-			log.warn("Failed to get local host address: {}", e.getMessage());
-			host = "Unknown";
-		}
-
-		return createLogEvent(msg, host);
 	}
 
 	@Override

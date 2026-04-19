@@ -38,6 +38,10 @@ public class BenchmarkAdapter extends OutputAdapter {
 
 	@Override
 	public void send(LogEvent logEvent) {
+		if (closed.get()) {
+			throw deliveryFailure("Adapter is closed");
+		}
+
 		intervalCounter++;
 		
 		long now = System.currentTimeMillis();

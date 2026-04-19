@@ -26,6 +26,9 @@ import lombok.Getter;
  * @see org.keinus.logparser.core.dispatch.OutputAdapterProcedure
  */
 public abstract class OutputAdapter implements Closeable {
+	private static final int DEFAULT_TIMEOUT_MS = 30_000;
+	private static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
+
 	@Getter
 	private Long id;
 	@Getter
@@ -34,7 +37,11 @@ public abstract class OutputAdapter implements Closeable {
 	@Getter
 	private String type = "";
 
-	protected final ObjectMapper objectMapper;
+	@Getter
+	private final int timeoutMs;
+
+	@Getter
+	private final boolean addOriginText;
 
 	protected OutputAdapter(Map<String, String> obj) throws IOException {
 		if (obj == null) {
@@ -45,12 +52,11 @@ public abstract class OutputAdapter implements Closeable {
 		if (obj.containsKey("id")) {
 			this.id = Long.parseLong(obj.get("id"));
 		}
-		this.type = obj.getOrDefault("messagetype", null);
+		String messageType = obj.get("messagetype");
+		this.type = (messageType == null || messageType.isBlank()) ? "all" : messageType;
 		this.name = getClass().getSimpleName() + ":" + obj.toString();
-
-		this.objectMapper = new ObjectMapper();
-		this.objectMapper.registerModule(new JavaTimeModule());
-		this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+		this.timeoutMs = parseTimeout(obj.get("timeoutMs"));
+		this.addOriginText = Boolean.parseBoolean(obj.getOrDefault("add_origin_text", "false"));
 	}
 
 	public String getMessageType() {
@@ -58,13 +64,60 @@ public abstract class OutputAdapter implements Closeable {
 	}
 
 	public abstract void send(LogEvent logEvent);
-	
+
+	protected String serializeEvent(LogEvent logEvent) {
+		try {
+			return logEvent.toOutputJson(addOriginText);
+		} catch (RuntimeException e) {
+			throw deliveryFailure("Failed to serialize output payload", e);
+		}
+	}
+
+	protected Map<String, Object> outputMap(LogEvent logEvent) {
+		try {
+			return logEvent.toOutputMap(addOriginText);
+		} catch (RuntimeException e) {
+			throw deliveryFailure("Failed to create output payload", e);
+		}
+	}
+
 	protected String toJson(Object value) {
 		try {
-			return objectMapper.writeValueAsString(value);
+			return OBJECT_MAPPER.writeValueAsString(value);
 		} catch (JsonProcessingException e) {
-			return "{}";
+			throw deliveryFailure("Failed to serialize output payload", e);
 		}
+	}
+
+	protected OutputDeliveryException deliveryFailure(String message) {
+		return new OutputDeliveryException(getClass().getSimpleName() + ": " + message);
+	}
+
+	protected OutputDeliveryException deliveryFailure(String message, Throwable cause) {
+		return new OutputDeliveryException(getClass().getSimpleName() + ": " + message, cause);
+	}
+
+	private int parseTimeout(String timeoutValue) throws IOException {
+		if (timeoutValue == null || timeoutValue.isBlank()) {
+			return DEFAULT_TIMEOUT_MS;
+		}
+
+		try {
+			int parsedTimeout = Integer.parseInt(timeoutValue);
+			if (parsedTimeout <= 0) {
+				throw new IOException("timeoutMs must be greater than zero");
+			}
+			return parsedTimeout;
+		} catch (NumberFormatException e) {
+			throw new IOException("Invalid timeoutMs value: " + timeoutValue, e);
+		}
+	}
+
+	private static ObjectMapper createObjectMapper() {
+		ObjectMapper mapper = new ObjectMapper();
+		mapper.registerModule(new JavaTimeModule());
+		mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+		return mapper;
 	}
 
 	@Override

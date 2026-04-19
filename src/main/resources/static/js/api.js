@@ -232,6 +232,10 @@ const pipelineAPI = {
     getThreads() {
         return api.get('/pipeline/threads');
     },
+
+    getOutputMetrics() {
+        return api.get('/pipeline/output-metrics');
+    },
     
     getTopology() {
         return api.get('/pipeline/topology');

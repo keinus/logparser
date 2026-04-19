@@ -1,5 +1,7 @@
 package org.keinus.logparser.domain.configuration.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.domain.configuration.model.*;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Transactional
 public class ConfigManagementService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final InputAdapterRepository inputAdapterRepository;
     private final ParserRepository parserRepository;
@@ -542,12 +545,12 @@ public class ConfigManagementService {
         OutputAdapterConfig config = new OutputAdapterConfig();
         config.setId(entity.getId());
         config.setType(entity.getType());
-        config.setMessagetype(entity.getMessagetype());
+        config.setMessagetype(normalizeOutputMessageType(entity.getMessagetype()));
         config.setHost(entity.getHost());
         config.setPort(entity.getPort());
         config.setUrl(entity.getUrl());
         config.setMethod(entity.getMethod());
-        // config.setHeaders(...) - Map conversion needed if stored as JSON/String
+        config.setHeaders(readJson(entity.getHeaders(), new TypeReference<Map<String, String>>() {}));
         config.setTopicid(entity.getTopicid());
         config.setBootstrapservers(entity.getBootstrapservers());
         config.setKey(entity.getKey());
@@ -560,6 +563,7 @@ public class ConfigManagementService {
         config.setRmqUsername(entity.getRmqUsername());
         config.setRmqPassword(entity.getRmqPassword());
         config.setRmqPort(entity.getRmqPort());
+        config.setTagpass(readJson(entity.getTagpass(), new TypeReference<Map<String, List<String>>>() {}));
         config.setBatchSize(entity.getBatchSize());
         config.setFlushIntervalMs(entity.getFlushIntervalMs());
         config.setRetryCount(entity.getRetryCount());
@@ -587,7 +591,28 @@ public class ConfigManagementService {
         config.setId(entity.getId());
         config.setType(entity.getType());
         config.setMessagetype(entity.getMessagetype());
+        config.setPriority(entity.getPriority());
         // Param conversion is complex, skipped for now as event might just need basic info or trigger reload
         return config;
+    }
+
+    private <T> T readJson(String rawValue, TypeReference<T> typeReference) {
+        if (rawValue == null || rawValue.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            return OBJECT_MAPPER.readValue(rawValue, typeReference);
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON configuration value: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private String normalizeOutputMessageType(String messageType) {
+        if (messageType == null || messageType.isBlank()) {
+            return "all";
+        }
+        return messageType;
     }
 }

@@ -44,6 +44,18 @@ public class StructuredTransformService {
     public void reload() {
         log.info("Reloading StructuredTransformService configuration cache");
         configCache.clear();
+        conditionEvaluator.clearCache();
+    }
+
+    public void invalidateCache(String messageType) {
+        if (messageType == null || messageType.isBlank()) {
+            reload();
+            return;
+        }
+
+        log.info("Invalidating structured transform cache for messageType={}", messageType);
+        configCache.remove(messageType);
+        conditionEvaluator.clearCache();
     }
 
     /**

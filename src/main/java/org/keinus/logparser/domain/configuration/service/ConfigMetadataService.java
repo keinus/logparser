@@ -50,8 +50,7 @@ public class ConfigMetadataService {
         return Arrays.asList(
                 new TransformTypeInfo("Filter", "Filter Transform", "Filter messages based on conditions"),
                 new TransformTypeInfo("AddProperty", "Add Property", "Add fields to messages"),
-                new TransformTypeInfo("RemoveProperty", "Remove Property", "Remove fields from messages"),
-                new TransformTypeInfo("Structure", "Structure (Logical Schema)", "Map raw fields to structured domain schema")
+                new TransformTypeInfo("RemoveProperty", "Remove Property", "Remove fields from messages")
         );
     }
 
@@ -187,7 +186,7 @@ public class ConfigMetadataService {
     }
 
     public List<String> getSupportedHttpMethods() {
-        return Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE");
+        return Arrays.asList("POST", "PUT", "PATCH");
     }
 
     // ==================== Inner Classes ====================

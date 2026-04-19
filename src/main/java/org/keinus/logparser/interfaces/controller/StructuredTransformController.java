@@ -54,6 +54,7 @@ public class StructuredTransformController {
     @PostMapping("/mapping")
     public ResponseEntity<Void> saveMapping(@RequestBody MappingConfiguration config) {
         mappingRepository.save(config);
+        transformService.invalidateCache(config.getMessageType());
         return ResponseEntity.ok().build();
     }
 

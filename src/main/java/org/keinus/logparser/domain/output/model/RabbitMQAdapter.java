@@ -43,7 +43,21 @@ public class RabbitMQAdapter extends OutputAdapter {
 	private final AtomicBoolean closed = new AtomicBoolean(false);
 
 	public RabbitMQAdapter(Map<String, String> obj) throws IOException {
+		this(obj, null, null);
+	}
+
+	RabbitMQAdapter(Map<String, String> obj, Connection connection, Channel channel) throws IOException {
 		super(obj);
+		routingkey = obj.get("routingkey");
+		exchange = obj.get("exchange");
+
+		if (connection != null || channel != null) {
+			this.connection = connection;
+			this.channel = channel;
+			log.info("RabbitMQ adapter initialized with injected connection/channel for exchange: {}", exchange);
+			return;
+		}
+
 		ConnectionFactory factory = new ConnectionFactory();
 		factory.setHost(obj.get("host"));
 		factory.setUsername(obj.get("username"));
@@ -51,13 +65,12 @@ public class RabbitMQAdapter extends OutputAdapter {
 		factory.setPort(Integer.parseInt(obj.get("port")));
 		factory.setConnectionTimeout(10000); // 10초 연결 타임아웃
 		factory.setHandshakeTimeout(10000); // 10초 핸드셰이크 타임아웃
-		routingkey = obj.get("routingkey");
-		exchange = obj.get("exchange");
 
 		try {
-			connection = factory.newConnection();
-			channel = connection.createChannel();
-			channel.exchangeDeclare(exchange, BuiltinExchangeType.TOPIC);
+			this.connection = factory.newConnection();
+			this.channel = this.connection.createChannel();
+			this.channel.confirmSelect();
+			this.channel.exchangeDeclare(exchange, BuiltinExchangeType.TOPIC);
 			log.info("RabbitMQ adapter initialized for exchange: {}", exchange);
 		} catch (IOException | TimeoutException e) {
 			log.error("Failed to initialize RabbitMQ connection: {}", e.getMessage());
@@ -123,17 +136,21 @@ public class RabbitMQAdapter extends OutputAdapter {
 
 	@Override
 	public void send(LogEvent logEvent) {
-		String jsonString = toJson(logEvent.toOutputMap());
+		String jsonString = serializeEvent(logEvent);
 		lock.lock();
 		try {
-			if (channel != null) {
-				try {
-					channel.basicPublish(exchange, routingkey, null, jsonString.getBytes(StandardCharsets.UTF_8));
-				} catch (IOException e) {
-					log.error("Failed to publish message to RabbitMQ: {}", e.getMessage());
+			if (channel == null) {
+				throw deliveryFailure("RabbitMQ channel is not initialized");
+			}
+
+			try {
+				channel.basicPublish(exchange, routingkey, null, jsonString.getBytes(StandardCharsets.UTF_8));
+				channel.waitForConfirmsOrDie(getTimeoutMs());
+			} catch (IOException | InterruptedException | TimeoutException e) {
+				if (e instanceof InterruptedException) {
+					Thread.currentThread().interrupt();
 				}
-			} else {
-				log.warn("Cannot send message: RabbitMQ channel is not initialized");
+				throw deliveryFailure("Failed to publish message to RabbitMQ", e);
 			}
 		} finally {
 			lock.unlock();

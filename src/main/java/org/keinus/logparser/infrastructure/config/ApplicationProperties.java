@@ -1,6 +1,7 @@
 package org.keinus.logparser.infrastructure.config;
 
 import java.util.List;
+import java.util.ArrayList;
 import jakarta.annotation.PostConstruct;
 
 import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
@@ -107,6 +108,30 @@ public class ApplicationProperties {
         }
     }
 
+    public synchronized void applyConfiguration(DatabaseConfigLoader.PipelineConfiguration config) {
+        if (config == null) {
+            throw new IllegalArgumentException("Configuration must not be null");
+        }
+
+        this.input = copyList(config.getInput());
+        this.output = copyList(config.getOutput());
+        this.parser = copyList(config.getParser());
+        this.transform = copyList(config.getTransform());
+        this.parserThreads = config.getParserThreads();
+        this.flushInterval = config.getFlushInterval();
+    }
+
+    public synchronized DatabaseConfigLoader.PipelineConfiguration snapshot() {
+        DatabaseConfigLoader.PipelineConfiguration snapshot = new DatabaseConfigLoader.PipelineConfiguration();
+        snapshot.setInput(copyList(input));
+        snapshot.setOutput(copyList(output));
+        snapshot.setParser(copyList(parser));
+        snapshot.setTransform(copyList(transform));
+        snapshot.setParserThreads(parserThreads);
+        snapshot.setFlushInterval(flushInterval);
+        return snapshot;
+    }
+
     public void validateProperties() {
         validateBasicProperties();
         validateRequiredConfigs();
@@ -183,6 +208,13 @@ public class ApplicationProperties {
             }
             index++;
         }
+    }
+
+    private <T> List<T> copyList(List<T> source) {
+        if (source == null) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(source);
     }
 
 }

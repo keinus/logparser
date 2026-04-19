@@ -1,6 +1,7 @@
 package org.keinus.logparser.domain.parse.service;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.Comparator;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -20,24 +21,14 @@ import org.keinus.logparser.infrastructure.config.ApplicationProperties;
 public class ParseService {
     private static final Logger LOGGER = LoggerFactory.getLogger( ParseService.class );
 
-    private MergingHashMap<IParser> parsers = new MergingHashMap<>();
+    private record ParserBinding(IParser parser, boolean continueOnFailure, String parserType) {}
+
+    private MergingHashMap<ParserBinding> parsers = new MergingHashMap<>();
     private final DatabaseConfigLoader databaseConfigLoader;
 
     public ParseService(ApplicationProperties applicationProperties, DatabaseConfigLoader databaseConfigLoader) {
         this.databaseConfigLoader = databaseConfigLoader;
-
-        List<ParserAdapterConfig> parserList = applicationProperties.getParser();
-        for(ParserAdapterConfig parser : parserList) {
-            String parserType = parser.getType();
-            IParser parserInterface = loadLibrary(parserType);
-            if(parserInterface == null) {
-                continue;
-            }
-            parserInterface.init(parser.getParam());
-            var msgType = parser.getMessagetype();
-            parsers.put(msgType, parserInterface);
-            LOGGER.info("Message Parser registered {}", parserType);
-        }
+        this.parsers = buildParsers(applicationProperties.getParser());
     }
 
     /**
@@ -46,33 +37,18 @@ public class ParseService {
     public synchronized void reload() {
         LOGGER.info("Reloading parsers from database");
 
-        // 기존 파서 초기화
-        MergingHashMap<IParser> newParsers = new MergingHashMap<>();
-
         try {
             DatabaseConfigLoader.PipelineConfiguration config = databaseConfigLoader.loadConfiguration();
-            List<ParserAdapterConfig> parserList = config.getParser();
-
-            for(ParserAdapterConfig parser : parserList) {
-                String parserType = parser.getType();
-                IParser parserInterface = loadLibrary(parserType);
-                if(parserInterface == null) {
-                    continue;
-                }
-                parserInterface.init(parser.getParam());
-                var msgType = parser.getMessagetype();
-                newParsers.put(msgType, parserInterface);
-                LOGGER.info("Message Parser reloaded: {}", parserType);
-            }
-
-            // 새 파서로 교체
-            this.parsers = newParsers;
-            LOGGER.info("Parser reload completed: {} parsers loaded", parserList.size());
-
+            reload(config.getParser());
         } catch (Exception e) {
             LOGGER.error("Failed to reload parsers", e);
             throw new RuntimeException("Failed to reload parsers", e);
         }
+    }
+
+    public synchronized void reload(List<ParserAdapterConfig> parserList) {
+        this.parsers = buildParsers(parserList);
+        LOGGER.info("Parser reload completed: {} parsers loaded", parserList == null ? 0 : parserList.size());
     }
 
     private IParser loadLibrary(String parserClassName) {
@@ -104,15 +80,28 @@ public class ParseService {
      */
     public boolean parse(LogEvent logEvent) {
         String messageType = logEvent.getMessageType();
-        List<IParser> parserList = parsers.get(messageType);
+        List<ParserBinding> parserList = parsers.get(messageType);
 
         if (parserList.isEmpty()) {
             return true;
         }
 
-        for(IParser parser : parserList) {
-            if(parser.parse(logEvent)) {
+        for (ParserBinding binding : parserList) {
+            boolean parsed = false;
+            try {
+                parsed = binding.parser().parse(logEvent);
+            } catch (Exception e) {
+                LOGGER.warn("Parser {} failed for messageType {}: {}",
+                        binding.parserType(), messageType, e.getMessage(), e);
+                logEvent.markAsError("Parsing failed: " + e.getMessage());
+            }
+
+            if (parsed) {
                 return true;
+            }
+
+            if (!binding.continueOnFailure()) {
+                return false;
             }
         }
         return false;
@@ -145,5 +134,36 @@ public class ParseService {
         }
         
         return event.getFields();
+    }
+
+    private MergingHashMap<ParserBinding> buildParsers(List<ParserAdapterConfig> parserList) {
+        MergingHashMap<ParserBinding> newParsers = new MergingHashMap<>();
+        if (parserList == null) {
+            return newParsers;
+        }
+
+        List<ParserAdapterConfig> sortedParsers = parserList.stream()
+                .sorted(Comparator
+                        .comparing((ParserAdapterConfig parser) -> parser.getPriority() == null ? Integer.MAX_VALUE : parser.getPriority())
+                        .thenComparing(parser -> parser.getId() == null ? Long.MAX_VALUE : parser.getId()))
+                .toList();
+
+        for (ParserAdapterConfig parser : sortedParsers) {
+            String parserType = parser.getType();
+            IParser parserInterface = loadLibrary(parserType);
+            if (parserInterface == null) {
+                continue;
+            }
+            parserInterface.init(parser.getParam());
+            String msgType = parser.getMessagetype();
+            boolean continueOnFailure = Boolean.TRUE.equals(parser.getContinueOnFailure());
+            newParsers.put(msgType, new ParserBinding(parserInterface, continueOnFailure, parserType));
+            LOGGER.info("Message Parser registered {} (priority={}, continueOnFailure={})",
+                    parserType,
+                    parser.getPriority(),
+                    continueOnFailure);
+        }
+
+        return newParsers;
     }
 }

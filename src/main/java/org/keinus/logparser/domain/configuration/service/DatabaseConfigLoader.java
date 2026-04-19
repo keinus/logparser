@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -120,6 +121,7 @@ public class DatabaseConfigLoader {
             // HTTP settings
             config.setUrl(entity.getUrl());
             config.setMethod(entity.getMethod());
+            config.setHeaders(readJsonMap(entity.getHeaders(), new TypeReference<Map<String, String>>() {}, "headers", entity.getId()));
 
             // Kafka settings
             config.setTopicid(entity.getTopicid());
@@ -138,6 +140,7 @@ public class DatabaseConfigLoader {
             config.setRmqUsername(entity.getRmqUsername());
             config.setRmqPassword(entity.getRmqPassword());
             config.setRmqPort(entity.getRmqPort());
+            config.setTagpass(readJsonMap(entity.getTagpass(), new TypeReference<Map<String, List<String>>>() {}, "tagpass", entity.getId()));
 
             // Performance settings
             config.setBatchSize(entity.getBatchSize());
@@ -149,6 +152,7 @@ public class DatabaseConfigLoader {
             config.setAddOriginText(entity.getAddOriginText());
             config.setEnabled(entity.getEnabled());
             config.setTimeoutMs(entity.getTimeoutMs());
+            config.setMessagetype(normalizeOutputMessageType(entity.getMessagetype()));
 
             configs.add(config);
         }
@@ -157,7 +161,11 @@ public class DatabaseConfigLoader {
     }
 
     private List<ParserAdapterConfig> loadParsers() {
-        List<ParserEntity> entities = configManagementService.getEnabledParsers();
+        List<ParserEntity> entities = configManagementService.getEnabledParsers().stream()
+                .sorted(Comparator
+                        .comparing((ParserEntity entity) -> entity.getPriority() == null ? Integer.MAX_VALUE : entity.getPriority())
+                        .thenComparing(entity -> entity.getId() == null ? Long.MAX_VALUE : entity.getId()))
+                .toList();
         List<ParserAdapterConfig> configs = new ArrayList<>();
 
         for (ParserEntity entity : entities) {
@@ -167,6 +175,7 @@ public class DatabaseConfigLoader {
             config.setMessagetype(entity.getMessagetype());
             config.setParam(entity.getParam());
             config.setPriority(entity.getPriority());
+            config.setContinueOnFailure(entity.getContinueOnFailure());
             configs.add(config);
         }
 
@@ -174,7 +183,11 @@ public class DatabaseConfigLoader {
     }
 
     private List<TransformConfig> loadTransforms() {
-        List<TransformEntity> entities = configManagementService.getEnabledTransforms();
+        List<TransformEntity> entities = configManagementService.getEnabledTransforms().stream()
+                .sorted(Comparator
+                        .comparing((TransformEntity entity) -> entity.getPriority() == null ? Integer.MAX_VALUE : entity.getPriority())
+                        .thenComparing(entity -> entity.getId() == null ? Long.MAX_VALUE : entity.getId()))
+                .toList();
         List<TransformConfig> configs = new ArrayList<>();
 
         for (TransformEntity entity : entities) {
@@ -182,6 +195,7 @@ public class DatabaseConfigLoader {
             config.setId(entity.getId());
             config.setType(entity.getType());
             config.setMessagetype(entity.getMessagetype());
+            config.setPriority(entity.getPriority());
 
             // TransformParamConfig 생성
             TransformParamConfig paramConfig = new TransformParamConfig();
@@ -243,6 +257,26 @@ public class DatabaseConfigLoader {
         }
 
         return configs;
+    }
+
+    private <T> T readJsonMap(String rawValue, TypeReference<T> typeReference, String fieldName, Long entityId) {
+        if (rawValue == null || rawValue.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            return objectMapper.readValue(rawValue, typeReference);
+        } catch (Exception e) {
+            log.warn("Failed to parse {} for output adapter {}: {}", fieldName, entityId, e.getMessage());
+            return null;
+        }
+    }
+
+    private String normalizeOutputMessageType(String messageType) {
+        if (messageType == null || messageType.isBlank()) {
+            return "all";
+        }
+        return messageType;
     }
 
     private void loadCommonSettings(PipelineConfiguration config) {

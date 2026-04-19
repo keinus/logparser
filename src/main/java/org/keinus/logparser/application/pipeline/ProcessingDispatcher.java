@@ -2,8 +2,10 @@ package org.keinus.logparser.application.pipeline;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.keinus.logparser.application.service.LiveTailService;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.domain.parse.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.StructuredTransformService;
@@ -12,41 +14,46 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * ProcessingDispatcher
- * 
- * Consolidates the Parse and Transform stages into a single processing unit.
- * Consumes raw events from inputQueue, parses them, applies transformations,
- * and puts them into outputQueue.
+ * 입력 큐에서 이벤트를 가져와 파싱, 변환, 동기 출력 전송까지 수행하는 워커입니다.
  */
 public class ProcessingDispatcher implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(ProcessingDispatcher.class);
 
     private final BlockingQueue<LogEvent> inputQueue;
-    private final BlockingQueue<LogEvent> outputQueue;
     private final ParseService parseService;
     private final TransformService transformService;
     private final StructuredTransformService structuredTransformService;
-    private final org.keinus.logparser.application.service.LiveTailService liveTailService;
+    private final LiveTailService liveTailService;
+    private final OutputAdapterComponent outputAdapterComponent;
     private final AtomicBoolean running;
+    private final AtomicInteger inFlightMessages;
+    private final AtomicLong totalMessagesDropped;
     private final AtomicLong totalMessagesFailed;
+    private final AtomicLong processedMessageCount;
 
     public ProcessingDispatcher(
             BlockingQueue<LogEvent> inputQueue,
-            BlockingQueue<LogEvent> outputQueue,
             ParseService parseService,
             TransformService transformService,
             StructuredTransformService structuredTransformService,
-            org.keinus.logparser.application.service.LiveTailService liveTailService,
+            LiveTailService liveTailService,
+            OutputAdapterComponent outputAdapterComponent,
             AtomicBoolean running,
-            AtomicLong totalMessagesFailed) {
+            AtomicInteger inFlightMessages,
+            AtomicLong totalMessagesDropped,
+            AtomicLong totalMessagesFailed,
+            AtomicLong processedMessageCount) {
         this.inputQueue = inputQueue;
-        this.outputQueue = outputQueue;
         this.parseService = parseService;
         this.transformService = transformService;
         this.structuredTransformService = structuredTransformService;
         this.liveTailService = liveTailService;
+        this.outputAdapterComponent = outputAdapterComponent;
         this.running = running;
+        this.inFlightMessages = inFlightMessages;
+        this.totalMessagesDropped = totalMessagesDropped;
         this.totalMessagesFailed = totalMessagesFailed;
+        this.processedMessageCount = processedMessageCount;
     }
 
     @Override
@@ -55,7 +62,12 @@ public class ProcessingDispatcher implements Runnable {
         while (running.get()) {
             try {
                 LogEvent logEvent = inputQueue.take();
-                processEvent(logEvent);
+                inFlightMessages.incrementAndGet();
+                try {
+                    processEvent(logEvent);
+                } finally {
+                    inFlightMessages.decrementAndGet();
+                }
             } catch (InterruptedException e) {
                 log.info("Processing thread interrupted: {}", Thread.currentThread().getName());
                 Thread.currentThread().interrupt();
@@ -70,75 +82,52 @@ public class ProcessingDispatcher implements Runnable {
 
     private void processEvent(LogEvent logEvent) {
         try {
-            // ==========================================
-            // Stage 1: Parsing
-            // ==========================================
-            // log.debug("Processing log event: {}", logEvent.getMessageType()); // Verbose log
-
             boolean parseResult = parseService.parse(logEvent);
-
             if (!parseResult) {
-                // Parsing failed
                 logEvent.markAsError("Parsing failed");
                 totalMessagesFailed.incrementAndGet();
                 log.error("Failed to parse log event: {}", logEvent);
-                // Optionally decide whether to send to DLQ or drop. 
-                // Currently logic implies we might just drop or log error.
-                return; 
+                return;
             }
             logEvent.markAsParsed();
 
-            // ==========================================
-            // Stage 2: Transformation (Legacy/Field)
-            // ==========================================
             boolean transformResult = transformService.transform(logEvent);
-
             if (!transformResult) {
                 log.debug("Log event filtered out by transform service");
-                return; // Filtered out
+                return;
             }
 
-            // ==========================================
-            // Stage 3: Transformation (Structured)
-            // ==========================================
             if (structuredTransformService != null) {
                 boolean structuredResult = structuredTransformService.applyToLogEvent(logEvent);
                 if (!structuredResult) {
                     log.warn("Structured transformation failed for event: {}", logEvent);
-                    // Decide whether to drop. For now, we continue if legacy succeeded.
                 }
             }
             logEvent.markAsTransformed();
+            logEvent.prepareOutputPayload();
 
-            // ==========================================
-            // Stage 4: Broadcast to Live Tail
-            // ==========================================
-            if (liveTailService != null) {
-                liveTailService.broadcastLog(logEvent);
+            OutputAdapterComponent.DeliverySummary deliverySummary = outputAdapterComponent.deliver(logEvent);
+            if (deliverySummary.attempted() == 0) {
+                totalMessagesDropped.incrementAndGet();
+                log.debug("No output adapters matched event type: {}", logEvent.getMessageType());
+            }
+            if (deliverySummary.hasFailures()) {
+                totalMessagesFailed.incrementAndGet();
             }
 
-            // ==========================================
-            // Stage 5: Output
-            // ==========================================
-            putOutputMsg(logEvent);
+            processedMessageCount.incrementAndGet();
 
-
+            if (liveTailService != null) {
+                try {
+                    liveTailService.broadcastLog(logEvent);
+                } catch (Exception e) {
+                    log.warn("Failed to broadcast live tail message: {}", e.getMessage(), e);
+                }
+            }
         } catch (Exception e) {
             log.error("Error processing log event: {}", logEvent, e);
             logEvent.markAsError("Processing error: " + e.getMessage());
             totalMessagesFailed.incrementAndGet();
-        }
-    }
-
-    private boolean putOutputMsg(LogEvent logEvent) {
-        try {
-            // Infinite blocking wait if queue is full (Backpressure)
-            outputQueue.put(logEvent);
-            return true;
-        } catch (InterruptedException e) {
-            log.debug("Interrupted while putting message to output queue");
-            Thread.currentThread().interrupt();
-            return false;
         }
     }
 }

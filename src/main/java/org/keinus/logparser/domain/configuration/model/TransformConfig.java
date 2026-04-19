@@ -16,5 +16,6 @@ public class TransformConfig {
     private Long id;
     String type;
     String messagetype;
+    Integer priority;
     TransformParamConfig param;
 }

@@ -26,7 +26,7 @@ public class OutputAdapterConfig {
     @Description("출력 어댑터의 타입")
     private String type;
 
-    @Description("처리할 메시지 타입 (null이면 모든 타입 처리)")
+    @Description("처리할 메시지 타입 (`all`이면 모든 타입 처리)")
     private String messagetype;
 
     @Default("false")

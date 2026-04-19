@@ -3,6 +3,9 @@ package org.keinus.logparser.domain.output.model;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
@@ -34,65 +37,99 @@ import org.keinus.logparser.domain.output.model.OutputAdapter;
  * @see org.apache.kafka.clients.producer.KafkaProducer
  */
 public class KafkaOutputAdapter extends OutputAdapter {
+	private static final int DEFAULT_RETRY_COUNT = 0;
+	private static final int DEFAULT_RETRY_DELAY_MS = 250;
+	private static final int DEFAULT_TIMEOUT_MS = 30_000;
+	private static final long DEFAULT_BUFFER_MEMORY_BYTES = 8L * 1024L * 1024L;
 	private static final Logger LOGGER = LoggerFactory.getLogger( KafkaOutputAdapter.class );
 	Producer<String, String> producer = null;
 	String topic = "";
+	String key = null;
 	private final AtomicBoolean closed = new AtomicBoolean(false);
 	
 	public KafkaOutputAdapter(Map<String, String> obj) throws IOException {
+		this(obj, null);
+	}
+
+	KafkaOutputAdapter(Map<String, String> obj, Producer<String, String> producer) throws IOException {
 		super(obj);
 
 		topic = obj.get("topicid");
+		key = obj.get("key");
 		String server = obj.get("bootstrapservers");
 
-		Properties props = new Properties();
-		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		if (producer != null) {
+			this.producer = producer;
+			LOGGER.info("Kafka Output Adapter initialized with injected producer for topic={}", topic);
+			return;
+		}
+
+		Properties props = buildProducerProperties(obj);
 		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, server);
-		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		this.producer = new KafkaProducer<>(props);
 
-		// Reliability settings to prevent message loss
-		// acks=all: Wait for all in-sync replicas to acknowledge (strongest durability)
-		props.put(ProducerConfig.ACKS_CONFIG, "all");
-
-		// Idempotence: Ensures exactly-once delivery semantics within a partition
-		props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-
-		// Retries: Maximum number of retry attempts (idempotence requires retries > 0)
-		props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-
-		// max.in.flight.requests.per.connection: Limit to 5 for idempotence
-		props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
-
-		// Request timeout: How long to wait for a request
-		props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "30000");
-
-		// Delivery timeout: Total time including retries (should be > request.timeout.ms)
-		props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "120000");
-
-		// Compression for better performance (optional but recommended)
-		props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
-
-		producer = new KafkaProducer<>(props);
-
-		LOGGER.info("Kafka Output Adapter connected to {} with reliability settings (acks=all, idempotence=true, topic={})",
+		LOGGER.info("Kafka Output Adapter connected to {} with bounded retry settings (topic={}, timeoutMs={})",
 				server, topic);
 	}
 
 	@Override
 	public void send(LogEvent logEvent) {
-		String jsonString = toJson(logEvent.toOutputMap());
-		// KafkaProducer는 이미 스레드 안전하므로 synchronized 불필요
-		ProducerRecord<String, String> record = new ProducerRecord<>(topic, jsonString);
+		String jsonString = serializeEvent(logEvent);
+		ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, jsonString);
 
-		producer.send(record, (metadata, exception) -> {
-			if (exception != null) {
-				LOGGER.error("Failed to send message to Kafka topic {}: {}",
-					topic, exception.getMessage(), exception);
-			} else {
-				LOGGER.debug("Message sent successfully to topic {} partition {} offset {}",
-					topic, metadata.partition(), metadata.offset());
-			}
-		});
+		try {
+			producer.send(record).get(getTimeoutMs(), TimeUnit.MILLISECONDS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw deliveryFailure("Kafka send interrupted", e);
+		} catch (ExecutionException | TimeoutException e) {
+			throw deliveryFailure("Failed to send message to Kafka topic " + topic, e);
+		}
+	}
+
+	static Properties buildProducerProperties(Map<String, String> obj) {
+		int timeoutMs = parsePositiveInt(obj.get("timeoutMs"), DEFAULT_TIMEOUT_MS);
+		int retryCount = parseNonNegativeInt(obj.get("retryCount"), DEFAULT_RETRY_COUNT);
+		int retryDelayMs = parsePositiveInt(obj.get("retryDelayMs"), DEFAULT_RETRY_DELAY_MS);
+		int deliveryTimeoutMs = timeoutMs + (retryCount * retryDelayMs) + 1_000;
+
+		Properties props = new Properties();
+		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		props.put(ProducerConfig.ACKS_CONFIG, "all");
+		props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+		props.put(ProducerConfig.RETRIES_CONFIG, String.valueOf(retryCount));
+		props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryDelayMs));
+		props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(timeoutMs));
+		props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, String.valueOf(deliveryTimeoutMs));
+		props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(timeoutMs));
+		props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, String.valueOf(DEFAULT_BUFFER_MEMORY_BYTES));
+		props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
+		return props;
+	}
+
+	private static int parsePositiveInt(String value, int defaultValue) {
+		if (value == null || value.isBlank()) {
+			return defaultValue;
+		}
+		try {
+			int parsed = Integer.parseInt(value);
+			return parsed > 0 ? parsed : defaultValue;
+		} catch (NumberFormatException e) {
+			return defaultValue;
+		}
+	}
+
+	private static int parseNonNegativeInt(String value, int defaultValue) {
+		if (value == null || value.isBlank()) {
+			return defaultValue;
+		}
+		try {
+			int parsed = Integer.parseInt(value);
+			return Math.max(parsed, 0);
+		} catch (NumberFormatException e) {
+			return defaultValue;
+		}
 	}
 
 	@Override
@@ -105,7 +142,7 @@ public class KafkaOutputAdapter extends OutputAdapter {
 
 		if (producer != null) {
 			try {
-				producer.close();
+				producer.close(java.time.Duration.ofMillis(getTimeoutMs()));
 				LOGGER.info("Kafka producer closed successfully");
 			} catch (Exception e) {
 				LOGGER.error("Error closing Kafka producer: {}", e.getMessage(), e);

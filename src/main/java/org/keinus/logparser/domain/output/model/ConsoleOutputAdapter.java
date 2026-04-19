@@ -31,11 +31,15 @@ public class ConsoleOutputAdapter extends OutputAdapter {
 
 	@Override
 	public void send(LogEvent logEvent) {
+		if (closed.get()) {
+			throw deliveryFailure("Adapter is closed");
+		}
+
 		try {
 			// SLF4J Logger는 이미 스레드 안전하므로 synchronized 불필요
-			LOGGER.info(toJson(logEvent.toOutputMap()));
+			LOGGER.info(serializeEvent(logEvent));
 		} catch (Exception e) {
-			LOGGER.error(e.getMessage());
+			throw deliveryFailure("Failed to write log event to console", e);
 		}
 	}
 

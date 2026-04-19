@@ -31,6 +31,10 @@ public class LiveTailService {
     }
 
     public void registerSession(WebSocketSession session) {
+        if (!session.isOpen()) {
+            log.debug("Skipping closed live tail session: {}", session.getId());
+            return;
+        }
         sessions.put(session.getId(), session);
         log.info("Live tail session registered: {}", session.getId());
     }
@@ -38,6 +42,10 @@ public class LiveTailService {
     public void removeSession(WebSocketSession session) {
         sessions.remove(session.getId());
         log.info("Live tail session removed: {}", session.getId());
+    }
+
+    public int getSessionCount() {
+        return sessions.size();
     }
 
     public void broadcastLog(LogEvent event) {
@@ -51,22 +59,28 @@ public class LiveTailService {
             String payload = objectMapper.writeValueAsString(Map.of(
                 "timestamp", System.currentTimeMillis(), // or event timestamp
                 "messageType", event.getMessageType(),
-                "data", event.getFields()
+                "data", event.hasFields() ? event.getFields() : Map.of()
             ));
 
             TextMessage message = new TextMessage(payload);
+            java.util.List<String> staleSessionIds = new java.util.ArrayList<>();
 
             for (WebSocketSession session : sessions.values()) {
                 synchronized (session) {
-                    if (session.isOpen()) {
-                        try {
-                            session.sendMessage(message);
-                        } catch (IOException | IllegalStateException e) {
-                            log.warn("Failed to send message to session {}", session.getId());
-                        }
+                    if (!session.isOpen()) {
+                        staleSessionIds.add(session.getId());
+                        continue;
+                    }
+                    try {
+                        session.sendMessage(message);
+                    } catch (IOException | IllegalStateException e) {
+                        staleSessionIds.add(session.getId());
+                        log.warn("Failed to send message to session {}", session.getId());
                     }
                 }
             }
+
+            staleSessionIds.forEach(sessions::remove);
         } catch (Exception e) {
             log.error("Error broadcasting log event", e);
         }

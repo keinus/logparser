@@ -1,7 +1,9 @@
 package org.keinus.logparser.domain.transformation.service;
 
+import java.util.Queue;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,8 +16,25 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConditionEvaluator {
     private static final Logger log = LoggerFactory.getLogger(ConditionEvaluator.class);
-    private final ExpressionParser parser = new SpelExpressionParser();
+    private static final int DEFAULT_MAX_CACHE_SIZE = 1024;
+
+    private final ExpressionParser parser;
     private final Map<String, Expression> expressionCache = new ConcurrentHashMap<>();
+    private final Queue<String> insertionOrder = new ConcurrentLinkedQueue<>();
+    private final int maxCacheSize;
+
+    public ConditionEvaluator() {
+        this(new SpelExpressionParser(), DEFAULT_MAX_CACHE_SIZE);
+    }
+
+    public ConditionEvaluator(int maxCacheSize) {
+        this(new SpelExpressionParser(), maxCacheSize);
+    }
+
+    private ConditionEvaluator(ExpressionParser parser, int maxCacheSize) {
+        this.parser = parser;
+        this.maxCacheSize = Math.max(1, maxCacheSize);
+    }
 
     public boolean evaluate(String conditionExpression, Map<String, Object> data) {
         if (conditionExpression == null || conditionExpression.trim().isEmpty()) {
@@ -36,14 +55,41 @@ public class ConditionEvaluator {
             // StandardEvaluationContext with MapAccessor allows this.
             context.addPropertyAccessor(new org.springframework.context.expression.MapAccessor());
 
-            Expression exp = expressionCache.computeIfAbsent(conditionExpression, 
-                key -> parser.parseExpression(key));
+            Expression exp = expressionCache.get(conditionExpression);
+            if (exp == null) {
+                Expression parsedExpression = parser.parseExpression(conditionExpression);
+                Expression previous = expressionCache.putIfAbsent(conditionExpression, parsedExpression);
+                exp = previous != null ? previous : parsedExpression;
+                if (previous == null) {
+                    insertionOrder.add(conditionExpression);
+                    trimCacheIfNeeded();
+                }
+            }
                 
             Boolean result = exp.getValue(context, Boolean.class);
             return result != null && result;
         } catch (Exception e) {
             log.warn("Failed to evaluate condition: '{}' with data: {}", conditionExpression, data, e);
             return false;
+        }
+    }
+
+    public void clearCache() {
+        expressionCache.clear();
+        insertionOrder.clear();
+    }
+
+    public int getCachedExpressionCount() {
+        return expressionCache.size();
+    }
+
+    private void trimCacheIfNeeded() {
+        while (expressionCache.size() > maxCacheSize) {
+            String oldest = insertionOrder.poll();
+            if (oldest == null) {
+                return;
+            }
+            expressionCache.remove(oldest);
         }
     }
 }

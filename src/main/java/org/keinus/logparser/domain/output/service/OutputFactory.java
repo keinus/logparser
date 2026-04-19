@@ -1,8 +1,11 @@
 package org.keinus.logparser.domain.output.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.lang.reflect.InvocationTargetException;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 import org.keinus.logparser.domain.configuration.model.OutputAdapterConfig;
 import org.keinus.logparser.domain.output.model.OutputAdapter;
 
@@ -24,6 +27,8 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class OutputFactory {
+	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
 	private OutputFactory() {
 		throw new IllegalStateException("Utility class");
 	}
@@ -50,7 +55,7 @@ public class OutputFactory {
 
 		if (config.getId() != null) param.put("id", String.valueOf(config.getId()));
 		param.put("type", config.getType());
-		if (config.getMessagetype() != null) param.put("messagetype", config.getMessagetype());
+		param.put("messagetype", normalizeMessageType(config.getMessagetype()));
 		if (config.getAddOriginText() != null) param.put("add_origin_text", String.valueOf(config.getAddOriginText()));
 
 		// Network 관련
@@ -60,6 +65,7 @@ public class OutputFactory {
 		// HTTP 관련
 		if (config.getUrl() != null) param.put("url", config.getUrl());
 		if (config.getMethod() != null) param.put("method", config.getMethod());
+		putJsonIfPresent(param, "headers", config.getHeaders());
 
 		// Kafka 관련
 		if (config.getTopicid() != null) param.put("topicid", config.getTopicid());
@@ -78,6 +84,7 @@ public class OutputFactory {
 		if (config.getRmqUsername() != null) param.put("username", config.getRmqUsername());
 		if (config.getRmqPassword() != null) param.put("password", config.getRmqPassword());
 		if (config.getRmqPort() != null) param.put("port", String.valueOf(config.getRmqPort()));
+		putJsonIfPresent(param, "tagpass", config.getTagpass());
 
 		// 성능 관련
 		if (config.getBatchSize() != null) param.put("batchSize", String.valueOf(config.getBatchSize()));
@@ -90,5 +97,24 @@ public class OutputFactory {
 		if (config.getTimeoutMs() != null) param.put("timeoutMs", String.valueOf(config.getTimeoutMs()));
 
 		return param;
+	}
+
+	private static void putJsonIfPresent(Map<String, String> param, String key, Object value) {
+		if (value == null) {
+			return;
+		}
+
+		try {
+			param.put(key, OBJECT_MAPPER.writeValueAsString(value));
+		} catch (JsonProcessingException e) {
+			throw new IllegalStateException("Failed to serialize output adapter setting: " + key, e);
+		}
+	}
+
+	private static String normalizeMessageType(String messageType) {
+		if (messageType == null || messageType.isBlank()) {
+			return "all";
+		}
+		return messageType;
 	}
 }

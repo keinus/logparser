@@ -2,14 +2,13 @@ package org.keinus.logparser.application.pipeline;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
 import org.keinus.logparser.domain.configuration.service.ConfigValidationService;
+import org.keinus.logparser.domain.configuration.service.DatabaseConfigLoader;
 import org.keinus.logparser.domain.parse.service.ParseService;
 import org.keinus.logparser.domain.transformation.service.StructuredTransformService;
 import org.keinus.logparser.domain.transformation.service.TransformService;
 import org.keinus.logparser.infrastructure.config.ApplicationProperties;
-import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -19,92 +18,166 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 @Slf4j
 public class PipelineReloadService {
+    private static final long PIPELINE_DRAIN_TIMEOUT_MS = 30_000;
 
     private final ConfigValidationService validationService;
-    private final ApplicationContext applicationContext;
     private final ConfigManagementService configManagementService;
+    private final DatabaseConfigLoader databaseConfigLoader;
     private final ApplicationProperties applicationProperties;
     private final MessageDispatcher messageDispatcher;
+    private final InputAdapterComponent inputAdapterComponent;
+    private final OutputAdapterComponent outputAdapterComponent;
+    private final ParseService parseService;
+    private final TransformService transformService;
+    private final StructuredTransformService structuredTransformService;
 
     private final AtomicBoolean reloadInProgress = new AtomicBoolean(false);
     private final AtomicInteger reloadProgress = new AtomicInteger(0);
     private volatile PipelineStatus currentStatus = PipelineStatus.RUNNING;
 
-    // ==================== Reload Operations ====================
-
     public void reloadConfiguration() {
-        log.info("Reloading configuration from database");
+        DatabaseConfigLoader.PipelineConfiguration targetConfiguration = loadValidatedConfiguration();
+        reconfigurePipeline(targetConfiguration, PipelineStatus.RELOADING);
+    }
 
+    public void validateAndReload() {
+        log.info("Validating pipeline before reload");
+        validateConfiguration();
+        reloadConfiguration();
+    }
+
+    public void restartPipeline() {
+        DatabaseConfigLoader.PipelineConfiguration targetConfiguration = loadValidatedConfiguration();
+        reconfigurePipeline(targetConfiguration, PipelineStatus.STOPPING);
+    }
+
+    private DatabaseConfigLoader.PipelineConfiguration loadValidatedConfiguration() {
+        log.info("Loading validated configuration from database");
+        validateConfiguration();
+        return databaseConfigLoader.loadConfiguration();
+    }
+
+    private void reconfigurePipeline(
+            DatabaseConfigLoader.PipelineConfiguration targetConfiguration,
+            PipelineStatus transientStatus
+    ) {
         if (!reloadInProgress.compareAndSet(false, true)) {
             throw new RuntimeException("Reload already in progress");
         }
 
+        DatabaseConfigLoader.PipelineConfiguration previousConfiguration = applicationProperties.snapshot();
+        boolean pipelineModified = false;
+
         try {
-            reloadProgress.set(0);
-            currentStatus = PipelineStatus.RELOADING;
+            reloadProgress.set(5);
+            currentStatus = transientStatus;
 
-            // Step 1: 현재 파이프라인 컴포넌트 중지
-            log.info("Stopping current pipeline components");
-            stopPipelineComponents();
-            reloadProgress.set(33);
+            stopAcceptingNewInput();
+            pipelineModified = true;
+            reloadProgress.set(25);
 
-            // Step 2: 데이터베이스에서 설정 로드 및 검증
-            log.info("Loading and validating configuration from database");
-            validateConfiguration();
-            
-            // Reload global settings (threads, flush interval)
-            log.info("Refreshing global application properties");
-            applicationProperties.loadConfigurationFromDatabase();
-            
-            reloadProgress.set(66);
+            drainProcessingQueue();
+            reloadProgress.set(45);
 
-            // Step 3: 새 설정으로 파이프라인 컴포넌트 재시작
-            log.info("Restarting pipeline components with new configuration");
+            stopProcessingAndOutputs();
+            reloadProgress.set(65);
+
+            applyConfiguration(targetConfiguration);
+            reloadProgress.set(80);
+
             startPipelineComponents();
             reloadProgress.set(100);
-
             currentStatus = PipelineStatus.RUNNING;
-            log.info("Pipeline reload completed successfully");
-
+            log.info("Pipeline reconfiguration completed successfully");
         } catch (Exception e) {
-            log.error("Failed to reload configuration", e);
-            currentStatus = PipelineStatus.ERROR;
-            throw new RuntimeException("Failed to reload configuration", e);
+            log.error("Failed to reconfigure pipeline", e);
+            if (pipelineModified) {
+                rollback(previousConfiguration, e);
+            } else {
+                currentStatus = PipelineStatus.ERROR;
+            }
+            throw new RuntimeException("Failed to reconfigure pipeline", e);
         } finally {
             reloadInProgress.set(false);
         }
     }
 
-    /**
-     * 파이프라인 컴포넌트 중지
-     */
-    private void stopPipelineComponents() {
-        try {
-            // Input Adapters 중지
-            InputAdapterComponent inputComponent = applicationContext.getBean(InputAdapterComponent.class);
-            inputComponent.stopPipeline();
-            log.info("Input adapters stopped");
+    private void stopAcceptingNewInput() {
+        log.info("Stopping input adapters");
+        inputAdapterComponent.stopPipeline();
+    }
 
-            // 큐 처리 대기 (큐가 어느정도 비워지도록 잠시 대기)
-            Thread.sleep(1000);
-
-            // Message Dispatcher는 계속 실행 (큐 처리를 위해)
-            log.info("Message dispatcher continues processing existing messages");
-
-            // Output Adapters 중지
-            OutputAdapterComponent outputComponent = applicationContext.getBean(OutputAdapterComponent.class);
-            outputComponent.stopPipeline();
-            log.info("Output adapters stopped");
-
-        } catch (Exception e) {
-            log.error("Error stopping pipeline components", e);
-            throw new RuntimeException("Failed to stop pipeline components", e);
+    private void drainProcessingQueue() {
+        log.info("Waiting for input queue and in-flight events to drain");
+        boolean drained = messageDispatcher.awaitIdle(PIPELINE_DRAIN_TIMEOUT_MS);
+        if (!drained) {
+            throw new IllegalStateException("Timed out while draining message queue");
         }
     }
 
-    /**
-     * 설정 검증
-     */
+    private void stopProcessingAndOutputs() {
+        log.info("Stopping processing workers");
+        messageDispatcher.stopProcessingWorkers();
+
+        log.info("Stopping output adapters");
+        outputAdapterComponent.stopPipeline();
+    }
+
+    private void applyConfiguration(DatabaseConfigLoader.PipelineConfiguration configuration) {
+        log.info("Applying new runtime configuration");
+        applicationProperties.applyConfiguration(configuration);
+        parseService.reload(configuration.getParser());
+        transformService.reload(configuration.getTransform());
+        structuredTransformService.reload();
+    }
+
+    private void startPipelineComponents() {
+        log.info("Starting output adapters");
+        outputAdapterComponent.startPipeline();
+
+        log.info("Starting processing workers");
+        messageDispatcher.restartWorkersFromCurrentConfiguration();
+
+        log.info("Starting input adapters");
+        inputAdapterComponent.startPipeline();
+    }
+
+    private void rollback(DatabaseConfigLoader.PipelineConfiguration previousConfiguration, Exception cause) {
+        log.warn("Attempting pipeline rollback after failure: {}", cause.getMessage());
+        try {
+            safelyStopAllPipelineComponents();
+            applyConfiguration(previousConfiguration);
+            startPipelineComponents();
+            currentStatus = PipelineStatus.RUNNING;
+            reloadProgress.set(0);
+            log.warn("Pipeline rollback completed successfully");
+        } catch (Exception rollbackException) {
+            currentStatus = PipelineStatus.ERROR;
+            log.error("Pipeline rollback failed", rollbackException);
+            throw new RuntimeException("Pipeline rollback failed", rollbackException);
+        }
+    }
+
+    private void safelyStopAllPipelineComponents() {
+        try {
+            inputAdapterComponent.stopPipeline();
+        } catch (Exception e) {
+            log.warn("Failed to stop input adapters during rollback preparation: {}", e.getMessage());
+        }
+
+        try {
+            messageDispatcher.stopProcessingWorkers();
+        } catch (Exception e) {
+            log.warn("Failed to stop processing workers during rollback preparation: {}", e.getMessage());
+        }
+
+        try {
+            outputAdapterComponent.stopPipeline();
+        } catch (Exception e) {
+            log.warn("Failed to stop output adapters during rollback preparation: {}", e.getMessage());
+        }
+    }
+
     private void validateConfiguration() {
         var validationResult = validationService.validatePipelineIntegrity();
 
@@ -117,110 +190,6 @@ public class PipelineReloadService {
             log.warn("Pipeline validation warnings: {}", validationResult.warnings());
         }
     }
-
-    /**
-     * 파이프라인 컴포넌트 재시작
-     */
-    private void startPipelineComponents() {
-        try {
-            // Parse Service와 Transform Service 리로드
-            ParseService parseService = applicationContext.getBean(ParseService.class);
-            TransformService transformService = applicationContext.getBean(TransformService.class);
-            StructuredTransformService structuredTransformService = applicationContext.getBean(StructuredTransformService.class);
-
-            // 데이터베이스에서 설정을 다시 로드
-            log.info("Reloading Parse, Transform and StructuredTransform services from database");
-            parseService.reload();
-            transformService.reload();
-            structuredTransformService.reload();
-            log.info("Services reloaded successfully");
-            
-            // MessageDispatcher worker 스레드 재설정 (개수 변경 적용)
-            messageDispatcher.updateWorkerThreadCount();
-
-            // Input Adapters 재시작
-            InputAdapterComponent inputComponent = applicationContext.getBean(InputAdapterComponent.class);
-            inputComponent.startPipeline();
-            log.info("Input adapters restarted");
-
-            // Output Adapters 재시작
-            OutputAdapterComponent outputComponent = applicationContext.getBean(OutputAdapterComponent.class);
-            outputComponent.startPipeline();
-            log.info("Output adapters restarted");
-
-        } catch (Exception e) {
-            log.error("Error starting pipeline components", e);
-            throw new RuntimeException("Failed to start pipeline components", e);
-        }
-    }
-
-    public void validateAndReload() {
-        log.info("Validating pipeline before reload");
-
-        // Validate pipeline integrity first
-        var validationResult = validationService.validatePipelineIntegrity();
-
-        if (!validationResult.isValid()) {
-            log.error("Pipeline validation failed: {}", validationResult.errors());
-            throw new RuntimeException("Pipeline validation failed: " + validationResult.errors());
-        }
-
-        if (!validationResult.warnings().isEmpty()) {
-            log.warn("Pipeline validation warnings: {}", validationResult.warnings());
-        }
-
-        // Proceed with reload
-        reloadConfiguration();
-    }
-
-    public void restartPipeline() {
-        log.info("Restarting pipeline");
-
-        if (!reloadInProgress.compareAndSet(false, true)) {
-            throw new RuntimeException("Reload already in progress");
-        }
-
-        try {
-            reloadProgress.set(0);
-            currentStatus = PipelineStatus.STOPPING;
-
-            // Step 1: Stop accepting new messages
-            log.info("Stopping input adapters");
-            reloadProgress.set(20);
-
-            // Step 2: Wait for queue to drain
-            log.info("Draining message queue");
-            reloadProgress.set(40);
-
-            // Step 3: Stop all components
-            log.info("Stopping all components");
-            reloadProgress.set(60);
-
-            currentStatus = PipelineStatus.STOPPED;
-
-            // Step 4: Reload configuration
-            log.info("Reloading configuration");
-            reloadProgress.set(70);
-
-            // Step 5: Restart components
-            log.info("Restarting components");
-            reloadProgress.set(90);
-
-            // Step 6: Complete restart
-            log.info("Restart completed");
-            reloadProgress.set(100);
-            currentStatus = PipelineStatus.RUNNING;
-
-        } catch (Exception e) {
-            log.error("Failed to restart pipeline", e);
-            currentStatus = PipelineStatus.ERROR;
-            throw new RuntimeException("Failed to restart pipeline", e);
-        } finally {
-            reloadInProgress.set(false);
-        }
-    }
-
-    // ==================== Status Operations ====================
 
     public boolean isReloadInProgress() {
         return reloadInProgress.get();
@@ -236,20 +205,19 @@ public class PipelineReloadService {
 
     public PipelineStatusInfo getPipelineStatus() {
         try {
-            // 데이터베이스에서 활성화된 컴포넌트 수 조회
             int inputAdapterCount = configManagementService.getEnabledInputAdapters().size();
             int parserCount = configManagementService.getEnabledParsers().size();
             int transformCount = configManagementService.getEnabledTransforms().size();
             int outputAdapterCount = configManagementService.getEnabledOutputAdapters().size();
 
-            // MessageDispatcher에서 큐 정보 가져오기
             int queueSize = 0;
+            int queueCapacity = 0;
             double throughput = 0.0;
 
             try {
-                MessageDispatcher dispatcher = applicationContext.getBean(MessageDispatcher.class);
-                var metrics = dispatcher.getDispatcherMetrics();
-                queueSize = metrics.globalQueueSize + metrics.outputQueueSize;
+                var metrics = messageDispatcher.getDispatcherMetrics();
+                queueSize = metrics.globalQueueSize;
+                queueCapacity = metrics.maxQueueSize;
                 throughput = metrics.outputThroughput;
             } catch (Exception e) {
                 log.debug("Could not retrieve queue metrics: {}", e.getMessage());
@@ -262,13 +230,14 @@ public class PipelineReloadService {
                     transformCount,
                     outputAdapterCount,
                     queueSize,
+                    queueCapacity,
                     throughput
             );
         } catch (Exception e) {
             log.error("Error getting pipeline status", e);
             return new PipelineStatusInfo(
                     PipelineStatus.ERROR,
-                    0, 0, 0, 0, 0, 0.0
+                    0, 0, 0, 0, 0, 0, 0.0
             );
         }
     }
@@ -284,8 +253,6 @@ public class PipelineReloadService {
             log.warn("No reload in progress to cancel");
         }
     }
-
-    // ==================== Inner Classes ====================
 
     public enum PipelineStatus {
         RUNNING,
@@ -308,7 +275,7 @@ public class PipelineReloadService {
             int transformCount,
             int outputAdapterCount,
             int queueSize,
+            int queueCapacity,
             double throughput
     ) {}
 }
-

@@ -13,6 +13,7 @@ const App = (function() {
         adapterCache: {
             input: [], parser: [], transform: [], output: []
         },
+        outputMetricsById: {},
         editingId: null
     };
 
@@ -121,6 +122,7 @@ const App = (function() {
             
             document.getElementById('stat-queue').textContent = status.queueSize || 0;
             document.getElementById('queue-progress').value = status.queueSize || 0;
+            document.getElementById('queue-progress').max = status.queueCapacity || 10000;
             
             document.getElementById('stat-threads').textContent = threads.length || 0;
             
@@ -446,12 +448,34 @@ const App = (function() {
                 'output': outputAdapterAPI
             };
             
-            const response = await apiMap[type].getAll();
-            const list = response.content || [];
+            const [response, outputMetrics] = await Promise.all([
+                apiMap[type].getAll(),
+                type === 'output'
+                    ? pipelineAPI.getOutputMetrics().catch(error => {
+                        console.warn('Failed to load output metrics', error);
+                        return [];
+                    })
+                    : Promise.resolve([])
+            ]);
+            const metricsById = {};
+            (outputMetrics || []).forEach(metric => {
+                metricsById[metric.adapterId] = metric;
+            });
+            state.outputMetricsById = metricsById;
+
+            const list = (response.content || []).map(item => ({
+                ...item,
+                deliveryMetrics: type === 'output' ? metricsById[item.id] || null : null
+            }));
             state.adapterCache[type] = list; // Cache for search
             
             // Update Badge
             document.getElementById(`badge-${type}`).textContent = list.length;
+
+            const configHeader = document.getElementById('generic-config-header');
+            if (configHeader) {
+                configHeader.textContent = type === 'output' ? 'Configuration / Metrics' : 'Configuration';
+            }
             
             renderList(list, type);
         } catch (e) {
@@ -487,6 +511,21 @@ const App = (function() {
 
             // Extract key config info for display
             let configSummary = getConfigSummary(item);
+            let metricsSummary = '';
+            if (type === 'output' && item.deliveryMetrics) {
+                const sent = item.deliveryMetrics.sentCount || 0;
+                const failed = item.deliveryMetrics.failedCount || 0;
+                metricsSummary = `Sent: ${sent} · Failed: ${failed}`;
+                if (item.deliveryMetrics.lastLatencyMs != null) {
+                    metricsSummary += ` · Last Latency: ${item.deliveryMetrics.lastLatencyMs}ms`;
+                }
+                if (item.deliveryMetrics.averageLatencyMs != null) {
+                    metricsSummary += ` · Avg Latency: ${item.deliveryMetrics.averageLatencyMs.toFixed(1)}ms`;
+                }
+                if (item.deliveryMetrics.lastError) {
+                    metricsSummary += ` · Last Error: ${item.deliveryMetrics.lastError}`;
+                }
+            }
 
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-800/50 transition-colors border-b border-slate-800';
@@ -515,7 +554,10 @@ const App = (function() {
                     <div class="text-xs text-slate-500 font-mono">ID: ${item.id}</div>
                 </td>
                 <td><span class="badge badge-ghost badge-sm font-mono">${item.type}</span></td>
-                <td class="text-slate-400 font-mono text-xs truncate max-w-xs" title="${configSummary}">${configSummary}</td>
+                <td class="text-slate-400 font-mono text-xs max-w-xs" title="${[configSummary, metricsSummary].filter(Boolean).join(' | ')}">
+                    <div class="truncate">${configSummary}</div>
+                    ${metricsSummary ? `<div class="truncate text-[10px] ${item.deliveryMetrics.failedCount > 0 ? 'text-amber-400' : 'text-slate-500'}">${metricsSummary}</div>` : ''}
+                </td>
                 <td class="text-right">
                     <div class="flex items-center justify-end gap-1">
                         <div class="tooltip tooltip-left" data-tip="Edit Configuration">

@@ -1,7 +1,7 @@
 package org.keinus.logparser.domain.service.transform;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -27,6 +27,7 @@ public class ConditionEvaluatorTest {
         // If logic was broken, it might fail or throw exception.
         boolean result2 = evaluator.evaluate(expression, data);
         assertTrue(result2);
+        assertEquals(1, evaluator.getCachedExpressionCount());
         
         // Performance test (micro-benchmark style)
         long start = System.nanoTime();
@@ -35,5 +36,21 @@ public class ConditionEvaluatorTest {
         }
         long end = System.nanoTime();
         System.out.println("10k evaluations took: " + (end - start) / 1000000.0 + " ms");
+
+        evaluator.clearCache();
+        assertEquals(0, evaluator.getCachedExpressionCount());
+    }
+
+    @Test
+    void testExpressionCacheRemainsBounded() {
+        ConditionEvaluator evaluator = new ConditionEvaluator(2);
+        Map<String, Object> data = new HashMap<>();
+        data.put("port", 80);
+
+        evaluator.evaluate("['port'] == 80", data);
+        evaluator.evaluate("['port'] == 81", data);
+        evaluator.evaluate("['port'] == 82", data);
+
+        assertTrue(evaluator.getCachedExpressionCount() <= 2);
     }
 }

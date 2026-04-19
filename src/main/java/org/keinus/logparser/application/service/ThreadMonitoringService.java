@@ -3,11 +3,9 @@ package org.keinus.logparser.application.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.infrastructure.persistence.entity.InputAdapterEntity;
-import org.keinus.logparser.infrastructure.persistence.entity.OutputAdapterEntity;
 import org.keinus.logparser.infrastructure.persistence.entity.ParserEntity;
 import org.keinus.logparser.infrastructure.persistence.entity.TransformEntity;
 import org.keinus.logparser.infrastructure.persistence.repository.InputAdapterRepository;
-import org.keinus.logparser.infrastructure.persistence.repository.OutputAdapterRepository;
 import org.keinus.logparser.infrastructure.persistence.repository.ParserRepository;
 import org.keinus.logparser.infrastructure.persistence.repository.TransformRepository;
 import org.keinus.logparser.infrastructure.util.ThreadManager;
@@ -29,7 +27,6 @@ public class ThreadMonitoringService {
 
     private final ThreadManager threadManager;
     private final InputAdapterRepository inputAdapterRepository;
-    private final OutputAdapterRepository outputAdapterRepository;
     private final ParserRepository parserRepository;
     private final TransformRepository transformRepository;
 
@@ -41,12 +38,11 @@ public class ThreadMonitoringService {
      */
     public List<ThreadDetailDto> getAllThreadDetails() {
         Map<Long, InputAdapterEntity> inputAdaptersById = loadInputAdapters();
-        Map<Long, OutputAdapterEntity> outputAdaptersById = loadOutputAdapters();
         List<ParserEntity> parsers = parserRepository.findAll();
         List<TransformEntity> transforms = transformRepository.findAll();
 
         return threadManager.getAllThreadInfo().stream()
-                .map(info -> mapThreadInfoToDetail(info, inputAdaptersById, outputAdaptersById, parsers, transforms))
+                .map(info -> mapThreadInfoToDetail(info, inputAdaptersById, parsers, transforms))
                 .toList();
     }
 
@@ -56,7 +52,6 @@ public class ThreadMonitoringService {
     private ThreadDetailDto mapThreadInfoToDetail(
             ThreadManager.ThreadInfo threadInfo,
             Map<Long, InputAdapterEntity> inputAdaptersById,
-            Map<Long, OutputAdapterEntity> outputAdaptersById,
             List<ParserEntity> parsers,
             List<TransformEntity> transforms
     ) {
@@ -78,7 +73,7 @@ public class ThreadMonitoringService {
         } else if (processingMatcher.matches()) {
             mapProcessingThread(builder, processingMatcher, parsers, transforms);
         } else {
-            mapSpecialThread(builder, threadName, outputAdaptersById);
+            mapSpecialThread(builder, threadName);
         }
 
         return builder.build();
@@ -107,16 +102,6 @@ public class ThreadMonitoringService {
         }
     }
 
-    private InputAdapterEntity findAdapterByType(
-            Map<Long, InputAdapterEntity> adapters, 
-            String adapterType
-    ) {
-        return adapters.values().stream()
-                .filter(a -> a.getType() != null && a.getType().equalsIgnoreCase(adapterType))
-                .findFirst()
-                .orElse(null);
-    }
-
     private void mapProcessingThread(
             ThreadDetailDto.ThreadDetailDtoBuilder builder,
             Matcher matcher,
@@ -135,27 +120,9 @@ public class ThreadMonitoringService {
 
     private void mapSpecialThread(
             ThreadDetailDto.ThreadDetailDtoBuilder builder,
-            String threadName,
-            Map<Long, OutputAdapterEntity> outputAdaptersById
+            String threadName
     ) {
-        if (threadName.startsWith("AdapterWorker-")) {
-            builder.componentType("OUTPUT")
-                   .componentName(threadName);
-            return;
-        }
-
         switch (threadName) {
-            case "processOutputAdapter" -> builder
-                    .componentType("OUTPUT")
-                    .componentName("Output Message Processor")
-                    .metadata(Map.of("activeAdapters", outputAdaptersById.size()));
-            case "OutputDispatcher" -> builder
-                    .componentType("OUTPUT")
-                    .componentName("Output Dispatcher")
-                    .metadata(Map.of("activeAdapters", outputAdaptersById.size()));
-            case "BatchFlushScheduler" -> builder
-                    .componentType("BATCH")
-                    .componentName("Batch Flush Scheduler");
             case "QueueMonitor" -> builder
                     .componentType("MONITOR")
                     .componentName("Queue Monitor");
@@ -180,10 +147,5 @@ public class ThreadMonitoringService {
     private Map<Long, InputAdapterEntity> loadInputAdapters() {
         return inputAdapterRepository.findAll().stream()
                 .collect(Collectors.toMap(InputAdapterEntity::getId, a -> a));
-    }
-
-    private Map<Long, OutputAdapterEntity> loadOutputAdapters() {
-        return outputAdapterRepository.findAll().stream()
-                .collect(Collectors.toMap(OutputAdapterEntity::getId, a -> a));
     }
 }
