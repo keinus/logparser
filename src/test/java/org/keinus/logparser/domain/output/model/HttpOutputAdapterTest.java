@@ -1,4 +1,4 @@
-package org.keinus.logparser.output;
+package org.keinus.logparser.domain.output.model;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
