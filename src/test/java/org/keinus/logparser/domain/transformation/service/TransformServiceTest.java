@@ -42,6 +42,26 @@ class TransformServiceTest {
         assertEquals("api", environment.get("service"));
     }
 
+    @Test
+    void ignoresLegacyStructureTransformBecauseStructuredTransformRunsCentrally() {
+        TransformConfig structureTransform = new TransformConfig();
+        structureTransform.setId(2L);
+        structureTransform.setType("Structure");
+        structureTransform.setMessagetype("test");
+        structureTransform.setPriority(0);
+
+        transformService.reload(List.of(structureTransform, addPropertyTransform()));
+
+        LogEvent event = new LogEvent("raw", "localhost", "test");
+        event.setField("service", "api");
+
+        boolean transformed = transformService.transform(event);
+
+        assertTrue(transformed);
+        Map<?, ?> environment = assertInstanceOf(Map.class, event.getField("environment"));
+        assertEquals("api", environment.get("service"));
+    }
+
     private TransformConfig addPropertyTransform() {
         TransformParamConfig param = new TransformParamConfig();
         param.setAdd(Map.of("environment", List.of("service")));

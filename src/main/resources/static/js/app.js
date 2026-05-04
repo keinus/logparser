@@ -685,12 +685,6 @@ const App = (function() {
             // Fill Dynamic Fields
             // Wait for DOM update
             setTimeout(() => {
-                // Special Case: Mapper
-                if (type === 'transform' && data.type === 'Structure') {
-                    if (window.MapperUI) MapperUI.loadData(data.messagetype, data);
-                    return;
-                }
-                
                 // General Population
                 Object.entries(data).forEach(([key, value]) => {
                      // If it's a param object (Transform generic), flatten or handle?
@@ -733,17 +727,6 @@ const App = (function() {
             else if (type === 'transform') schema = await metadataAPI.getTransformSchema(adapterType);
             else if (type === 'output') schema = await metadataAPI.getOutputAdapterSchema(adapterType);
             
-            // Special Case: Structure Transform -> Render Mapper UI
-            if (type === 'transform' && adapterType === 'Structure') {
-                if (window.MapperUI) {
-                    MapperUI.render(container);
-                    MapperUI.loadData(document.getElementById('config-messagetype').value);
-                } else {
-                    container.innerHTML = '<p class="text-error">MapperUI module not loaded.</p>';
-                }
-                return;
-            }
-
             // Generic Render
             if (!schema || !schema.fields || schema.fields.length === 0) {
                 container.innerHTML = '<p class="text-slate-500 text-sm">No additional configuration required.</p>';
@@ -867,33 +850,28 @@ const App = (function() {
             data.enabled = document.getElementById('config-enabled').checked;
         }
 
-        // Special Case: Mapper
-        if (state.currentAdapterType === 'transform' && data.type === 'Structure') {
-            data.param = MapperUI.getData();
-        } else {
-            // Collect dynamic fields
-            const dynamicFields = document.querySelectorAll('#dynamic-fields [name]');
-            const params = {};
-            
-            dynamicFields.forEach(field => {
-                let val = field.value;
-                // Basic type coercion if feasible, or let backend handle strings
-                if (val === 'true') val = true;
-                if (val === 'false') val = false;
-                
-                // If Transform/Parser, fields often go into 'param'
-                if (state.currentAdapterType === 'transform') {
-                    params[field.name] = val;
-                } else if (state.currentAdapterType === 'parser' && field.name === 'param') {
-                    data.param = val; // Grok/Regex pattern usually top level string in simple implementation, but DTO might expect it.
-                } else {
-                    data[field.name] = val;
-                }
-            });
+        // Collect dynamic fields
+        const dynamicFields = document.querySelectorAll('#dynamic-fields [name]');
+        const params = {};
 
+        dynamicFields.forEach(field => {
+            let val = field.value;
+            // Basic type coercion if feasible, or let backend handle strings
+            if (val === 'true') val = true;
+            if (val === 'false') val = false;
+
+            // If Transform/Parser, fields often go into 'param'
             if (state.currentAdapterType === 'transform') {
-                data.param = params;
+                params[field.name] = val;
+            } else if (state.currentAdapterType === 'parser' && field.name === 'param') {
+                data.param = val; // Grok/Regex pattern usually top level string in simple implementation, but DTO might expect it.
+            } else {
+                data[field.name] = val;
             }
+        });
+
+        if (state.currentAdapterType === 'transform') {
+            data.param = params;
         }
 
         try {

@@ -94,22 +94,18 @@ class TcpOutputAdapterTest {
 
         @Override
         public void run() {
-            try {
-                while (running) {
-                    try (Socket clientSocket = serverSocket.accept();
-                         InputStream is = clientSocket.getInputStream()) {
-                        byte[] buffer = new byte[1024];
-                        int read;
-                        while ((read = is.read(buffer)) != -1) {
-                            outputStream.write(buffer, 0, read);
-                        }
-                        latch.countDown();
-                    } catch (IOException e) {
-                        if (running) e.printStackTrace();
+            while (running) {
+                try (Socket clientSocket = serverSocket.accept();
+                     InputStream is = clientSocket.getInputStream()) {
+                    byte[] buffer = new byte[1024];
+                    int read;
+                    while ((read = is.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, read);
                     }
+                    latch.countDown();
+                } catch (IOException e) {
+                    if (running) e.printStackTrace();
                 }
-            } catch (IOException e) {
-                if (running) e.printStackTrace();
             }
         }
 

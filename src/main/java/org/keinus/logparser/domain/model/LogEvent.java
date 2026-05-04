@@ -86,6 +86,14 @@ public class LogEvent implements Serializable {
         this.stage = ProcessingStage.RAW;
     }
 
+    public LogEvent(String originalText) {
+        this.originalText = originalText;
+        this.sourceHost = "localhost";
+        this.messageType = "test";
+        this.timestamp = Instant.now();
+        this.stage = ProcessingStage.RAW;
+    }
+
     /**
      * 빈 LogEvent를 생성합니다 (Jackson 역직렬화용).
      */

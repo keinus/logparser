@@ -126,33 +126,29 @@ class OpenSearchOutputAdapterTest {
 
         @Override
         public void run() {
-            try {
-                while (running) {
-                    try (Socket socket = serverSocket.accept();
-                         BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                         OutputStream os = socket.getOutputStream()) {
-                        
-                        requestLine = reader.readLine();
-                        if (requestLine == null) continue;
+            while (running) {
+                try (Socket socket = serverSocket.accept();
+                     BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                     OutputStream os = socket.getOutputStream()) {
 
-                        String line;
-                        while ((line = reader.readLine()) != null && !line.isEmpty()) {
-                            int colon = line.indexOf(":");
-                            if (colon > 0) {
-                                headers.put(line.substring(0, colon).trim().toLowerCase(), line.substring(colon + 1).trim());
-                            }
+                    requestLine = reader.readLine();
+                    if (requestLine == null) continue;
+
+                    String line;
+                    while ((line = reader.readLine()) != null && !line.isEmpty()) {
+                        int colon = line.indexOf(":");
+                        if (colon > 0) {
+                            headers.put(line.substring(0, colon).trim().toLowerCase(), line.substring(colon + 1).trim());
                         }
-
-                        String response = "HTTP/1.1 " + responseCode + " OK\r\nContent-Length: 0\r\n\r\n";
-                        os.write(response.getBytes(StandardCharsets.UTF_8));
-                        os.flush();
-                        latch.countDown();
-                    } catch (IOException e) {
-                        if (running) e.printStackTrace();
                     }
+
+                    String response = "HTTP/1.1 " + responseCode + " OK\r\nContent-Length: 0\r\n\r\n";
+                    os.write(response.getBytes(StandardCharsets.UTF_8));
+                    os.flush();
+                    latch.countDown();
+                } catch (IOException e) {
+                    if (running) e.printStackTrace();
                 }
-            } catch (IOException e) {
-                if (running) e.printStackTrace();
             }
         }
 

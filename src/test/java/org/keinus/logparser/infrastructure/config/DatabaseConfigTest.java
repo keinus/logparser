@@ -2,6 +2,7 @@ package org.keinus.logparser.infrastructure.config;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.file.Files;
@@ -25,6 +26,19 @@ class DatabaseConfigTest {
         config.initDatabase();
         
         assertThat(Files.exists(tempDir.resolve("subdir"))).isTrue();
+    }
+
+    @Test
+    void shouldCreateDirectoryBeforeFlywayMigration() {
+        DatabaseConfig config = new DatabaseConfig();
+        Path dbPath = tempDir.resolve("flyway/config.db");
+        String url = "jdbc:sqlite:" + dbPath;
+
+        ReflectionTestUtils.setField(config, "datasourceUrl", url);
+
+        config.customize(new FluentConfiguration());
+
+        assertThat(Files.exists(tempDir.resolve("flyway"))).isTrue();
     }
 
     @Test

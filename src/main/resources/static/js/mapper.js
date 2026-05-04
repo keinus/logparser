@@ -144,10 +144,9 @@ window.MapperUI = (function() {
         try {
             await loadSchemaMetadata();
             
-            // If existing config provided, load it
-            if (existingConfig && existingConfig.param) {
-                // If it's a "Structure" transform, 'param' is the config object
-                loadConfigToState(existingConfig.param);
+            // If existing mapping provided, load it
+            if (existingConfig) {
+                loadConfigToState(existingConfig);
             }
         } catch (e) {
             console.error("Error initializing mapper:", e);
@@ -470,6 +469,7 @@ window.MapperUI = (function() {
         });
         
         const config = {
+            messageType: currentState.messageType,
             commonMappings: commonList,
             subTableRules: [
                 {
@@ -504,10 +504,7 @@ window.MapperUI = (function() {
                 body: JSON.stringify({
                     messageType: currentState.messageType,
                     sampleData: sampleData,
-                    temporaryConfig: {
-                         type: 'Structure',
-                         param: tempConfig
-                    }
+                    temporaryConfig: tempConfig
                 })
             });
             
