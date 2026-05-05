@@ -41,7 +41,7 @@ public class HttpParser implements IParser {
 					if(line.contains(":")) {
 						String[] split = line.split(":", 2); // 최대 2개로 분할하여 값에 콜론이 있어도 처리
 						if (split.length >= 2) {
-							headers.put(split[0].toUpperCase().trim(), split[1].toUpperCase().trim());
+							headers.put(split[0].toUpperCase().trim(), split[1].trim());
 						}
 					}
 				}

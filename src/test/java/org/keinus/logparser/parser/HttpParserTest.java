@@ -60,9 +60,9 @@ class HttpParserTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> headers = (Map<String, Object>) fields.get("headers");
-        assertEquals("LOCALHOST:8080", headers.get("HOST"));
-        assertEquals("TEST-AGENT", headers.get("USER-AGENT"));
-        assertEquals("APPLICATION/JSON", headers.get("ACCEPT"));
+        assertEquals("localhost:8080", headers.get("HOST"));
+        assertEquals("Test-Agent", headers.get("USER-AGENT"));
+        assertEquals("application/json", headers.get("ACCEPT"));
 
         String body = (String) fields.get("body");
         assertEquals("", body.trim()); // GET 요청은 본문이 비어있음
@@ -95,8 +95,8 @@ class HttpParserTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> headers = (Map<String, Object>) fields.get("headers");
-        assertEquals("EXAMPLE.COM", headers.get("HOST"));
-        assertEquals("APPLICATION/JSON", headers.get("CONTENT-TYPE"));
+        assertEquals("example.com", headers.get("HOST"));
+        assertEquals("application/json", headers.get("CONTENT-TYPE"));
         assertEquals(String.valueOf(requestBody.length()), headers.get("CONTENT-LENGTH"));
 
         String body = (String) fields.get("body");
@@ -124,9 +124,9 @@ class HttpParserTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> headers = (Map<String, Object>) logEvent.getFields().get("headers");
-        assertEquals("LOCALHOST:8080", headers.get("HOST"));
-        assertEquals("BEARER TOKEN:WITH:COLONS", headers.get("AUTHORIZATION"));
-        assertEquals("VALUE:WITH:MULTIPLE:COLONS", headers.get("CUSTOM-HEADER"));
+        assertEquals("localhost:8080", headers.get("HOST"));
+        assertEquals("Bearer token:with:colons", headers.get("AUTHORIZATION"));
+        assertEquals("value:with:multiple:colons", headers.get("CUSTOM-HEADER"));
     }
 
     @Test
@@ -150,8 +150,8 @@ class HttpParserTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> headers = (Map<String, Object>) logEvent.getFields().get("headers");
-        assertEquals("LOCALHOST:8080", headers.get("HOST"));
-        assertEquals("VALID-VALUE", headers.get("VALID-HEADER"));
+        assertEquals("localhost:8080", headers.get("HOST"));
+        assertEquals("valid-value", headers.get("VALID-HEADER"));
         assertNull(headers.get("InvalidHeaderWithoutColon")); // 잘못된 헤더는 포함되지 않음
     }
 
@@ -176,9 +176,9 @@ class HttpParserTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> headers = (Map<String, Object>) logEvent.getFields().get("headers");
-        assertEquals("LOCALHOST:8080", headers.get("HOST"));
+        assertEquals("localhost:8080", headers.get("HOST"));
         assertEquals("", headers.get("EMPTY-HEADER"));
-        assertEquals("VALUE", headers.get("ANOTHER-HEADER"));
+        assertEquals("value", headers.get("ANOTHER-HEADER"));
     }
 
     @Test
@@ -268,8 +268,8 @@ class HttpParserTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> headers = (Map<String, Object>) logEvent.getFields().get("headers");
-        assertEquals("LOCALHOST", headers.get("HOST"));
-        assertEquals("TESTAGENT", headers.get("USER-AGENT"));
+        assertEquals("localhost", headers.get("HOST"));
+        assertEquals("TestAgent", headers.get("USER-AGENT"));
 
         String body = (String) logEvent.getFields().get("body");
         assertEquals("", body.trim());
@@ -303,10 +303,10 @@ class HttpParserTest {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> headers = (Map<String, Object>) logEvent.getFields().get("headers");
-        assertEquals("LOG-SERVER.EXAMPLE.COM:443", headers.get("HOST"));
-        assertEquals("APPLICATION/JSON; CHARSET=UTF-8", headers.get("CONTENT-TYPE"));
+        assertEquals("log-server.example.com:443", headers.get("HOST"));
+        assertEquals("application/json; charset=utf-8", headers.get("CONTENT-TYPE"));
         assertEquals("85", headers.get("CONTENT-LENGTH"));
-        assertEquals("BEARER EYJHBGCIOIJIUZI1NIISINR5CCI6IKPXVCJ9", headers.get("AUTHORIZATION"));
+        assertEquals("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", headers.get("AUTHORIZATION"));
 
         String body = (String) logEvent.getFields().get("body");
         assertTrue(body.contains("\"timestamp\":\"2024-01-01T12:00:00Z\""));

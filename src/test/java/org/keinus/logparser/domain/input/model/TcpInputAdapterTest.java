@@ -9,6 +9,7 @@ import org.keinus.logparser.domain.model.LogEvent;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -144,10 +145,10 @@ class TcpInputAdapterTest {
     void closeAdapter() throws IOException {
         adapter = new TcpInputAdapter(config);
         adapter.close();
-        
-        // After close, run should eventually return null or handle closed socket
-        LogEvent event = adapter.run();
-        // Since we closed it, it might return null due to SocketException being caught and retried, 
-        // but eventually it should stop.
+
+        assertNull(adapter.run());
+        try (ServerSocket socket = new ServerSocket(testPort)) {
+            assertTrue(socket.isBound());
+        }
     }
 }

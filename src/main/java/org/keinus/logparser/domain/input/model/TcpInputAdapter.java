@@ -119,6 +119,11 @@ public class TcpInputAdapter extends InputAdapter {
         } catch (java.net.SocketTimeoutException e) {
             // 타임아웃은 정상 - 계속 진행
         } catch(SocketException e) {
+            if (terminated.get() || serverSocket == null || serverSocket.isClosed()) {
+                LOGGER.debug("TCP input adapter is closed, skipping socket retry");
+                return null;
+            }
+
             retryCount++;
 
             if (retryCount >= MAX_RETRIES) {
@@ -230,6 +235,7 @@ public class TcpInputAdapter extends InputAdapter {
 	
 	@Override
 	public void close() throws IOException {
+		terminated.set(true);
 		LOGGER.info("Closing TCP Input Adapter on port {}", port);
 
 		// 1. ServerSocket 닫기 (새 연결 거부)
