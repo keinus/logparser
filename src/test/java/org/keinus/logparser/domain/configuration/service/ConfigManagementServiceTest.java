@@ -35,6 +35,7 @@ class ConfigManagementServiceTest {
     @Mock private OutputAdapterRepository outputAdapterRepository;
     @Mock private ConfigSettingsRepository configSettingsRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private ConfigValidationService validationService;
 
     @InjectMocks
     private ConfigManagementService service;
@@ -47,7 +48,17 @@ class ConfigManagementServiceTest {
         inputEntity.setId(1L);
         inputEntity.setType("TcpInputAdapter");
         inputEntity.setMessagetype("test");
+        inputEntity.setPort(5514);
         inputEntity.setEnabled(true);
+
+        lenient().when(validationService.validateInputAdapter(any()))
+                .thenReturn(new ConfigValidationService.ValidationResult(true, List.of()));
+        lenient().when(validationService.validateParser(any()))
+                .thenReturn(new ConfigValidationService.ValidationResult(true, List.of()));
+        lenient().when(validationService.validateTransform(any()))
+                .thenReturn(new ConfigValidationService.ValidationResult(true, List.of()));
+        lenient().when(validationService.validateOutputAdapter(any()))
+                .thenReturn(new ConfigValidationService.ValidationResult(true, List.of()));
     }
 
     @Test

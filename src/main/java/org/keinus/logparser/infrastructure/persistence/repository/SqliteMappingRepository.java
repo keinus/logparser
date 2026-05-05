@@ -63,9 +63,8 @@ public class SqliteMappingRepository implements MappingRepository {
 
     @Override
     public void save(MappingConfiguration config) {
-        String sql = "INSERT OR REPLACE INTO mapping_config (message_type, config_json) VALUES (?, ?)";
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(upsertSql(conn))) {
             
             String json = objectMapper.writeValueAsString(config);
             pstmt.setString(1, config.getMessageType());
@@ -77,5 +76,13 @@ public class SqliteMappingRepository implements MappingRepository {
             log.error("Error saving mapping config for type: {}", config.getMessageType(), e);
             throw new RuntimeException("Failed to save mapping config", e);
         }
+    }
+
+    private String upsertSql(Connection conn) throws SQLException {
+        String databaseName = conn.getMetaData().getDatabaseProductName();
+        if (databaseName != null && databaseName.toLowerCase().contains("h2")) {
+            return "MERGE INTO mapping_config (message_type, config_json) KEY(message_type) VALUES (?, ?)";
+        }
+        return "INSERT OR REPLACE INTO mapping_config (message_type, config_json) VALUES (?, ?)";
     }
 }

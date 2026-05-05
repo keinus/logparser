@@ -112,19 +112,21 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             throw deliveryFailure("Adapter is closed");
         }
 
-        Map<String, Object> json = outputMap(logEvent);
-        String targetIndex = resolveIndex(json);
-        String payload = serializeEvent(logEvent);
-        String url = buildDocumentUrl(targetIndex);
+        String targetIndex = null;
+        try {
+            Map<String, Object> json = outputMap(logEvent);
+            targetIndex = resolveIndex(json);
+            String payload = serializeEvent(logEvent);
+            String url = buildDocumentUrl(targetIndex);
 
-        HttpPost request = new HttpPost(url);
-        request.setHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.getMimeType());
-        if (authorizationHeader != null) {
-            request.setHeader(HttpHeaders.AUTHORIZATION, authorizationHeader);
-        }
-        request.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
+            HttpPost request = new HttpPost(url);
+            request.setHeader(HttpHeaders.CONTENT_TYPE, ContentType.APPLICATION_JSON.getMimeType());
+            if (authorizationHeader != null) {
+                request.setHeader(HttpHeaders.AUTHORIZATION, authorizationHeader);
+            }
+            request.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
 
-        try (CloseableHttpResponse response = httpClient.execute(request)) {
+            try (CloseableHttpResponse response = httpClient.execute(request)) {
             int statusCode = response.getCode();
             String responseBody = response.getEntity() != null ? EntityUtils.toString(response.getEntity()) : "";
             if (statusCode < 200 || statusCode >= 300) {
@@ -133,7 +135,10 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                                 + (responseBody.isBlank() ? "" : ": " + responseBody)
                 );
             }
-        } catch (IOException | ParseException e) {
+            }
+        } catch (OutputDeliveryException e) {
+            throw e;
+        } catch (IOException | ParseException | IllegalArgumentException e) {
             throw deliveryFailure("Failed to send document to OpenSearch index " + targetIndex, e);
         }
     }
@@ -170,9 +175,10 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
                 }
             }
 
-            if (replacement != null && !replacement.isEmpty()) {
-                targetIndex = targetIndex.replace("%{" + variable + "}", replacement);
+            if (replacement == null || replacement.isEmpty()) {
+                throw deliveryFailure("Missing value for OpenSearch index template variable: " + variable);
             }
+            targetIndex = targetIndex.replace("%{" + variable + "}", replacement);
         }
         return targetIndex;
     }

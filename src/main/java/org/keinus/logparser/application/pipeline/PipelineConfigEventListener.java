@@ -28,7 +28,7 @@ public class PipelineConfigEventListener {
                     inputAdapterComponent.addAdapter(event.getConfig());
                     break;
                 case UPDATED:
-                    if (event.getConfig().getEnabled().booleanValue()) {
+                    if (Boolean.TRUE.equals(event.getConfig().getEnabled())) {
                         inputAdapterComponent.restartAdapter(event.getConfig());
                     } else {
                         inputAdapterComponent.removeAdapter(event.getAdapterId());
@@ -52,7 +52,7 @@ public class PipelineConfigEventListener {
                     outputAdapterComponent.addAdapter(event.getConfig());
                     break;
                 case UPDATED:
-                    if (event.getConfig().getEnabled().booleanValue()) {
+                    if (Boolean.TRUE.equals(event.getConfig().getEnabled())) {
                         outputAdapterComponent.restartAdapter(event.getConfig());
                     } else {
                         outputAdapterComponent.removeAdapter(event.getAdapterId());

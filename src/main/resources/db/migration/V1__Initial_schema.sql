@@ -163,7 +163,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS validate_transform_type
 BEFORE INSERT ON transforms
 FOR EACH ROW
-WHEN NEW.type NOT IN ('filter', 'add_property', 'remove_property', 'Filter', 'AddProperty')
+WHEN NEW.type NOT IN ('filter', 'add_property', 'remove_property', 'Filter', 'AddProperty', 'RemoveProperty')
 BEGIN
     SELECT RAISE(ABORT, 'Invalid transform type');
 END;

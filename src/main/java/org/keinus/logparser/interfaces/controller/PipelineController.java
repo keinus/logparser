@@ -75,7 +75,7 @@ public class PipelineController {
             ));
         } catch (Exception e) {
             log.error("Failed to reload configuration", e);
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.internalServerError().body(Map.of(
                     "status", "error",
                     "message", e.getMessage()
             ));
@@ -93,7 +93,7 @@ public class PipelineController {
             ));
         } catch (Exception e) {
             log.error("Failed to validate and reload configuration", e);
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.internalServerError().body(Map.of(
                     "status", "error",
                     "message", e.getMessage()
             ));
@@ -111,7 +111,7 @@ public class PipelineController {
             ));
         } catch (Exception e) {
             log.error("Failed to restart pipeline", e);
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.internalServerError().body(Map.of(
                     "status", "error",
                     "message", e.getMessage()
             ));
@@ -136,7 +136,7 @@ public class PipelineController {
             ));
         } catch (Exception e) {
             log.error("Failed to cancel reload", e);
-            return ResponseEntity.ok(Map.of(
+            return ResponseEntity.internalServerError().body(Map.of(
                     "status", "error",
                     "message", e.getMessage()
             ));

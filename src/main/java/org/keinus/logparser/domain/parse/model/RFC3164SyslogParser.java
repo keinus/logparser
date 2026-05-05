@@ -106,25 +106,10 @@ public class RFC3164SyslogParser implements IParser {
     }
 
     protected String getTimestamp(Reader r) {
-        StringBuilder sb = new StringBuilder();
-        // Month (3 letters)
-        for (int i = 0; i < 3; i++) {
-            sb.append((char) r.getc());
-        }
-        sb.append(SPACE);
-        // Day (dd)
-        while (!r.is(SPACE)) {
-            sb.append((char) r.getc());
-        }
-        sb.append((char) r.getc()); // SPACE
-        // Time (HH:MM:SS)
-        for (int i = 0; i < 8; i++) {
-            sb.append((char) r.getc());
-        }
-        if (r.is(SPACE)) {
-            r.getc();
-        }
-        return sb.toString();
+        String month = r.getToken();
+        String day = r.getToken();
+        String time = r.getToken();
+        return month + SPACE + day + SPACE + time;
     }
 
     protected static class Reader {
@@ -182,6 +167,22 @@ public class RFC3164SyslogParser implements IParser {
                 sb.append((char) getc());
             }
             return sb.toString();
+        }
+
+        public String getToken() {
+            skipWhitespace();
+            StringBuilder sb = new StringBuilder();
+            while (this.idx < this.line.length() && !Character.isWhitespace(this.line.charAt(this.idx))) {
+                sb.append((char) getc());
+            }
+            skipWhitespace();
+            return sb.toString();
+        }
+
+        private void skipWhitespace() {
+            while (this.idx < this.line.length() && Character.isWhitespace(this.line.charAt(this.idx))) {
+                this.idx++;
+            }
         }
     }
 

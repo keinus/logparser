@@ -738,7 +738,8 @@ const App = (function() {
                  const required = field.required ? 'required' : '';
                  
                  // Map Types to HTML
-                 if (field.type === 'Boolean') {
+                 const fieldType = field.dataType || field.type;
+                 if (fieldType === 'Boolean') {
                      inputHtml = `
                         <select name="${field.name}" class="select select-bordered bg-slate-800 text-white w-full" ${required}>
                             <option value="true">True</option>
@@ -852,7 +853,6 @@ const App = (function() {
 
         // Collect dynamic fields
         const dynamicFields = document.querySelectorAll('#dynamic-fields [name]');
-        const params = {};
 
         dynamicFields.forEach(field => {
             let val = field.value;
@@ -860,19 +860,23 @@ const App = (function() {
             if (val === 'true') val = true;
             if (val === 'false') val = false;
 
-            // If Transform/Parser, fields often go into 'param'
             if (state.currentAdapterType === 'transform') {
-                params[field.name] = val;
+                const transformFieldMap = {
+                    pass: 'filterPass',
+                    drop: 'filterDrop',
+                    add: 'addProperties',
+                    remove: 'removeProperties'
+                };
+                const mappedField = transformFieldMap[field.name];
+                if (mappedField && val !== '') {
+                    data[mappedField] = formatTransformFieldValue(field.name, val);
+                }
             } else if (state.currentAdapterType === 'parser' && field.name === 'param') {
                 data.param = val; // Grok/Regex pattern usually top level string in simple implementation, but DTO might expect it.
             } else {
                 data[field.name] = val;
             }
         });
-
-        if (state.currentAdapterType === 'transform') {
-            data.param = params;
-        }
 
         try {
             const apiMap = {
@@ -913,6 +917,14 @@ const App = (function() {
         } catch (e) {
             showToast("Delete failed", "error");
         }
+    }
+
+    function formatTransformFieldValue(fieldName, value) {
+        const trimmed = value.trim();
+        if (fieldName === 'remove' && trimmed && !trimmed.startsWith('[')) {
+            return JSON.stringify(trimmed.split(',').map(item => item.trim()).filter(Boolean));
+        }
+        return trimmed;
     }
     
     async function toggleAdapter(type, id, checked) {

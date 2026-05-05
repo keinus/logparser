@@ -52,7 +52,7 @@ public class OutputAdapterEntity {
     @Column(name = "bootstrapservers", length = 500)
     private String bootstrapservers;
 
-    @Column(name = "key", length = 255)
+    @Column(name = "\"key\"", length = 255)
     private String key;
 
     @Column(name = "index_template", length = 255)

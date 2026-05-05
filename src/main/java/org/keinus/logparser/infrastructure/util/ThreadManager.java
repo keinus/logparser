@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -24,7 +25,7 @@ public class ThreadManager extends ThreadPoolExecutor {
 
     public ThreadManager(String threadName) {
         super(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, 
-              new LinkedBlockingQueue<>(), new CustomThreadFactory(threadName));
+              new SynchronousQueue<>(), new CustomThreadFactory(threadName));
     }
 
     public ThreadManager(String threadName, int nThreads) {
@@ -69,6 +70,9 @@ public class ThreadManager extends ThreadPoolExecutor {
     public void stopThread(String threadName) {
         Thread thread = threads.get(threadName);
         if (thread == null) {
+            if (removePendingThread(threadName)) {
+                LOGGER.info("Removed pending thread task: {}", threadName);
+            }
             LOGGER.debug("Thread not found: {}", threadName);
             return;
         }
@@ -82,21 +86,17 @@ public class ThreadManager extends ThreadPoolExecutor {
         thread.interrupt();
 
         try {
-            LOGGER.debug("Waiting for thread to finish: {}", threadName);
+            LOGGER.debug("Waiting for task to finish: {}", threadName);
 
-            // 스레드가 1~9초 사이에 종료되므로 최대 10초 대기하며 1초마다 확인
             long timeoutMs = 10000;
-            long intervalMs = 1000;
+            long intervalMs = 100;
             long deadline = System.currentTimeMillis() + timeoutMs;
 
-            while (thread.isAlive() && System.currentTimeMillis() < deadline) {
-                thread.join(intervalMs);
-                if (thread.isAlive()) {
-                    LOGGER.debug("Thread {} is still running... waiting", threadName);
-                }
+            while (threads.get(threadName) == thread && System.currentTimeMillis() < deadline) {
+                Thread.sleep(intervalMs);
             }
 
-            if (thread.isAlive()) {
+            if (threads.get(threadName) == thread) {
                 LOGGER.warn("Thread {} did not finish within {} ms", threadName, timeoutMs);
             } else {
                 LOGGER.info("Thread {} has been successfully stopped", threadName);
@@ -125,8 +125,10 @@ public class ThreadManager extends ThreadPoolExecutor {
             return 0;
         }
 
-        List<Thread> targetThreads = new ArrayList<>();
+        Map<String, Thread> targetThreads = new ConcurrentHashMap<>();
         int count = 0;
+
+        count += removePendingThreadsStartingWith(prefix);
 
         // 1. 대상 식별 및 인터럽트 전송 (병렬 종료 신호)
         for (Map.Entry<String, Thread> entry : threads.entrySet()) {
@@ -135,28 +137,30 @@ public class ThreadManager extends ThreadPoolExecutor {
                 if (thread.isAlive()) {
                     LOGGER.info("Interrupting thread: {}", entry.getKey());
                     thread.interrupt();
-                    targetThreads.add(thread);
+                    targetThreads.put(entry.getKey(), thread);
                 }
             }
         }
 
         long deadline = System.currentTimeMillis() + Math.max(timeoutMs, 0);
-        for (Thread thread : targetThreads) {
+        for (Map.Entry<String, Thread> target : targetThreads.entrySet()) {
             try {
-                while (thread.isAlive()) {
+                String name = target.getKey();
+                Thread thread = target.getValue();
+                while (threads.get(name) == thread) {
                     long remainingMs = deadline - System.currentTimeMillis();
                     if (remainingMs <= 0) {
-                        LOGGER.warn("Thread {} did not finish within {} ms", thread.getName(), timeoutMs);
+                        LOGGER.warn("Thread {} did not finish within {} ms", name, timeoutMs);
                         break;
                     }
-                    thread.join(Math.min(remainingMs, 1_000));
+                    Thread.sleep(Math.min(remainingMs, 100));
                 }
-                if (!thread.isAlive()) {
+                if (threads.get(name) != thread) {
                     count++;
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                LOGGER.error("Interrupted while waiting for thread {} to finish", thread.getName(), e);
+                LOGGER.error("Interrupted while waiting for thread {} to finish", target.getKey(), e);
                 break;
             }
         }
@@ -186,6 +190,11 @@ public class ThreadManager extends ThreadPoolExecutor {
                 activeThreads.add(name);
             }
         });
+        taskNames.values().forEach(name -> {
+            if (!activeThreads.contains(name)) {
+                activeThreads.add(name);
+            }
+        });
         return Collections.unmodifiableList(activeThreads);
     }
 
@@ -195,6 +204,11 @@ public class ThreadManager extends ThreadPoolExecutor {
     public List<ThreadInfo> getAllThreadInfo() {
         List<ThreadInfo> infoList = new ArrayList<>();
         threads.forEach((name, thread) -> infoList.add(createThreadInfo(name, thread)));
+        taskNames.values().forEach(name -> {
+            if (!threads.containsKey(name)) {
+                infoList.add(new ThreadInfo(name, -1L, Thread.State.NEW, false, false));
+            }
+        });
         return Collections.unmodifiableList(infoList);
     }
 
@@ -209,6 +223,27 @@ public class ThreadManager extends ThreadPoolExecutor {
     private ThreadInfo createThreadInfo(String name, Thread thread) {
         return new ThreadInfo(name, thread.threadId(), thread.getState(), 
                               thread.isAlive(), thread.isInterrupted());
+    }
+
+    private boolean removePendingThread(String threadName) {
+        for (Map.Entry<Runnable, String> entry : taskNames.entrySet()) {
+            if (entry.getValue().equals(threadName) && getQueue().remove(entry.getKey())) {
+                taskNames.remove(entry.getKey());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int removePendingThreadsStartingWith(String prefix) {
+        int removed = 0;
+        for (Map.Entry<Runnable, String> entry : taskNames.entrySet()) {
+            if (entry.getValue().startsWith(prefix) && getQueue().remove(entry.getKey())) {
+                taskNames.remove(entry.getKey());
+                removed++;
+            }
+        }
+        return removed;
     }
 
     public void shutdownAllThreads() {

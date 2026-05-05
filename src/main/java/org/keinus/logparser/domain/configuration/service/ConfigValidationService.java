@@ -35,30 +35,30 @@ public class ConfigValidationService {
             errors.add("Message type is required");
         }
 
-        // Type-specific validation
-        switch (entity.getType() != null ? entity.getType().toLowerCase() : "") {
-            case "tcp", "udp" -> {
-                if (entity.getHost() == null || entity.getPort() == null) {
-                    errors.add("Host and port are required for TCP/UDP");
-                }
-            }
-            case "http" -> {
+        String type = normalizeType(entity.getType());
+        switch (type) {
+            case "tcp", "tcpinputadapter", "udp", "udpinputadapter", "http", "httpinputadapter" -> {
                 if (entity.getPort() == null) {
-                    errors.add("Port is required for HTTP");
+                    errors.add("Port is required for " + entity.getType());
                 }
             }
-            case "kafka" -> {
+            case "kafka", "kafkainputadapter" -> {
                 if (entity.getBootstrapservers() == null || entity.getTopicid() == null) {
                     errors.add("Bootstrap servers and topic are required for Kafka");
                 }
             }
-            case "file" -> {
+            case "file", "fileinputadapter" -> {
                 if (entity.getPath() == null) {
                     errors.add("Path is required for File");
                 }
             }
-            default -> {
+            case "fake", "fakeinputadapter" -> {
                 break;
+            }
+            default -> {
+                if (entity.getType() != null && !entity.getType().trim().isEmpty()) {
+                    errors.add("Unsupported input adapter type: " + entity.getType());
+                }
             }
         }
 
@@ -76,11 +76,21 @@ public class ConfigValidationService {
             errors.add("Message type is required");
         }
 
-        // Type-specific validation
-        if ("grok".equalsIgnoreCase(entity.getType()) || "regex".equalsIgnoreCase(entity.getType())) {
+        String type = normalizeType(entity.getType());
+        if ("grok".equals(type) || "grokparser".equals(type) || "regex".equals(type) || "regexparser".equals(type)) {
             if (entity.getParam() == null || entity.getParam().trim().isEmpty()) {
                 errors.add("Pattern parameter is required for " + entity.getType());
             }
+        }
+        if (!Set.of(
+                "json", "jsonparser",
+                "grok", "grokparser",
+                "regex", "regexparser",
+                "rfc3164", "rfc3164syslogparser",
+                "rfc5424", "rfc5424syslogparser",
+                "http", "httpparser"
+        ).contains(type) && entity.getType() != null && !entity.getType().trim().isEmpty()) {
+            errors.add("Unsupported parser type: " + entity.getType());
         }
 
         return new ValidationResult(errors.isEmpty(), errors);
@@ -97,22 +107,27 @@ public class ConfigValidationService {
             errors.add("Message type is required");
         }
 
-        // Type-specific validation
-        switch (entity.getType() != null ? entity.getType().toLowerCase() : "") {
+        String type = normalizeType(entity.getType());
+        switch (type) {
             case "filter" -> {
                 if ((entity.getFilterPass() == null || entity.getFilterPass().trim().isEmpty()) &&
                     (entity.getFilterDrop() == null || entity.getFilterDrop().trim().isEmpty())) {
                     errors.add("Either filterPass or filterDrop is required for Filter");
                 }
             }
-            case "add_property" -> {
+            case "add_property", "addproperty" -> {
                 if (entity.getAddProperties() == null || entity.getAddProperties().trim().isEmpty()) {
                     errors.add("Add properties is required for AddProperty");
                 }
             }
-            case "remove_property" -> {
+            case "remove_property", "removeproperty" -> {
                 if (entity.getRemoveProperties() == null || entity.getRemoveProperties().trim().isEmpty()) {
                     errors.add("Remove properties is required for RemoveProperty");
+                }
+            }
+            default -> {
+                if (entity.getType() != null && !entity.getType().trim().isEmpty()) {
+                    errors.add("Unsupported transform type: " + entity.getType());
                 }
             }
         }
@@ -131,24 +146,24 @@ public class ConfigValidationService {
             errors.add("Message type is required");
         }
 
-        // Type-specific validation (전체 클래스명 사용)
-        switch (entity.getType() != null ? entity.getType() : "") {
-            case "TcpOutputAdapter" -> {
+        String type = normalizeType(entity.getType());
+        switch (type) {
+            case "tcp", "tcpoutputadapter" -> {
                 if (entity.getHost() == null || entity.getPort() == null) {
                     errors.add("Host and port are required for TcpOutputAdapter");
                 }
             }
-            case "HttpOutputAdapter" -> {
+            case "http", "httpoutputadapter" -> {
                 if (entity.getUrl() == null || entity.getUrl().trim().isEmpty()) {
                     errors.add("URL is required for HttpOutputAdapter");
                 }
             }
-            case "KafkaOutputAdapter" -> {
+            case "kafka", "kafkaoutputadapter" -> {
                 if (entity.getBootstrapservers() == null || entity.getTopicid() == null) {
                     errors.add("Bootstrap servers and topic are required for KafkaOutputAdapter");
                 }
             }
-            case "OpenSearchOutputAdapter" -> {
+            case "opensearch", "opensearchoutputadapter" -> {
                 if (entity.getUrl() == null || entity.getUrl().trim().isEmpty()) {
                     errors.add("URL is required for OpenSearchOutputAdapter");
                 }
@@ -156,7 +171,7 @@ public class ConfigValidationService {
                     errors.add("Index is required for OpenSearchOutputAdapter");
                 }
             }
-            case "RabbitMQAdapter" -> {
+            case "rabbitmq", "rabbitmqadapter" -> {
                 if (entity.getHost() == null || entity.getHost().trim().isEmpty()) {
                     errors.add("Host is required for RabbitMQAdapter");
                 }
@@ -165,6 +180,14 @@ public class ConfigValidationService {
                 }
                 if (entity.getRoutingkey() == null || entity.getRoutingkey().trim().isEmpty()) {
                     errors.add("Routing key is required for RabbitMQAdapter");
+                }
+            }
+            case "console", "consoleoutputadapter", "benchmark", "benchmarkadapter" -> {
+                break;
+            }
+            default -> {
+                if (entity.getType() != null && !entity.getType().trim().isEmpty()) {
+                    errors.add("Unsupported output adapter type: " + entity.getType());
                 }
             }
         }
@@ -250,6 +273,10 @@ public class ConfigValidationService {
 
     private boolean isGlobalOutputType(String messageType) {
         return messageType != null && "all".equalsIgnoreCase(messageType.trim());
+    }
+
+    private String normalizeType(String type) {
+        return type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
     }
 
     // ==================== Error Management ====================

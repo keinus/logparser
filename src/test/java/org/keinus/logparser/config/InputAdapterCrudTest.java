@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
+import org.keinus.logparser.domain.configuration.service.ConfigValidationService;
 import org.keinus.logparser.infrastructure.persistence.entity.InputAdapterEntity;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;
@@ -23,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(ConfigManagementService.class)
+@Import({ConfigManagementService.class, ConfigValidationService.class})
 @org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase(replace = org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE)
 @org.springframework.data.jpa.repository.config.EnableJpaAuditing
 class InputAdapterCrudTest {

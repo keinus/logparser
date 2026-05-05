@@ -1,10 +1,14 @@
 package org.keinus.logparser.infrastructure.util.converter;
 
 import java.time.Instant;
+import java.time.DateTimeException;
 import java.time.LocalDateTime;
+import java.time.Year;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoField;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +50,7 @@ public class TimestampParser {
         }
         
         if (dateObj instanceof Long) {
-            return Instant.ofEpochMilli((Long) dateObj);
+            return parseEpoch((Long) dateObj);
         }
 
         String dateStr = dateObj.toString().trim();
@@ -54,28 +58,16 @@ public class TimestampParser {
         // Try Numeric Epoch
         try {
             long epoch = Long.parseLong(dateStr);
-            // Heuristic: If > 10^11, likely millis, else seconds
-            if (epoch > 100000000000L) { 
-                return Instant.ofEpochMilli(epoch);
-            } else {
-                return Instant.ofEpochSecond(epoch);
-            }
+            return parseEpoch(epoch);
         } catch (NumberFormatException ignored) {
             // Not a number, proceed to patterns
         }
 
         for (DateTimeFormatter formatter : FORMATTERS) {
             try {
-                // Try parsing as Zoned/Offset first
-                return Instant.from(formatter.parse(dateStr));
+                TemporalAccessor parsed = formatter.parse(dateStr);
+                return toInstant(parsed);
             } catch (DateTimeParseException ignored) {
-                try {
-                    // Try parsing as Local and assume system default zone
-                    LocalDateTime localDt = LocalDateTime.parse(dateStr, formatter);
-                    return localDt.atZone(ZoneId.systemDefault()).toInstant();
-                } catch (DateTimeParseException ignored2) {
-                    // Continue
-                }
             } catch (Exception e) {
                 // Continue
             }
@@ -83,5 +75,45 @@ public class TimestampParser {
         
         log.debug("Failed to parse timestamp: {}", dateStr);
         return null;
+    }
+
+    private static Instant parseEpoch(long epoch) {
+        // Heuristic: If > 10^11, likely millis, else seconds
+        if (epoch > 100000000000L) {
+            return Instant.ofEpochMilli(epoch);
+        }
+        return Instant.ofEpochSecond(epoch);
+    }
+
+    private static Instant toInstant(TemporalAccessor parsed) {
+        try {
+            return Instant.from(parsed);
+        } catch (DateTimeException ignored) {
+            // Fall through to local date-time parsing.
+        }
+
+        try {
+            return LocalDateTime.from(parsed).atZone(ZoneId.systemDefault()).toInstant();
+        } catch (DateTimeException ignored) {
+            // Syslog timestamps often omit a year.
+        }
+
+        if (parsed.isSupported(ChronoField.MONTH_OF_YEAR)
+                && parsed.isSupported(ChronoField.DAY_OF_MONTH)
+                && parsed.isSupported(ChronoField.HOUR_OF_DAY)
+                && parsed.isSupported(ChronoField.MINUTE_OF_HOUR)
+                && parsed.isSupported(ChronoField.SECOND_OF_MINUTE)) {
+            LocalDateTime localDt = LocalDateTime.of(
+                    Year.now(ZoneId.systemDefault()).getValue(),
+                    parsed.get(ChronoField.MONTH_OF_YEAR),
+                    parsed.get(ChronoField.DAY_OF_MONTH),
+                    parsed.get(ChronoField.HOUR_OF_DAY),
+                    parsed.get(ChronoField.MINUTE_OF_HOUR),
+                    parsed.get(ChronoField.SECOND_OF_MINUTE)
+            );
+            return localDt.atZone(ZoneId.systemDefault()).toInstant();
+        }
+
+        throw new DateTimeException("Unsupported timestamp fields");
     }
 }

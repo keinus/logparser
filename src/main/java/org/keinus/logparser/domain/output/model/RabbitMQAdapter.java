@@ -35,6 +35,7 @@ import com.rabbitmq.client.Channel;
  */
 @Slf4j
 public class RabbitMQAdapter extends OutputAdapter {
+	private static final int DEFAULT_PORT = 5672;
 	private String routingkey = null;
 	private String exchange = null;
 	private final ReentrantLock lock = new ReentrantLock();
@@ -62,7 +63,7 @@ public class RabbitMQAdapter extends OutputAdapter {
 		factory.setHost(obj.get("host"));
 		factory.setUsername(obj.get("username"));
 		factory.setPassword(obj.get("password"));
-		factory.setPort(Integer.parseInt(obj.get("port")));
+		factory.setPort(parsePort(obj.get("port")));
 		factory.setConnectionTimeout(10000); // 10초 연결 타임아웃
 		factory.setHandshakeTimeout(10000); // 10초 핸드셰이크 타임아웃
 
@@ -77,6 +78,17 @@ public class RabbitMQAdapter extends OutputAdapter {
 			// Clean up partially initialized resources
 			closeResources();
 			throw new IOException("Failed to initialize RabbitMQ adapter", e);
+		}
+	}
+
+	private int parsePort(String value) throws IOException {
+		if (value == null || value.isBlank()) {
+			return DEFAULT_PORT;
+		}
+		try {
+			return Integer.parseInt(value);
+		} catch (NumberFormatException e) {
+			throw new IOException("Invalid RabbitMQ port: " + value, e);
 		}
 	}
 

@@ -36,11 +36,13 @@ public class ConfigManagementService {
     private final OutputAdapterRepository outputAdapterRepository;
     private final ConfigSettingsRepository configSettingsRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ConfigValidationService validationService;
 
     // ==================== InputAdapter Management ====================
 
     public InputAdapterEntity createInputAdapter(InputAdapterEntity entity) {
         log.info("Creating input adapter: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
+        assertValid("InputAdapter", validationService.validateInputAdapter(entity));
         InputAdapterEntity saved = inputAdapterRepository.save(entity);
         eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
         return saved;
@@ -51,6 +53,7 @@ public class ConfigManagementService {
         InputAdapterEntity existing = getInputAdapter(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
+        assertValid("InputAdapter", validationService.validateInputAdapter(entity));
         InputAdapterEntity saved = inputAdapterRepository.save(entity);
         eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
         return saved;
@@ -92,6 +95,7 @@ public class ConfigManagementService {
         log.info("Enabling input adapter: id={}", id);
         InputAdapterEntity entity = getInputAdapter(id);
         entity.setEnabled(true);
+        assertValid("InputAdapter", validationService.validateInputAdapter(entity));
         InputAdapterEntity saved = inputAdapterRepository.save(entity);
         eventPublisher.publishEvent(new InputAdapterChangedEvent(this, InputAdapterChangedEvent.ChangeType.ENABLED, convertToConfig(saved)));
         return saved;
@@ -115,6 +119,7 @@ public class ConfigManagementService {
 
     public ParserEntity createParser(ParserEntity entity) {
         log.info("Creating parser: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
+        assertValid("Parser", validationService.validateParser(entity));
         ParserEntity saved = parserRepository.save(entity);
         eventPublisher.publishEvent(new ParserChangedEvent(this, ParserChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
         return saved;
@@ -125,6 +130,7 @@ public class ConfigManagementService {
         ParserEntity existing = getParser(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
+        assertValid("Parser", validationService.validateParser(entity));
         ParserEntity saved = parserRepository.save(entity);
         eventPublisher.publishEvent(new ParserChangedEvent(this, ParserChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
         return saved;
@@ -178,6 +184,7 @@ public class ConfigManagementService {
 
     public TransformEntity createTransform(TransformEntity entity) {
         log.info("Creating transform: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
+        assertValid("Transform", validationService.validateTransform(entity));
         TransformEntity saved = transformRepository.save(entity);
         eventPublisher.publishEvent(new TransformChangedEvent(this, TransformChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
         return saved;
@@ -188,6 +195,7 @@ public class ConfigManagementService {
         TransformEntity existing = getTransform(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
+        assertValid("Transform", validationService.validateTransform(entity));
         TransformEntity saved = transformRepository.save(entity);
         eventPublisher.publishEvent(new TransformChangedEvent(this, TransformChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
         return saved;
@@ -241,6 +249,7 @@ public class ConfigManagementService {
 
     public OutputAdapterEntity createOutputAdapter(OutputAdapterEntity entity) {
         log.info("Creating output adapter: type={}, messagetype={}", entity.getType(), entity.getMessagetype());
+        assertValid("OutputAdapter", validationService.validateOutputAdapter(entity));
         OutputAdapterEntity saved = outputAdapterRepository.save(entity);
         eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.CREATED, convertToConfig(saved)));
         return saved;
@@ -251,6 +260,7 @@ public class ConfigManagementService {
         OutputAdapterEntity existing = getOutputAdapter(id);
         entity.setId(existing.getId());
         entity.setVersion(existing.getVersion());
+        assertValid("OutputAdapter", validationService.validateOutputAdapter(entity));
         OutputAdapterEntity saved = outputAdapterRepository.save(entity);
         eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.UPDATED, convertToConfig(saved)));
         return saved;
@@ -290,6 +300,7 @@ public class ConfigManagementService {
         log.info("Enabling output adapter: id={}", id);
         OutputAdapterEntity entity = getOutputAdapter(id);
         entity.setEnabled(true);
+        assertValid("OutputAdapter", validationService.validateOutputAdapter(entity));
         OutputAdapterEntity saved = outputAdapterRepository.save(entity);
         eventPublisher.publishEvent(new OutputAdapterChangedEvent(this, OutputAdapterChangedEvent.ChangeType.ENABLED, convertToConfig(saved)));
         return saved;
@@ -519,6 +530,13 @@ public class ConfigManagementService {
                 String.format("Invalid configuration: '%s' is not a valid %s", value, dataType), e);
         }
     }
+
+    private void assertValid(String entityName, ConfigValidationService.ValidationResult result) {
+        if (!result.isValid()) {
+            throw new IllegalArgumentException(entityName + " validation failed: " + result.errors());
+        }
+    }
+
     private InputAdapterConfig convertToConfig(InputAdapterEntity entity) {
         InputAdapterConfig config = new InputAdapterConfig();
         config.setId(entity.getId());

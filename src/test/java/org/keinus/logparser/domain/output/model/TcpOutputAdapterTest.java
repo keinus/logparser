@@ -34,6 +34,7 @@ class TcpOutputAdapterTest {
         config.put("retryCount", "2");
         config.put("retryDelayMs", "100");
         config.put("timeoutMs", "1000");
+        config.put("add_origin_text", "true");
     }
 
     @AfterEach
@@ -55,7 +56,12 @@ class TcpOutputAdapterTest {
 
     @Test
     void testSendFailure() throws IOException {
-        server.close(); // Stop server to cause connection failure
+        server.close();
+        try (ServerSocket closedSocket = new ServerSocket(0)) {
+            config.put("port", String.valueOf(closedSocket.getLocalPort()));
+        }
+        config.put("retryCount", "1");
+        config.put("retryDelayMs", "1");
         
         TcpOutputAdapter adapter = new TcpOutputAdapter(config);
         LogEvent event = new LogEvent("test failure", "localhost", "test");

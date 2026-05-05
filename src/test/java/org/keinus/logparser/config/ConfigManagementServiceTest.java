@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
+import org.keinus.logparser.domain.configuration.service.ConfigValidationService;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +26,7 @@ public class ConfigManagementServiceTest {
     @Mock private OutputAdapterRepository outputAdapterRepository;
     @Mock private ConfigSettingsRepository configSettingsRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private ConfigValidationService validationService;
 
     @BeforeEach
     void setUp() {
@@ -34,7 +36,8 @@ public class ConfigManagementServiceTest {
             transformRepository,
             outputAdapterRepository,
             configSettingsRepository,
-            eventPublisher
+            eventPublisher,
+            validationService
         );
     }
 
