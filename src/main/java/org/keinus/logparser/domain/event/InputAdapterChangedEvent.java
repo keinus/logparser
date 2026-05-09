@@ -4,8 +4,10 @@ import org.keinus.logparser.domain.configuration.model.InputAdapterConfig;
 import org.springframework.context.ApplicationEvent;
 
 public class InputAdapterChangedEvent extends ApplicationEvent {
+    private static final long serialVersionUID = 1L;
 
     private final ChangeType changeType;
+    @SuppressWarnings("serial")
     private final InputAdapterConfig config;
     private final Long adapterId;
 

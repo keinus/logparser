@@ -1,6 +1,8 @@
 package org.keinus.logparser.interfaces.exception;
 
 public class VersionNotFoundException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final Long versionId;
 
     public VersionNotFoundException(Long versionId) {

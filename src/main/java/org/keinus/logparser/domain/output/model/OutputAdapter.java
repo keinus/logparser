@@ -37,8 +37,7 @@ public abstract class OutputAdapter implements Closeable {
 	@Getter
 	private String type = "";
 
-	@Getter
-	private final int timeoutMs;
+	protected final int timeoutMs;
 
 	@Getter
 	private final boolean addOriginText;
@@ -61,6 +60,10 @@ public abstract class OutputAdapter implements Closeable {
 
 	public String getMessageType() {
 		return type;
+	}
+
+	public final int getTimeoutMs() {
+		return timeoutMs;
 	}
 
 	public abstract void send(LogEvent logEvent);

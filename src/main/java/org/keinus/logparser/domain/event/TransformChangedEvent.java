@@ -4,8 +4,10 @@ import org.keinus.logparser.domain.configuration.model.TransformConfig;
 import org.springframework.context.ApplicationEvent;
 
 public class TransformChangedEvent extends ApplicationEvent {
+    private static final long serialVersionUID = 1L;
 
     private final ChangeType changeType;
+    @SuppressWarnings("serial")
     private final TransformConfig config;
     private final Long transformId;
 

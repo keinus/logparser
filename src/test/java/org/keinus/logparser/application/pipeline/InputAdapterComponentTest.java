@@ -46,7 +46,9 @@ class InputAdapterComponentTest {
         TestInputAdapter adapter2 = new TestInputAdapter(config2);
         InputAdapterComponent component = new InputAdapterComponent(appProp, threadManager, messageDispatcher);
 
-        when(appProp.getInput()).thenReturn(List.of(config1), List.of(config2));
+        when(appProp.getInput())
+                .thenReturn(List.of(config1))
+                .thenReturn(List.of(config2));
 
         try (MockedStatic<InputFactory> mockedFactory = mockStatic(InputFactory.class)) {
             mockedFactory.when(() -> InputFactory.getInputAdapter(any())).thenAnswer(invocation -> {

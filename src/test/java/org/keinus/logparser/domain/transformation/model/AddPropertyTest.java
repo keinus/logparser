@@ -43,7 +43,9 @@ class AddPropertyTest {
         assertTrue(fields.containsKey("user"));
         assertTrue(fields.containsKey("other"));
 
-        Map<String, Object> user = (Map<String, Object>) fields.get("user");
+        Object userValue = fields.get("user");
+        assertTrue(userValue instanceof Map<?, ?>);
+        Map<?, ?> user = (Map<?, ?>) userValue;
         assertEquals("john", user.get("name"));
         assertEquals("john@example.com", user.get("email"));
     }

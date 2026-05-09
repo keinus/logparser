@@ -1,8 +1,11 @@
 package org.keinus.logparser.interfaces.exception;
 
 public class DuplicateConfigException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final String entityType;
     private final String conflictField;
+    @SuppressWarnings("serial")
     private final Object conflictValue;
 
     public DuplicateConfigException(String entityType, String conflictField, Object conflictValue) {

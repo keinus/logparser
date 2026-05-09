@@ -49,7 +49,8 @@ class KafkaInputAdapterTest {
     @DisplayName("생성자 테스트 - 유효한 설정으로 생성")
     void testConstructorWithValidConfig() {
         // Given
-        try (MockedConstruction<KafkaConsumer> mockedConstruction = mockConstruction(KafkaConsumer.class)) {
+        try (MockedConstruction<KafkaConsumer<String, String>> mockedConstruction =
+                     mockConstruction(kafkaConsumerType())) {
             // When & Then
             assertDoesNotThrow(() -> new KafkaInputAdapter(validConfig));
             assertEquals(1, mockedConstruction.constructed().size());
@@ -84,12 +85,13 @@ class KafkaInputAdapterTest {
         ConsumerRecord<String, String> record = new ConsumerRecord<>("test-topic", 0, 0L, "key", "test message");
         ConsumerRecords<String, String> records = new ConsumerRecords<>(Map.of(partition, List.of(record)));
 
-        try (MockedConstruction<KafkaConsumer> mockedConstruction = mockConstruction(KafkaConsumer.class,
+        try (MockedConstruction<KafkaConsumer<String, String>> mockedConstruction = mockConstruction(kafkaConsumerType(),
                 (mock, context) -> {
                     when(mock.poll(any(Duration.class))).thenReturn(records);
                 })) {
 
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
+            assertEquals(1, mockedConstruction.constructed().size());
 
             // When
             LogEvent result = adapter.run();
@@ -107,12 +109,13 @@ class KafkaInputAdapterTest {
         // Given
         ConsumerRecords<String, String> emptyRecords = new ConsumerRecords<>(Map.of());
 
-        try (MockedConstruction<KafkaConsumer> mockedConstruction = mockConstruction(KafkaConsumer.class,
+        try (MockedConstruction<KafkaConsumer<String, String>> mockedConstruction = mockConstruction(kafkaConsumerType(),
                 (mock, context) -> {
                     when(mock.poll(any(Duration.class))).thenReturn(emptyRecords);
                 })) {
 
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
+            assertEquals(1, mockedConstruction.constructed().size());
 
             // When
             LogEvent result = adapter.run();
@@ -126,14 +129,15 @@ class KafkaInputAdapterTest {
     @DisplayName("close() 테스트 - 리소스 정리")
     void testClose() throws IOException {
         // Given
-        try (MockedConstruction<KafkaConsumer> mockedConstruction = mockConstruction(KafkaConsumer.class)) {
+        try (MockedConstruction<KafkaConsumer<String, String>> mockedConstruction =
+                     mockConstruction(kafkaConsumerType())) {
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
 
             // When
             adapter.close();
 
             // Then
-            KafkaConsumer mockConsumer = mockedConstruction.constructed().get(0);
+            KafkaConsumer<String, String> mockConsumer = mockedConstruction.constructed().get(0);
             verify(mockConsumer, times(1)).close(any(Duration.class));
         }
     }
@@ -142,8 +146,10 @@ class KafkaInputAdapterTest {
     @DisplayName("getType() 테스트 - 메시지 타입 반환")
     void testGetType() throws IOException {
         // Given
-        try (MockedConstruction<KafkaConsumer> ignored = mockConstruction(KafkaConsumer.class)) {
+        try (MockedConstruction<KafkaConsumer<String, String>> mockedConstruction =
+                     mockConstruction(kafkaConsumerType())) {
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
+            assertEquals(1, mockedConstruction.constructed().size());
 
             // When
             String type = adapter.getMessageType();
@@ -158,8 +164,10 @@ class KafkaInputAdapterTest {
     void testGetSourceHost() throws IOException {
         // Given
         validConfig.setHost("custom-host");
-        try (MockedConstruction<KafkaConsumer> ignored = mockConstruction(KafkaConsumer.class)) {
+        try (MockedConstruction<KafkaConsumer<String, String>> mockedConstruction =
+                     mockConstruction(kafkaConsumerType())) {
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
+            assertEquals(1, mockedConstruction.constructed().size());
 
             // When
             String host = adapter.getSourceHost();
@@ -173,8 +181,10 @@ class KafkaInputAdapterTest {
     @DisplayName("getSourceHost() 테스트 - 기본 호스트 반환")
     void testGetSourceHostDefault() throws IOException {
         // Given
-        try (MockedConstruction<KafkaConsumer> ignored = mockConstruction(KafkaConsumer.class)) {
+        try (MockedConstruction<KafkaConsumer<String, String>> mockedConstruction =
+                     mockConstruction(kafkaConsumerType())) {
             KafkaInputAdapter adapter = new KafkaInputAdapter(validConfig);
+            assertEquals(1, mockedConstruction.constructed().size());
 
             // When
             String host = adapter.getSourceHost();
@@ -182,5 +192,10 @@ class KafkaInputAdapterTest {
             // Then
             assertEquals("localhost", host);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Class<KafkaConsumer<String, String>> kafkaConsumerType() {
+        return (Class<KafkaConsumer<String, String>>) (Class<?>) KafkaConsumer.class;
     }
 }

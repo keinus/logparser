@@ -1,6 +1,8 @@
 package org.keinus.logparser.interfaces.exception;
 
 public class PipelineOperationException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final String operation;
     private final String pipelineStatus;
 

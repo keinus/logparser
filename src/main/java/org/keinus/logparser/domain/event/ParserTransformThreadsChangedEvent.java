@@ -6,6 +6,7 @@ import lombok.Getter;
 
 @Getter
 public class ParserTransformThreadsChangedEvent extends ApplicationEvent {
+    private static final long serialVersionUID = 1L;
 
     private final ChangeType changeType;
     private final int threads;

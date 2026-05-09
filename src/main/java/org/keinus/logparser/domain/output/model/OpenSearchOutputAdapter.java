@@ -21,19 +21,18 @@ import javax.net.ssl.SSLContext;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
-import org.apache.hc.client5.http.ssl.TrustSelfSignedStrategy;
+import org.apache.hc.client5.http.ssl.TlsSocketStrategy;
 import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.HttpHeaders;
-import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
+import org.apache.hc.core5.ssl.TrustStrategy;
 import org.apache.hc.core5.util.Timeout;
 import org.keinus.logparser.domain.model.LogEvent;
 import org.keinus.logparser.infrastructure.util.PatternCache;
@@ -75,24 +74,25 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
         }
 
         try {
+            TrustStrategy trustSelfSigned = (certificateChain, authType) -> certificateChain.length == 1;
             SSLContext sslContext = SSLContextBuilder.create()
-                    .loadTrustMaterial(null, TrustSelfSignedStrategy.INSTANCE)
+                    .loadTrustMaterial(null, trustSelfSigned)
                     .build();
 
-            SSLConnectionSocketFactory sslSocketFactory = new SSLConnectionSocketFactory(
-                    sslContext,
-                    NoopHostnameVerifier.INSTANCE
-            );
+            TlsSocketStrategy tlsSocketStrategy = ClientTlsStrategyBuilder.create()
+                    .setSslContext(sslContext)
+                    .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                    .buildClassic();
 
             this.connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
-                    .setSSLSocketFactory(sslSocketFactory)
+                    .setTlsSocketStrategy(tlsSocketStrategy)
                     .setMaxConnTotal(20)
                     .setMaxConnPerRoute(10)
                     .build();
 
             RequestConfig requestConfig = RequestConfig.custom()
-                    .setConnectionRequestTimeout(Timeout.ofMilliseconds(getTimeoutMs()))
-                    .setResponseTimeout(Timeout.ofMilliseconds(getTimeoutMs()))
+                    .setConnectionRequestTimeout(Timeout.ofMilliseconds(timeoutMs))
+                    .setResponseTimeout(Timeout.ofMilliseconds(timeoutMs))
                     .build();
 
             this.httpClient = HttpClients.custom()
@@ -126,19 +126,21 @@ public class OpenSearchOutputAdapter extends OutputAdapter {
             }
             request.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
 
-            try (CloseableHttpResponse response = httpClient.execute(request)) {
-            int statusCode = response.getCode();
-            String responseBody = response.getEntity() != null ? EntityUtils.toString(response.getEntity()) : "";
-            if (statusCode < 200 || statusCode >= 300) {
-                throw deliveryFailure(
-                        "OpenSearch request failed with status " + statusCode + " for index " + targetIndex
-                                + (responseBody.isBlank() ? "" : ": " + responseBody)
-                );
-            }
-            }
+            String responseIndex = targetIndex;
+            httpClient.execute(request, response -> {
+                int statusCode = response.getCode();
+                String responseBody = response.getEntity() != null ? EntityUtils.toString(response.getEntity()) : "";
+                if (statusCode < 200 || statusCode >= 300) {
+                    throw deliveryFailure(
+                            "OpenSearch request failed with status " + statusCode + " for index " + responseIndex
+                                    + (responseBody.isBlank() ? "" : ": " + responseBody)
+                    );
+                }
+                return null;
+            });
         } catch (OutputDeliveryException e) {
             throw e;
-        } catch (IOException | ParseException | IllegalArgumentException e) {
+        } catch (IOException | IllegalArgumentException e) {
             throw deliveryFailure("Failed to send document to OpenSearch index " + targetIndex, e);
         }
     }

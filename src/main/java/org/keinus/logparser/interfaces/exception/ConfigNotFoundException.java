@@ -1,7 +1,10 @@
 package org.keinus.logparser.interfaces.exception;
 
 public class ConfigNotFoundException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final String entityType;
+    @SuppressWarnings("serial")
     private final Object entityId;
 
     public ConfigNotFoundException(String entityType, Object entityId) {

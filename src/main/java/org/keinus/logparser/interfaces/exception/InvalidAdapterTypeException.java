@@ -3,8 +3,11 @@ package org.keinus.logparser.interfaces.exception;
 import java.util.List;
 
 public class InvalidAdapterTypeException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final String adapterType;
     private final String providedType;
+    @SuppressWarnings("serial")
     private final List<String> validTypes;
 
     public InvalidAdapterTypeException(String adapterType, String providedType, List<String> validTypes) {

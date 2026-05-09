@@ -3,6 +3,9 @@ package org.keinus.logparser.interfaces.exception;
 import java.util.List;
 
 public class PipelineIntegrityException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    @SuppressWarnings("serial")
     private final List<String> integrityErrors;
 
     public PipelineIntegrityException(String message, List<String> integrityErrors) {

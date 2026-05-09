@@ -36,7 +36,8 @@ class StructuredTransformServiceTest {
         ConditionEvaluator conditionEvaluator = mock(ConditionEvaluator.class);
         StructuredEventSerializer serializer = mock(StructuredEventSerializer.class);
         when(mappingRepository.findByMessageType("test"))
-                .thenReturn(Optional.empty(), Optional.empty());
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty());
 
         StructuredTransformService service = new StructuredTransformService(
                 mappingRepository,

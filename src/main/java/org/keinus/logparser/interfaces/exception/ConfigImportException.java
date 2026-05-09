@@ -1,6 +1,8 @@
 package org.keinus.logparser.interfaces.exception;
 
 public class ConfigImportException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final String importFormat;
     private final String details;
 

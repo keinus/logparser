@@ -1,6 +1,5 @@
 package org.keinus.logparser.domain.model;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.HashMap;
@@ -50,6 +49,7 @@ public class LogEvent implements Serializable {
     private String originalText;
 
     // === Parsed/Transformed Data ===
+    @SuppressWarnings("serial")
     private Map<String, Object> fields;
 
     // === Processing State ===

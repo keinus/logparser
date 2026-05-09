@@ -4,8 +4,10 @@ import org.keinus.logparser.domain.configuration.model.ParserAdapterConfig;
 import org.springframework.context.ApplicationEvent;
 
 public class ParserChangedEvent extends ApplicationEvent {
+    private static final long serialVersionUID = 1L;
 
     private final ChangeType changeType;
+    @SuppressWarnings("serial")
     private final ParserAdapterConfig config;
     private final Long parserId;
 

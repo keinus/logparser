@@ -57,12 +57,13 @@ class KafkaInputAdapterTest {
         ConsumerRecord<String, String> record = new ConsumerRecord<>("test-topic", 0, 0L, "key", "kafka-msg");
         ConsumerRecords<String, String> records = new ConsumerRecords<>(Map.of(partition, List.of(record)));
 
-        try (MockedConstruction<KafkaConsumer> mocked = mockConstruction(KafkaConsumer.class,
+        try (MockedConstruction<KafkaConsumer<String, String>> mocked = mockConstruction(kafkaConsumerType(),
                 (mock, context) -> {
                     when(mock.poll(any(Duration.class))).thenReturn(records);
                 })) {
             
             KafkaInputAdapter adapter = new KafkaInputAdapter(config);
+            assertThat(mocked.constructed()).hasSize(1);
             LogEvent event = adapter.run();
             
             assertThat(event).isNotNull();
@@ -74,12 +75,13 @@ class KafkaInputAdapterTest {
     @Test
     @DisplayName("Should return null when no messages are available")
     void noMessages() throws IOException {
-        try (MockedConstruction<KafkaConsumer> mocked = mockConstruction(KafkaConsumer.class,
+        try (MockedConstruction<KafkaConsumer<String, String>> mocked = mockConstruction(kafkaConsumerType(),
                 (mock, context) -> {
                     when(mock.poll(any(Duration.class))).thenReturn(new ConsumerRecords<>(Collections.emptyMap()));
                 })) {
             
             KafkaInputAdapter adapter = new KafkaInputAdapter(config);
+            assertThat(mocked.constructed()).hasSize(1);
             LogEvent event = adapter.run();
             
             assertThat(event).isNull();
@@ -89,12 +91,17 @@ class KafkaInputAdapterTest {
     @Test
     @DisplayName("Should close consumer on close")
     void closeAdapter() throws IOException {
-        try (MockedConstruction<KafkaConsumer> mocked = mockConstruction(KafkaConsumer.class)) {
+        try (MockedConstruction<KafkaConsumer<String, String>> mocked = mockConstruction(kafkaConsumerType())) {
             KafkaInputAdapter adapter = new KafkaInputAdapter(config);
             adapter.close();
             
-            KafkaConsumer mock = mocked.constructed().get(0);
+            KafkaConsumer<String, String> mock = mocked.constructed().get(0);
             verify(mock).close(any(Duration.class));
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Class<KafkaConsumer<String, String>> kafkaConsumerType() {
+        return (Class<KafkaConsumer<String, String>>) (Class<?>) KafkaConsumer.class;
     }
 }

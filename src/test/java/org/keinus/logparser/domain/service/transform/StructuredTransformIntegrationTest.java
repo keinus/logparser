@@ -87,20 +87,26 @@ public class StructuredTransformIntegrationTest {
         System.out.println("Result Fields: " + resultFields);
 
         // Check Common
-        Map<String, Object> common = (Map<String, Object>) resultFields.get("common");
+        Object commonValue = resultFields.get("common");
+        assertTrue(commonValue instanceof Map<?, ?>);
+        Map<?, ?> common = (Map<?, ?>) commonValue;
         assertNotNull(common);
         assertEquals("192.168.1.1", common.get("srcIp"));
         
         // Check SubFields
         assertEquals("event_network", resultFields.get("subDomainType"));
-        Map<String, Object> sub = (Map<String, Object>) resultFields.get("subFields");
+        Object subValue = resultFields.get("subFields");
+        assertTrue(subValue instanceof Map<?, ?>);
+        Map<?, ?> sub = (Map<?, ?>) subValue;
         assertNotNull(sub, "SubFields is null");
         Object bytesVal = sub.get("bytes_in");
         assertNotNull(bytesVal, "bytes_in is null");
         assertEquals(1024, ((Number)bytesVal).intValue());
         
         // Check Additional Attributes
-        Map<String, Object> additional = (Map<String, Object>) resultFields.get("additionalAttributes");
+        Object additionalValue = resultFields.get("additionalAttributes");
+        assertTrue(additionalValue instanceof Map<?, ?>);
+        Map<?, ?> additional = (Map<?, ?>) additionalValue;
         System.out.println("Additional Attributes: " + additional);
         assertEquals("foo", additional.get("extra"));
         

@@ -42,7 +42,7 @@ public class HttpOutputAdapter extends OutputAdapter {
         this.method = normalizeMethod(obj.get("method"));
         this.headers = parseHeaders(obj.get("headers"));
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(getTimeoutMs()))
+                .connectTimeout(Duration.ofMillis(timeoutMs))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
 
@@ -102,7 +102,7 @@ public class HttpOutputAdapter extends OutputAdapter {
         log.info("HTTP Output Adapter closed");
     }
 
-    private URI validateUri(String url) throws IOException {
+    private static URI validateUri(String url) throws IOException {
         try {
             URI uri = URI.create(url);
             String scheme = uri.getScheme();
@@ -118,7 +118,7 @@ public class HttpOutputAdapter extends OutputAdapter {
         }
     }
 
-    private String normalizeMethod(String configuredMethod) {
+    private static String normalizeMethod(String configuredMethod) {
         if (configuredMethod == null || configuredMethod.isBlank()) {
             return "POST";
         }
@@ -126,11 +126,12 @@ public class HttpOutputAdapter extends OutputAdapter {
         String normalizedMethod = configuredMethod.toUpperCase(Locale.ROOT);
         return switch (normalizedMethod) {
             case "POST", "PUT", "PATCH" -> normalizedMethod;
-            default -> throw deliveryFailure("Unsupported HTTP method: " + configuredMethod);
+            default -> throw new OutputDeliveryException(
+                    HttpOutputAdapter.class.getSimpleName() + ": Unsupported HTTP method: " + configuredMethod);
         };
     }
 
-    private Map<String, String> parseHeaders(String rawHeaders) throws IOException {
+    private static Map<String, String> parseHeaders(String rawHeaders) throws IOException {
         if (rawHeaders == null || rawHeaders.isBlank()) {
             return Map.of();
         }

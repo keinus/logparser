@@ -16,7 +16,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.junit.jupiter.api.Test;
 import org.keinus.logparser.domain.model.LogEvent;
@@ -46,7 +45,7 @@ class KafkaOutputAdapterTest {
         @SuppressWarnings("unchecked")
         Future<RecordMetadata> future = mock(Future.class);
 
-        when(producer.send(any(ProducerRecord.class))).thenReturn(future);
+        when(producer.send(any())).thenReturn(future);
         when(future.get(anyLong(), eq(TimeUnit.MILLISECONDS)))
                 .thenThrow(new ExecutionException(new IOException("kafka failure")));
 
