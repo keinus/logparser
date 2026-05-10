@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.keinus.logparser.domain.event.InputAdapterChangedEvent;
+import org.keinus.logparser.domain.model.mapping.MappingConfiguration;
 import org.keinus.logparser.infrastructure.persistence.entity.InputAdapterEntity;
 import org.keinus.logparser.infrastructure.persistence.entity.ParserEntity;
 import org.keinus.logparser.infrastructure.persistence.entity.TransformEntity;
@@ -34,6 +35,7 @@ class ConfigManagementServiceTest {
     @Mock private TransformRepository transformRepository;
     @Mock private OutputAdapterRepository outputAdapterRepository;
     @Mock private ConfigSettingsRepository configSettingsRepository;
+    @Mock private MappingRepository mappingRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private ConfigValidationService validationService;
 
@@ -59,6 +61,7 @@ class ConfigManagementServiceTest {
                 .thenReturn(new ConfigValidationService.ValidationResult(true, List.of()));
         lenient().when(validationService.validateOutputAdapter(any()))
                 .thenReturn(new ConfigValidationService.ValidationResult(true, List.of()));
+        lenient().when(mappingRepository.findAll()).thenReturn(Collections.emptyList());
     }
 
     @Test
@@ -189,6 +192,22 @@ class ConfigManagementServiceTest {
         assertEquals(1, topology.get(0).getInputs().size());
         assertEquals(2, topology.get(0).getProcessing().size());
         assertEquals(1, topology.get(0).getOutputs().size());
+    }
+
+    @Test
+    void testGetPipelineTopologyIncludesSchemaMap() {
+        when(inputAdapterRepository.findAll()).thenReturn(Collections.singletonList(inputEntity));
+
+        MappingConfiguration mapping = new MappingConfiguration();
+        mapping.setMessageType("test");
+        when(mappingRepository.findAll()).thenReturn(Collections.singletonList(mapping));
+
+        var topology = service.getPipelineTopology();
+
+        assertEquals(1, topology.size());
+        assertTrue(topology.get(0).getProcessing().stream()
+                .anyMatch(stage -> "SCHEMA".equals(stage.getBadge())
+                        && "Schema Map".equals(stage.getName())));
     }
 
 }

@@ -171,10 +171,16 @@
                     </a>
                 </li>
                 <li>
-                    <a href="#" onclick="App.switchView('transform')" id="nav-transform" class="flex items-center justify-center lg:justify-start lg:px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors" title="Transforms">
-                        <span class="material-icons-round text-2xl lg:text-lg lg:mr-3">memory</span>
-                        <span class="hidden lg:inline-block">Transforms</span>
+                    <a href="#" onclick="App.switchView('transform')" id="nav-transform" class="flex items-center justify-center lg:justify-start lg:px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors" title="Event Rules">
+                        <span class="material-icons-round text-2xl lg:text-lg lg:mr-3">rule</span>
+                        <span class="hidden lg:inline-block">Event Rules</span>
                         <span class="hidden lg:inline-flex ml-auto bg-slate-800 text-slate-400 py-0.5 px-2 rounded-full text-xs" id="badge-transform">0</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" onclick="App.switchView('schema-map')" id="nav-schema-map" class="flex items-center justify-center lg:justify-start lg:px-6 py-3 text-sm font-medium hover:bg-slate-800 transition-colors" title="Schema Map">
+                        <span class="material-icons-round text-2xl lg:text-lg lg:mr-3">schema</span>
+                        <span class="hidden lg:inline-block">Schema Map</span>
                     </a>
                 </li>
                 <li>
@@ -505,6 +511,24 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- SCHEMA MAP VIEW -->
+            <div id="view-schema-map" class="hidden h-full flex flex-col gap-4">
+                <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+                    <div class="join w-full sm:w-auto">
+                        <input type="text" id="schema-map-message-type" value="syslog" class="input input-sm input-bordered join-item bg-slate-800 border-slate-700 text-white w-full sm:w-64 font-mono" placeholder="messageType" />
+                        <button class="btn btn-sm btn-outline join-item border-slate-700 text-slate-300 hover:bg-slate-800" onclick="App.loadSchemaMapping()">
+                            <span class="material-icons-round text-sm">download</span>
+                            Load
+                        </button>
+                    </div>
+                    <button class="btn btn-sm btn-primary gap-2 w-full sm:w-auto" onclick="App.saveSchemaMapping()">
+                        <span class="material-icons-round text-sm">save</span>
+                        Save Mapping
+                    </button>
+                </div>
+                <div id="schema-map-container" class="flex-1 min-h-[720px]"></div>
             </div>
             
             <!-- SETTINGS VIEW -->

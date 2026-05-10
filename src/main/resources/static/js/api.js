@@ -14,16 +14,28 @@ const api = {
                 }
             });
 
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ message: 'Request failed' }));
-                throw new Error(error.message || `HTTP ${response.status}`);
+            const responseText = await response.text();
+            let responseBody = null;
+            if (responseText) {
+                try {
+                    responseBody = JSON.parse(responseText);
+                } catch (parseError) {
+                    responseBody = { message: responseText };
+                }
             }
 
-            if (response.status === 204) {
+            if (!response.ok) {
+                const error = new Error((responseBody && responseBody.message) || `HTTP ${response.status}`);
+                error.status = response.status;
+                error.body = responseBody;
+                throw error;
+            }
+
+            if (response.status === 204 || responseBody === null) {
                 return null;
             }
 
-            return await response.json();
+            return responseBody;
         } catch (error) {
             console.error('API request failed:', error);
             throw error;
@@ -169,6 +181,25 @@ const transformAPI = {
 
     disable(id) {
         return api.patch(`/transforms/${id}/disable`);
+    }
+};
+
+// Structured Transform API
+const structureAPI = {
+    getSchema() {
+        return api.get('/structure/schema');
+    },
+
+    getMapping(messageType) {
+        return api.get(`/structure/mapping/${encodeURIComponent(messageType)}`);
+    },
+
+    saveMapping(config) {
+        return api.post('/structure/mapping', config);
+    },
+
+    simulate(payload) {
+        return api.post('/structure/simulate', payload);
     }
 };
 

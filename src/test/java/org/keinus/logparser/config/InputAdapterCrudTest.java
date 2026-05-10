@@ -5,17 +5,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keinus.logparser.domain.configuration.service.ConfigManagementService;
 import org.keinus.logparser.domain.configuration.service.ConfigValidationService;
+import org.keinus.logparser.domain.model.mapping.MappingConfiguration;
 import org.keinus.logparser.infrastructure.persistence.entity.InputAdapterEntity;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,6 +38,28 @@ class InputAdapterCrudTest {
 
     @Autowired
     private InputAdapterRepository inputAdapterRepository;
+
+    @TestConfiguration
+    static class MappingRepositoryTestConfig {
+        @Bean
+        MappingRepository mappingRepository() {
+            return new MappingRepository() {
+                @Override
+                public Optional<MappingConfiguration> findByMessageType(String messageType) {
+                    return Optional.empty();
+                }
+
+                @Override
+                public List<MappingConfiguration> findAll() {
+                    return List.of();
+                }
+
+                @Override
+                public void save(MappingConfiguration config) {
+                }
+            };
+        }
+    }
 
     @BeforeEach
     void setUp() {

@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.domain.configuration.model.*;
 import org.keinus.logparser.domain.event.*;
+import org.keinus.logparser.domain.model.mapping.MappingConfiguration;
 import org.keinus.logparser.infrastructure.persistence.entity.*;
 import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;
@@ -14,6 +15,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -34,6 +36,7 @@ public class ConfigManagementService {
     private final TransformRepository transformRepository;
     private final OutputAdapterRepository outputAdapterRepository;
     private final ConfigSettingsRepository configSettingsRepository;
+    private final MappingRepository mappingRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ConfigValidationService validationService;
 
@@ -362,11 +365,21 @@ public class ConfigManagementService {
 
     // ==================== Topology ====================
 
-    @Transactional(readOnly = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<PipelineTopologyDto> getPipelineTopology() {
         Map<String, PipelineTopologyDto> topologyMap = new HashMap<>();
 
-        // 1. Inputs
+        // 1. Structured Schema Mappings
+        mappingRepository.findAll().forEach(mapping -> {
+            String msgType = mapping.getMessageType();
+            topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
+                    .messageType(k)
+                    .description("Flow for " + k)
+                    .build())
+                .getProcessing().add(mapStructuredMappingToStage(mapping));
+        });
+
+        // 2. Inputs
         inputAdapterRepository.findAll().forEach(input -> {
             String msgType = input.getMessagetype();
             topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
@@ -376,7 +389,7 @@ public class ConfigManagementService {
                 .getInputs().add(mapInputToStage(input));
         });
 
-        // 2. Parsers
+        // 3. Parsers
         parserRepository.findAll().forEach(parser -> {
              String msgType = parser.getMessagetype();
              topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
@@ -386,7 +399,7 @@ public class ConfigManagementService {
                 .getProcessing().add(mapParserToStage(parser));
         });
 
-        // 3. Transforms
+        // 4. Transforms
         transformRepository.findAll().forEach(transform -> {
              String msgType = transform.getMessagetype();
              topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
@@ -395,13 +408,13 @@ public class ConfigManagementService {
                     .build())
                 .getProcessing().add(mapTransformToStage(transform));
         });
-        
+
         // Sort Processing by priority
         topologyMap.values().forEach(dto -> 
             dto.getProcessing().sort(Comparator.comparingInt(s -> s.getPriority() != null ? s.getPriority() : 999))
         );
 
-        // 4. Outputs
+        // 5. Outputs
         outputAdapterRepository.findAll().forEach(output -> {
              String msgType = output.getMessagetype();
              topologyMap.computeIfAbsent(msgType, k -> PipelineTopologyDto.builder()
@@ -465,6 +478,18 @@ public class ConfigManagementService {
                 .badge(badge)
                 .enabled(entity.getEnabled())
                 .priority(entity.getPriority())
+                .build();
+    }
+
+    private PipelineTopologyDto.PipelineStageDto mapStructuredMappingToStage(MappingConfiguration config) {
+        int ruleCount = config.getSubTableRules() != null ? config.getSubTableRules().size() : 0;
+        return PipelineTopologyDto.PipelineStageDto.builder()
+                .type("Structured Schema Mapping")
+                .name("Schema Map")
+                .detail("Rules: " + ruleCount)
+                .badge("SCHEMA")
+                .enabled(true)
+                .priority(10_000)
                 .build();
     }
 

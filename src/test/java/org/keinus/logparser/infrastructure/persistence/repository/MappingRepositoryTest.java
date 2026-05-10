@@ -68,4 +68,19 @@ class MappingRepositoryTest {
         assertThat(result).isPresent();
         assertThat(result.get().getId()).isEqualTo("id2");
     }
+
+    @Test
+    void shouldFindAllMappings() {
+        MappingConfiguration config1 = new MappingConfiguration();
+        config1.setMessageType("type-a");
+        mappingRepository.save(config1);
+
+        MappingConfiguration config2 = new MappingConfiguration();
+        config2.setMessageType("type-b");
+        mappingRepository.save(config2);
+
+        assertThat(mappingRepository.findAll())
+                .extracting(MappingConfiguration::getMessageType)
+                .contains("type-a", "type-b");
+    }
 }

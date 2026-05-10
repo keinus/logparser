@@ -25,6 +25,7 @@ public class ConfigManagementServiceTest {
     @Mock private TransformRepository transformRepository;
     @Mock private OutputAdapterRepository outputAdapterRepository;
     @Mock private ConfigSettingsRepository configSettingsRepository;
+    @Mock private MappingRepository mappingRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private ConfigValidationService validationService;
 
@@ -36,6 +37,7 @@ public class ConfigManagementServiceTest {
             transformRepository,
             outputAdapterRepository,
             configSettingsRepository,
+            mappingRepository,
             eventPublisher,
             validationService
         );

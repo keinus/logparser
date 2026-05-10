@@ -5,7 +5,7 @@ let commonMappings = {}; // target -> source
 let subRules = {}; // subTable -> { condition: "", mappings: { target -> source } }
 
 // API Endpoints
-const API_BASE = '/api/transform';
+const API_BASE = '/api/v1/structure';
 
 async function init() {
     try {

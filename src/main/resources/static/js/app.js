@@ -14,7 +14,8 @@ const App = (function() {
             input: [], parser: [], transform: [], output: []
         },
         outputMetricsById: {},
-        editingId: null
+        editingId: null,
+        schemaMapRendered: false
     };
 
     // --- Initialization ---
@@ -62,6 +63,7 @@ const App = (function() {
         else if (viewName === 'outputs') { navId = 'nav-output'; state.currentAdapterType = 'output'; }
         else if (viewName === 'parser') { navId = 'nav-parser'; state.currentAdapterType = 'parser'; }
         else if (viewName === 'transform') { navId = 'nav-transform'; state.currentAdapterType = 'transform'; }
+        else if (viewName === 'schema-map') { navId = 'nav-schema-map'; }
         
         const activeNav = document.getElementById(navId);
         if (activeNav) {
@@ -76,7 +78,8 @@ const App = (function() {
             'pipeline-visual': 'Pipeline Visualization',
             'inputs': 'Data Sources',
             'parser': 'Parsers',
-            'transform': 'Processing Rules',
+            'transform': 'Event Rules',
+            'schema-map': 'Structured Schema Mapping',
             'outputs': 'Destinations',
             'settings': 'System Settings'
         };
@@ -100,6 +103,8 @@ const App = (function() {
                 initChart(); // Re-render chart if canvas was destroyed/hidden
             } else if (viewName === 'pipeline-visual') {
                  renderTopology();
+            } else if (viewName === 'schema-map') {
+                 initSchemaMapView();
             } else if (viewName === 'settings') {
                  loadSettings();
             }
@@ -354,8 +359,8 @@ const App = (function() {
                                 
                                 <div class="bg-slate-800/30 rounded-lg p-3 border border-slate-700/50 flex flex-wrap gap-2 items-center min-h-[60px]">
                                     ${pipe.processing && pipe.processing.length > 0 ? pipe.processing.map((p, idx) => `
-                                        <div class="flex items-center bg-slate-800 border ${p.enabled ? 'border-slate-600' : 'border-slate-700 opacity-50'} rounded px-2 py-1 shadow-sm cursor-pointer hover:border-slate-500" onclick="App.editAdapter('${p.badge === 'PARSER' || p.badge === 'GROK' || p.badge === 'JSON' || p.badge === 'REGEX' ? 'parser' : 'transform'}', ${p.id})">
-                                            <span class="text-[10px] font-bold ${p.badge.includes('GROK') || p.badge.includes('JSON') ? 'text-purple-400' : 'text-amber-400'} mr-2">${p.badge}</span>
+                                        <div class="flex items-center bg-slate-800 border ${p.enabled ? 'border-slate-600' : 'border-slate-700 opacity-50'} rounded px-2 py-1 shadow-sm cursor-pointer hover:border-slate-500" onclick="${getProcessingStageClickHandler(p, pipe.messageType)}">
+                                            <span class="text-[10px] font-bold ${getProcessingBadgeClass(p)} mr-2">${p.badge}</span>
                                             <span class="text-xs text-slate-300">${p.type}</span>
                                         </div>
                                         ${idx < pipe.processing.length - 1 ? `<span class="material-icons-round text-slate-600 text-sm">chevron_right</span>` : ''}
@@ -401,6 +406,30 @@ const App = (function() {
                 </div>
             `;
         }
+    }
+
+    function getProcessingStageClickHandler(stage, messageType) {
+        if (stage.badge === 'SCHEMA') {
+            return `App.openSchemaMapForMessageType('${escapeJsString(messageType)}')`;
+        }
+
+        const adapterType = isParserStage(stage) ? 'parser' : 'transform';
+        return `App.editAdapter('${adapterType}', ${stage.id})`;
+    }
+
+    function isParserStage(stage) {
+        return ['PARSER', 'GROK', 'JSON', 'REGEX'].includes(stage.badge);
+    }
+
+    function getProcessingBadgeClass(stage) {
+        if (stage.badge === 'SCHEMA') return 'text-blue-400';
+        return isParserStage(stage) ? 'text-purple-400' : 'text-amber-400';
+    }
+
+    function escapeJsString(value) {
+        return String(value == null ? '' : value)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'");
     }
     
     // --- Topology Visual ---
@@ -946,6 +975,95 @@ const App = (function() {
         }
     }
 
+    // --- Schema Map ---
+    async function initSchemaMapView() {
+        const container = document.getElementById('schema-map-container');
+        if (!container) return;
+
+        if (!state.schemaMapRendered) {
+            MapperUI.render(container);
+            state.schemaMapRendered = true;
+        }
+
+        if (!container.dataset.loaded) {
+            await loadSchemaMapping();
+        }
+    }
+
+    async function loadSchemaMapping() {
+        const container = document.getElementById('schema-map-container');
+        if (!container) return;
+
+        if (!state.schemaMapRendered) {
+            MapperUI.render(container);
+            state.schemaMapRendered = true;
+        }
+
+        const input = document.getElementById('schema-map-message-type');
+        const messageType = (input && input.value.trim()) || '';
+        if (!messageType) {
+            showToast("Message type is required", "error");
+            return;
+        }
+
+        try {
+            showToast("Loading schema map...", "info");
+            const schemaMetadata = await structureAPI.getSchema();
+
+            let existingConfig = null;
+            try {
+                existingConfig = await structureAPI.getMapping(messageType);
+            } catch (e) {
+                if (e.status !== 404) {
+                    throw e;
+                }
+            }
+
+            await MapperUI.loadData(messageType, existingConfig, schemaMetadata);
+            container.dataset.loaded = 'true';
+            showToast(existingConfig ? "Mapping loaded" : "Schema loaded", "success");
+        } catch (e) {
+            showToast("Failed to load schema map: " + e.message, "error");
+        }
+    }
+
+    async function saveSchemaMapping() {
+        if (!state.schemaMapRendered) {
+            await initSchemaMapView();
+        }
+
+        const input = document.getElementById('schema-map-message-type');
+        const messageType = (input && input.value.trim()) || '';
+        const config = MapperUI.getData();
+        config.messageType = messageType || config.messageType;
+
+        if (!config.messageType) {
+            showToast("Message type is required", "error");
+            return;
+        }
+
+        try {
+            await structureAPI.saveMapping(config);
+            showToast("Mapping saved", "success");
+        } catch (e) {
+            showToast("Failed to save mapping: " + e.message, "error");
+        }
+    }
+
+    function openSchemaMapForMessageType(messageType) {
+        const input = document.getElementById('schema-map-message-type');
+        if (input) {
+            input.value = messageType || '';
+        }
+
+        const container = document.getElementById('schema-map-container');
+        if (container) {
+            delete container.dataset.loaded;
+        }
+
+        switchView('schema-map');
+    }
+
     // --- Control Panel ---
     function openControlModal() {
         document.getElementById('control_modal').showModal();
@@ -1138,6 +1256,9 @@ const App = (function() {
         reloadPipeline,
         validateAndReload,
         restartPipeline,
+        loadSchemaMapping,
+        saveSchemaMapping,
+        openSchemaMapForMessageType,
         saveSettings,
         togglePauseTail,
         toggleLiveTailService,

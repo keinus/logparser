@@ -90,14 +90,17 @@ class ThreadManagerTest {
 
     @Test
     void testGetAllThreadInfo() throws InterruptedException {
+        CountDownLatch started = new CountDownLatch(1);
         CountDownLatch latch = new CountDownLatch(1);
         threadManager.executeWithName("task1", () -> {
+            started.countDown();
             try {
                 latch.await();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         });
+        assertThat(started.await(1, TimeUnit.SECONDS)).isTrue();
         List<ThreadManager.ThreadInfo> info = threadManager.getAllThreadInfo();
         assertThat(info).isNotEmpty();
         latch.countDown();

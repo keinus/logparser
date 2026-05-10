@@ -5,6 +5,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import javax.sql.DataSource;
@@ -59,6 +61,27 @@ public class SqliteMappingRepository implements MappingRepository {
             log.error("Error loading mapping config for type: {}", messageType, e);
         }
         return Optional.empty();
+    }
+
+    @Override
+    public List<MappingConfiguration> findAll() {
+        String sql = "SELECT config_json FROM mapping_config ORDER BY message_type";
+        List<MappingConfiguration> configs = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                String json = rs.getString("config_json");
+                MappingConfiguration config = objectMapper.readValue(json, MappingConfiguration.class);
+                if (config != null) {
+                    configs.add(config);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error loading mapping configs", e);
+        }
+        return configs;
     }
 
     @Override
