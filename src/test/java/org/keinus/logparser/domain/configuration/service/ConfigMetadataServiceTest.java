@@ -15,6 +15,8 @@ class ConfigMetadataServiceTest {
         List<ConfigMetadataService.AdapterTypeInfo> types = service.getInputAdapterTypes();
         assertFalse(types.isEmpty());
         assertTrue(types.stream().anyMatch(t -> t.type().equals("TcpInputAdapter")));
+        assertTrue(types.stream().anyMatch(t -> t.type().equals("SnmpInputAdapter")));
+        assertTrue(types.stream().anyMatch(t -> t.type().equals("RabbitMqInputAdapter")));
     }
 
     @Test
@@ -44,6 +46,14 @@ class ConfigMetadataServiceTest {
         assertEquals("TcpInputAdapter", schema.type());
         assertFalse(schema.fields().isEmpty());
         assertTrue(schema.fields().stream().anyMatch(f -> f.name().equals("port")));
+
+        schema = service.getInputAdapterSchema("SnmpInputAdapter");
+        assertEquals("SnmpInputAdapter", schema.type());
+        assertTrue(schema.fields().stream().anyMatch(f -> f.name().equals("configParams") && f.required()));
+
+        schema = service.getInputAdapterSchema("RabbitMqInputAdapter");
+        assertEquals("RabbitMqInputAdapter", schema.type());
+        assertTrue(schema.fields().stream().anyMatch(f -> f.name().equals("configParams") && f.required()));
 
         schema = service.getInputAdapterSchema("Unknown");
         assertTrue(schema.fields().isEmpty());

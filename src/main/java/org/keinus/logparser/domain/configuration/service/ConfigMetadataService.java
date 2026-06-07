@@ -18,6 +18,8 @@ public class ConfigMetadataService {
                 new AdapterTypeInfo("UdpInputAdapter", "UDP Input", "Listen for UDP datagrams"),
                 new AdapterTypeInfo("HttpInputAdapter", "HTTP Input", "HTTP REST endpoint"),
                 new AdapterTypeInfo("KafkaInputAdapter", "Kafka Input", "Consume from Kafka topic"),
+                new AdapterTypeInfo("SnmpInputAdapter", "SNMP Collector", "Poll SNMP targets"),
+                new AdapterTypeInfo("RabbitMqInputAdapter", "RabbitMQ Input", "Consume from RabbitMQ queue"),
                 new AdapterTypeInfo("FileInputAdapter", "File Input", "Read from files"),
                 new AdapterTypeInfo("FakeInputAdapter", "Fake Input", "Generate test data")
         );
@@ -77,6 +79,24 @@ public class ConfigMetadataService {
                             new FieldSchema("bootstrapservers", "String", true, "Kafka bootstrap servers"),
                             new FieldSchema("topicid", "String", true, "Topic to consume from"),
                             new FieldSchema("groupId", "String", false, "Consumer group ID")
+                    )
+            );
+            case "SnmpInputAdapter" -> new AdapterSchema(
+                    type,
+                    Arrays.asList(
+                            new FieldSchema("configParams", "String", true, "SNMP collector JSON configuration"),
+                            new FieldSchema("timeoutMs", "Integer", false, "SNMP request timeout"),
+                            new FieldSchema("queueSize", "Integer", false, "Internal event queue size"),
+                            new FieldSchema("workerThreads", "Integer", false, "Concurrent polling workers")
+                    )
+            );
+            case "RabbitMqInputAdapter" -> new AdapterSchema(
+                    type,
+                    Arrays.asList(
+                            new FieldSchema("host", "String", false, "RabbitMQ host"),
+                            new FieldSchema("port", "Integer", false, "RabbitMQ port"),
+                            new FieldSchema("configParams", "String", true, "RabbitMQ input JSON configuration"),
+                            new FieldSchema("timeoutMs", "Integer", false, "RabbitMQ connection timeout")
                     )
             );
             case "FileInputAdapter" -> new AdapterSchema(

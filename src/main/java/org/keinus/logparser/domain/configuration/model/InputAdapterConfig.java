@@ -19,6 +19,8 @@ public class InputAdapterConfig {
         "UdpInputAdapter",
         "HttpInputAdapter",
         "KafkaInputAdapter",
+        "SnmpInputAdapter",
+        "RabbitMqInputAdapter",
         "FakeInputAdapter"
     })
     @Description("입력 어댑터의 타입")
@@ -31,12 +33,12 @@ public class InputAdapterConfig {
     // === Network 관련 설정 ===
 
     @Range(min = 1, max = 65535)
-    @AdapterSpecific(adapters = {"TcpInputAdapter", "UdpInputAdapter", "HttpInputAdapter"})
+    @AdapterSpecific(adapters = {"TcpInputAdapter", "UdpInputAdapter", "HttpInputAdapter", "RabbitMqInputAdapter"})
     @Description("네트워크 포트 번호")
     private Integer port;
 
     @Default("0.0.0.0")
-    @AdapterSpecific(adapters = {"TcpInputAdapter", "UdpInputAdapter", "HttpInputAdapter"})
+    @AdapterSpecific(adapters = {"TcpInputAdapter", "UdpInputAdapter", "HttpInputAdapter", "RabbitMqInputAdapter"})
     @Description("바인딩할 호스트 주소")
     private String host;
 
@@ -107,6 +109,10 @@ public class InputAdapterConfig {
     @Description("내부 큐 최대 크기")
     private Integer queueSize;
 
+    @AdapterSpecific(adapters = {"SnmpInputAdapter", "RabbitMqInputAdapter"})
+    @Description("Adapter-specific JSON configuration")
+    private String configParams;
+
     /**
      * 어댑터 타입별 필수 필드 검증
      */
@@ -127,6 +133,16 @@ public class InputAdapterConfig {
             case "KafkaInputAdapter":
                 if (topicid == null || bootstrapservers == null) {
                     throw new IllegalArgumentException("KafkaInputAdapter requires 'topicid' and 'bootstrapservers' fields");
+                }
+                break;
+            case "SnmpInputAdapter":
+                if (configParams == null || configParams.trim().isEmpty()) {
+                    throw new IllegalArgumentException("SnmpInputAdapter requires 'configParams' field");
+                }
+                break;
+            case "RabbitMqInputAdapter":
+                if (configParams == null || configParams.trim().isEmpty()) {
+                    throw new IllegalArgumentException("RabbitMqInputAdapter requires 'configParams' field");
                 }
                 break;
             case "FakeInputAdapter":

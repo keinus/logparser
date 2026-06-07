@@ -145,7 +145,7 @@ CREATE INDEX IF NOT EXISTS idx_output_adapters_messagetype ON output_adapters(me
 CREATE TRIGGER IF NOT EXISTS validate_input_adapter_type
 BEFORE INSERT ON input_adapters
 FOR EACH ROW
-WHEN NEW.type NOT IN ('TcpInputAdapter', 'UdpInputAdapter', 'HttpInputAdapter', 'KafkaInputAdapter', 'FileInputAdapter', 'FakeInputAdapter', 'tcp', 'udp', 'http', 'kafka', 'file', 'fake')
+WHEN NEW.type NOT IN ('TcpInputAdapter', 'UdpInputAdapter', 'HttpInputAdapter', 'KafkaInputAdapter', 'SnmpInputAdapter', 'RabbitMqInputAdapter', 'FileInputAdapter', 'FakeInputAdapter', 'tcp', 'udp', 'http', 'kafka', 'snmp', 'rabbitmq', 'file', 'fake')
 BEGIN
     SELECT RAISE(ABORT, 'Invalid input adapter type');
 END;

@@ -42,6 +42,28 @@ class InputAdapterConfigTest {
     }
 
     @Test
+    void testSnmpInputAdapterValidation() {
+        InputAdapterConfig config = new InputAdapterConfig();
+        config.setType("SnmpInputAdapter");
+
+        assertThrows(IllegalArgumentException.class, config::validate);
+
+        config.setConfigParams("{\"targets\":[{\"host\":\"192.0.2.10\",\"community\":\"public\"}],\"oids\":[\"1.3.6.1.2.1.1.5.0\"]}");
+        assertDoesNotThrow(config::validate);
+    }
+
+    @Test
+    void testRabbitMqInputAdapterValidation() {
+        InputAdapterConfig config = new InputAdapterConfig();
+        config.setType("RabbitMqInputAdapter");
+
+        assertThrows(IllegalArgumentException.class, config::validate);
+
+        config.setConfigParams("{\"queue\":\"logs.input\"}");
+        assertDoesNotThrow(config::validate);
+    }
+
+    @Test
     void testGettersAndSetters() {
         InputAdapterConfig config = new InputAdapterConfig();
         config.setId(1L);
@@ -56,6 +78,7 @@ class InputAdapterConfigTest {
         config.setEnabled(true);
         config.setWorkerThreads(4);
         config.setQueueSize(5000);
+        config.setConfigParams("{\"targets\":[],\"oids\":[]}");
 
         assertEquals(1L, config.getId());
         assertEquals("syslog", config.getMessagetype());
@@ -69,5 +92,6 @@ class InputAdapterConfigTest {
         assertTrue(config.getEnabled());
         assertEquals(4, config.getWorkerThreads());
         assertEquals(5000, config.getQueueSize());
+        assertEquals("{\"targets\":[],\"oids\":[]}", config.getConfigParams());
     }
 }

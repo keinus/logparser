@@ -13,6 +13,7 @@ import org.keinus.logparser.infrastructure.persistence.repository.*;
 import org.keinus.logparser.interfaces.exception.ConfigNotFoundException;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -73,6 +74,19 @@ class ConfigManagementServiceTest {
         assertNotNull(saved);
         verify(inputAdapterRepository).save(inputEntity);
         verify(eventPublisher).publishEvent(any(InputAdapterChangedEvent.class));
+    }
+
+    @Test
+    void createInputAdapterPublishesConfigParams() {
+        inputEntity.setType("SnmpInputAdapter");
+        inputEntity.setConfigParams("{\"targets\":[{\"host\":\"192.0.2.10\"}],\"oids\":[\"1.3.6.1.2.1.1.5.0\"]}");
+        when(inputAdapterRepository.save(any())).thenReturn(inputEntity);
+
+        service.createInputAdapter(inputEntity);
+
+        ArgumentCaptor<InputAdapterChangedEvent> eventCaptor = ArgumentCaptor.forClass(InputAdapterChangedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertEquals(inputEntity.getConfigParams(), eventCaptor.getValue().getConfig().getConfigParams());
     }
 
     @Test

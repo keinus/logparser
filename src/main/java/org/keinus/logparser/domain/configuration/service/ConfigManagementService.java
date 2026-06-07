@@ -580,6 +580,7 @@ public class ConfigManagementService {
         config.setEnabled(entity.getEnabled());
         config.setWorkerThreads(entity.getWorkerThreads());
         config.setQueueSize(entity.getQueueSize());
+        config.setConfigParams(entity.getConfigParams());
         return config;
     }
 

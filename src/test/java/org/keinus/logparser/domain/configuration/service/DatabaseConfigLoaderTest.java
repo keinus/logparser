@@ -40,6 +40,7 @@ class DatabaseConfigLoaderTest {
                         .messagetype("access")
                         .host("0.0.0.0")
                         .port(5140)
+                        .configParams("{\"targets\":[{\"host\":\"192.0.2.10\"}],\"oids\":[\"1.3.6.1.2.1.1.5.0\"]}")
                         .enabled(true)
                         .build()
         ));
@@ -97,6 +98,10 @@ class DatabaseConfigLoaderTest {
         DatabaseConfigLoader.PipelineConfiguration configuration = databaseConfigLoader.loadConfiguration();
 
         assertEquals(1, configuration.getInput().size());
+        assertEquals(
+                "{\"targets\":[{\"host\":\"192.0.2.10\"}],\"oids\":[\"1.3.6.1.2.1.1.5.0\"]}",
+                configuration.getInput().get(0).getConfigParams()
+        );
         assertEquals("all", configuration.getOutput().get(0).getMessagetype());
         assertEquals("PATCH", configuration.getOutput().get(0).getMethod());
         assertEquals(Map.of("X-Env", "test"), configuration.getOutput().get(0).getHeaders());

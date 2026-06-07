@@ -97,6 +97,7 @@ public class DatabaseConfigLoader {
             config.setEnabled(entity.getEnabled());
             config.setWorkerThreads(entity.getWorkerThreads());
             config.setQueueSize(entity.getQueueSize());
+            config.setConfigParams(entity.getConfigParams());
 
             configs.add(config);
         }

@@ -1,5 +1,7 @@
 package org.keinus.logparser.domain.configuration.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keinus.logparser.infrastructure.persistence.entity.*;
@@ -14,6 +16,7 @@ import java.util.*;
 @Slf4j
 @Transactional(readOnly = true)
 public class ConfigValidationService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final InputAdapterRepository inputAdapterRepository;
     private final ParserRepository parserRepository;
@@ -52,6 +55,8 @@ public class ConfigValidationService {
                     errors.add("Path is required for File");
                 }
             }
+            case "snmpinputadapter" -> validateSnmpConfigParams(entity, errors);
+            case "rabbitmq", "rabbitmqinputadapter" -> validateRabbitMqConfigParams(entity, errors);
             case "fake", "fakeinputadapter" -> {
                 break;
             }
@@ -63,6 +68,43 @@ public class ConfigValidationService {
         }
 
         return new ValidationResult(errors.isEmpty(), errors);
+    }
+
+    private void validateSnmpConfigParams(InputAdapterEntity entity, List<String> errors) {
+        String configParams = entity.getConfigParams();
+        if (configParams == null || configParams.trim().isEmpty()) {
+            errors.add("configParams is required for SnmpInputAdapter");
+            return;
+        }
+
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(configParams);
+            if (!root.hasNonNull("targets") || !root.get("targets").isArray() || root.get("targets").isEmpty()) {
+                errors.add("configParams.targets must contain at least one target");
+            }
+            if (!root.hasNonNull("oids") || !root.get("oids").isArray() || root.get("oids").isEmpty()) {
+                errors.add("configParams.oids must contain at least one OID");
+            }
+        } catch (Exception e) {
+            errors.add("configParams must be valid JSON for SnmpInputAdapter");
+        }
+    }
+
+    private void validateRabbitMqConfigParams(InputAdapterEntity entity, List<String> errors) {
+        String configParams = entity.getConfigParams();
+        if (configParams == null || configParams.trim().isEmpty()) {
+            errors.add("configParams is required for RabbitMqInputAdapter");
+            return;
+        }
+
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(configParams);
+            if (!root.hasNonNull("queue") || root.get("queue").asText().isBlank()) {
+                errors.add("configParams.queue is required for RabbitMqInputAdapter");
+            }
+        } catch (Exception e) {
+            errors.add("configParams must be valid JSON for RabbitMqInputAdapter");
+        }
     }
 
     public ValidationResult validateParser(ParserEntity entity) {
